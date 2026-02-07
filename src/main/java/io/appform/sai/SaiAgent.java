@@ -25,7 +25,9 @@ import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.tools.ExecutableTool;
 
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class SaiAgent extends Agent<String, String, SaiAgent> {
 
     private static final String DEFAULT_SYSTEM_PROMPT = """

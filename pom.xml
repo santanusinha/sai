@@ -16,6 +16,7 @@
         <lombok.version>1.18.42</lombok.version>
         <sentinel-ai.version>1.1.1-alpha4</sentinel-ai.version>
         <picocli.version>4.7.7</picocli.version>
+        <logback.version>1.4.14</logback.version>
     </properties>
 
     <dependencyManagement>
@@ -90,6 +91,11 @@
             <artifactId>lombok</artifactId>
             <version>${lombok.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

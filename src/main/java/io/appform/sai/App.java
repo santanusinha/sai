@@ -25,23 +25,36 @@ import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
 import okhttp3.OkHttpClient;
+import lombok.extern.slf4j.Slf4j;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.joran.spi.JoranException;
+import org.slf4j.LoggerFactory;
 
+@Slf4j
 public class App {
     public static void main(String[] args) {
-        final var printer = Printer.builder().headless(false).build();
-        final var mapper = JsonUtils.createMapper();
-        final var execitorSerivce = Executors.newCachedThreadPool();
         final var dotenv = Dotenv.configure()
                 .ignoreIfMissing()
                 .ignoreIfMalformed()
+                .systemProperties()
                 .load();
-        final var okHttpClient = new OkHttpClient.Builder()
-                .readTimeout(Duration.ofSeconds(300))
+
+        setupLogging();
+
+        final var printer = Printer.builder().headless(false).build();
+        final var mapper = JsonUtils.createMapper();
+        final var execitorSerivce = Executors.newCachedThreadPool();
+
+        final var okHttpClient = new OkHttpClient.Builder().readTimeout(Duration
+                .ofSeconds(300))
                 .callTimeout(Duration.ofSeconds(300))
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
-        final var modelProviderFactory = modelFactory(dotenv, mapper, okHttpClient);
+        final var modelProviderFactory = modelFactory(dotenv,
+                                                      mapper,
+                                                      okHttpClient);
 
         final var agentSetup = AgentSetup.builder()
                 .executorService(execitorSerivce)
@@ -54,14 +67,14 @@ public class App {
                                 .encodingType(EncodingType.O200K_BASE)
                                 .build())
                         .build())
-                .model(new SimpleOpenAIModel<>(
-                        "gpt-5",
-                        modelProviderFactory,
-                        mapper,
-                        SimpleOpenAIModelOptions.builder()
-                            .tokenCountingConfig(TokenCountingConfig.DEFAULT)
-                            .build()))
-                 .build();
+                .model(new SimpleOpenAIModel<>("gpt-5",
+                                               modelProviderFactory,
+                                               mapper,
+                                               SimpleOpenAIModelOptions
+                                                       .builder()
+                                                       .tokenCountingConfig(TokenCountingConfig.DEFAULT)
+                                                       .build()))
+                .build();
 
         final var agent = new SaiAgent(agentSetup, List.of(), Map.of());
 
@@ -74,14 +87,14 @@ public class App {
                 printer.print("Response: " + response);
             }
             catch (Exception e) {
-                e.printStackTrace();
+                log.error("Error executing agent", e);
             }
         });
     }
 
     private static ChatCompletionServiceFactory modelFactory(final Dotenv dotenv,
-                                                      final ObjectMapper mapper,
-                                                      final OkHttpClient okHttpClient) {
+                                                             final ObjectMapper mapper,
+                                                             final OkHttpClient okHttpClient) {
         final var gpt5 = SimpleOpenAIAzure.builder()
                 .baseUrl(dotenv.get("AZURE_GPT5_ENDPOINT"))
                 .apiKey(dotenv.get("AZURE_API_KEY"))
@@ -108,5 +121,18 @@ public class App {
                 .registerProvider("gpt-5-mini", gpt5Mini);
     }
 
-
+    private static void setupLogging() {
+        try {
+            final var context = (LoggerContext) LoggerFactory
+                    .getILoggerFactory();
+            final var configurator = new JoranConfigurator();
+            configurator.setContext(context);
+            context.reset();
+            configurator.doConfigure(App.class.getResourceAsStream(
+                                                                   "/logback.xml"));
+        }
+        catch (JoranException je) {
+            je.printStackTrace();
+        }
+    }
 }
