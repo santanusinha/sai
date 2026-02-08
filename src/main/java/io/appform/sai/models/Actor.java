@@ -21,7 +21,7 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-enum Actor {
+public enum Actor {
     USER("User", "👤"),
     SYSTEM("System", "⚙️"),
     ASSISTANT("Assistant", "🤖");

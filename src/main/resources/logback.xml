@@ -2,12 +2,6 @@
     <property name="LOG_PATH" value="${LOGPATH:-${user.home}/.local/state/sai/logs}" />
     <property name="LOG_LEVEL" value="${LOGLEVEL:-INFO}" />
 
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/sai.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
@@ -22,7 +16,6 @@
     </appender>
 
     <root level="${LOG_LEVEL}">
-        <appender-ref ref="STDOUT" />
         <appender-ref ref="FILE" />
     </root>
 </configuration>

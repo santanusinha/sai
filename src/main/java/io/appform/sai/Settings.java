@@ -14,20 +14,17 @@
  * limitations under the License.
  */
 
-package io.appform.sai.models;
+package io.appform.sai;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Value;
+import lombok.With;
 
-@Getter
-@AllArgsConstructor
-public enum Severity {
-    ERROR("❌"),
-    WARNING("⚠️"),
-    SUCCESS("✅"),
-    INFO("ℹ️"),
-    DEBUG("🐞");
-
-    private final String emoji;
-
+@Value
+@Builder
+@With
+public class Settings {
+    String dataDir;
+    boolean debug;
+    boolean headless;
 }

@@ -1,18 +1,25 @@
 
 package io.appform.sai;
 
+import java.awt.Color;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Executors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Stopwatch;
 import com.knuddels.jtokkit.api.EncodingType;
 import com.phonepe.sentinelai.core.agent.AgentInput;
+import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
+import com.phonepe.sentinelai.core.errors.ErrorType;
+import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.OutputGenerationMode;
+import com.phonepe.sentinelai.core.utils.AgentUtils;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.DefaultChatCompletionServiceFactory;
@@ -20,6 +27,7 @@ import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
 
+import io.appform.sai.models.Severity;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
@@ -56,9 +64,16 @@ public class App {
                                                       mapper,
                                                       okHttpClient);
 
+        final var settings = Settings.builder()
+            .debug(false)
+            .headless(false)
+            .build();
+        final var eventBus = new EventBus(execitorSerivce);
+
         final var agentSetup = AgentSetup.builder()
                 .executorService(execitorSerivce)
                 .mapper(mapper)
+                .eventBus(eventBus)
                 .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
                 .modelSettings(ModelSettings.builder()
                         .parallelToolCalls(true)
@@ -76,18 +91,37 @@ public class App {
                                                        .build()))
                 .build();
 
+        eventBus.onEvent().connect(new DisplayMessageHandler(settings, printer, mapper)::handleEvent);
+
         final var agent = new SaiAgent(agentSetup, List.of(), Map.of());
 
         execitorSerivce.submit(() -> {
+            final var elapsedTimeCoounter = Stopwatch.createStarted();
             try {
-                final var response = agent.executeAsync(AgentInput
+                final var responseF = agent.executeAsync(AgentInput
                         .<String>builder()
-                        .request("What is the capital of France?")
-                        .build()).get();
-                printer.print("Response: " + response);
+                        .requestMetadata(AgentRequestMetadata.builder()
+                                .sessionId("session-1")
+                                .userId(Objects.requireNonNullElse(System.getProperty("USER"), "user-1"))
+                                .build())
+                        .request("Provide some guidance and sample code to format markdown properly on a terminal in java")
+                        .build());
+                final var response = responseF.get();
+                final var icon = response.getError().getErrorType().equals(ErrorType.SUCCESS) ? Severity.SUCCESS.getEmoji() : Severity.ERROR.getEmoji();
+                printer.print(Printer.Colours.WHITE,
+                        "%s %s.".formatted(icon, response.getError().getMessage()));
+                printer.println(Printer.Colours.GRAY,
+                        " (Time taken: %.3f seconds, Tokens used: %d)".formatted(
+                            (float)elapsedTimeCoounter.elapsed().toMillis() / 1000.0,
+                            response.getUsage().getTotalTokens()));
             }
             catch (Exception e) {
-                log.error("Error executing agent", e);
+                final var message = AgentUtils.rootCause(e).getMessage();
+                printer.print(Printer.Colours.RED, "Error sending request:" + message);
+                printer.println(Printer.Colours.GRAY,
+                        " (Time taken: %.3f seconds)".formatted(
+                            (float)elapsedTimeCoounter.elapsed().toMillis() / 1000.0));
+                 log.error("Error executing agent %s".formatted(message), e);
             }
         });
     }

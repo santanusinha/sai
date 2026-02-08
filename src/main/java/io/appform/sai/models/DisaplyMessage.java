@@ -17,31 +17,114 @@
 package io.appform.sai.models;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
+import com.phonepe.sentinelai.core.errors.SentinelError;
+
+import lombok.Builder;
 import lombok.NonNull;
 import lombok.Value;
+import lombok.With;
 
 @Value
+@Builder
+@With
 public class DisaplyMessage {
 
-    enum MessageType {
+    public enum MessageType {
         USER_MESSAGE,
         MODEL_RESPONSE,
+        MODEL_ERROR,
         TOOL_CALL,
         TOOL_OUTPUT,
-        TOOL_RESPONSE,
         EVENT
     }
 
     @NonNull
     MessageType type;
 
+    @NonNull
+    String messageId;
+
+    @NonNull
+    String sessionId;
+
+    String ruinId;
+
+    @NonNull
     Actor actor;
-    
+
+    @NonNull
     Severity severity;
 
+    @NonNull
     String content;
 
-    LocalDateTime timestamp;
-}
+    @Builder.Default
+    LocalDateTime timestamp = LocalDateTime.now();
 
+    public static DisaplyMessage userMessage(String sessionId, String runId, String content) {
+        return DisaplyMessage.builder()
+                .type(MessageType.USER_MESSAGE)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.USER)
+                .severity(Severity.INFO)
+                .content(content)
+                .build();
+    }
+
+    public static DisaplyMessage modelSuccess(String sessionId, String runId, String content) {
+        return DisaplyMessage.builder()
+                .type(MessageType.MODEL_RESPONSE)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.ASSISTANT)
+                .severity(Severity.SUCCESS)
+                .content(content)
+                .build();
+    }
+
+    public static DisaplyMessage modelError(String sessionId, String runId, final String error) {
+        return DisaplyMessage.builder()
+                .type(MessageType.MODEL_RESPONSE)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.ASSISTANT)
+                .severity(Severity.ERROR)
+                .content(error)
+                .build();
+    }
+
+    public static DisaplyMessage toolCall(String sessionId, String runId, String content) {
+        return DisaplyMessage.builder()
+                .type(MessageType.TOOL_CALL)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.ASSISTANT)
+                .severity(Severity.INFO)
+                .content(content)
+                .build();
+    }
+
+    public static DisaplyMessage toolOutput(String sessionId, String runId, String content) {
+        return DisaplyMessage.builder()
+                .type(MessageType.TOOL_OUTPUT)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.SYSTEM)
+                .severity(Severity.INFO)
+                .content(content)
+                .build();
+    }
+
+    private static String generateMessageId(String sessionId, String runId) {
+        return "msg-" + UUID.nameUUIDFromBytes("%s-%s-%d".formatted(sessionId, runId, System.currentTimeMillis()).getBytes());
+    }
+
+}

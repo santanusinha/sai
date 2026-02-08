@@ -27,6 +27,7 @@ import lombok.Value;
 public class Printer {
 
     public static final class Colours {
+        public static final String WHITE = "\u001B[37m";
         public static final String RED = "\u001B[31m";
         public static final String GREEN = "\u001B[32m";
         public static final String YELLOW = "\u001B[33m";
@@ -35,6 +36,14 @@ public class Printer {
         public static final String CYAN = "\u001B[36m";
         public static final String GRAY = "\u001B[90m";
         public static final String RESET = "\u001B[0m";
+        public static final String BOLD_WHITE_ON_GRAY_BACKGROUND = "\u001B[1;37;100m";
+        public static final String BOLD_WHITE_ON_RED_BACKGROUND = "\u001B[1;37;41m";
+        public static final String BOLD_WHITE_ON_BLACK_BACKGROUND = "\u001B[1;37;40m";
+        public static final String WHITE_ON_BLACK_BACKGROUND = "\u001B[37;40m";
+        public static final String WHITE_ON_DARK_GRAY_BACKGROUND = "\u001B[37;100m";
+        public static final String GRAY_ON_BLACK_BACKGROUND = "\u001B[90;40m";
+        public static final String RED_ON_BLACK_BACKGROUND = "\u001B[31;40m";
+        public static final String YELLOW_ON_BLACK_BACKGROUND = "\u001B[33;40m";
     }
 
     @Builder.Default
@@ -44,27 +53,34 @@ public class Printer {
     private final PrintStream outputStream = System.out;
 
     public void success(String message) {
-        printWithColour(Colours.GREEN, message);
+        println(Colours.GREEN, message);
     }
 
     public void warning(String message) {
-        printWithColour(Colours.YELLOW, message);
+        println(Colours.YELLOW, message);
     }
 
     public void info(String message) {
-        printWithColour(Colours.BLUE, message);
+        println(Colours.BLUE, message);
     }
 
     public void debug(String message) {
-        printWithColour(Colours.GRAY, message);
+        println(Colours.GRAY, message);
     }
 
     public void print(String message) {
         outputStream.println(message);
     }
 
-    public void printWithColour(String colour, String message) {
+    public void print(String colour, String message) {
+        outputStream.print(colour + message + Colours.RESET);
+        outputStream.flush();
+    }
+
+    public void println(String colour, String message) {
         outputStream.println(colour + message + Colours.RESET);
+        outputStream.println();
+        outputStream.flush();
     }
 
 }
