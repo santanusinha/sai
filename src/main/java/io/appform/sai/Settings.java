@@ -26,6 +26,8 @@ import java.util.UUID;
 @Builder
 @With
 public class Settings {
+    @Builder.Default
+    String appName = "sai";
     String dataDir;
     boolean debug;
     boolean headless;

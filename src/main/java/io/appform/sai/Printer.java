@@ -17,14 +17,25 @@
 
 package io.appform.sai;
 
-import java.io.PrintStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Objects;
+
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReader.Option;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.Status;
 
 import lombok.Builder;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.SneakyThrows;
 import lombok.Value;
 
 @Value
-@Builder
-public class Printer {
+public class Printer implements AutoCloseable {
 
     public static final class Colours {
         public static final String WHITE = "\u001B[37m";
@@ -46,33 +57,60 @@ public class Printer {
         public static final String YELLOW_ON_BLACK_BACKGROUND = "\u001B[33;40m";
     }
 
+    @NonNull
+    final Settings settings;
 
-    @Builder.Default
-    private boolean headless = false;
+    final Terminal terminal = createTerminal();
 
-    @Builder.Default
-    private final PrintStream outputStream = System.out;
+    private final PrintWriter outputStream;
+
+    @Getter
+    private final LineReader lineReader;
+
+    private final Status status;
+
+    @Builder
+    public Printer(@NonNull Settings settings,
+                   PrintWriter outputStream,
+                   LineReader lineReader) {
+        this.settings = settings;
+        this.outputStream = Objects.requireNonNullElseGet(outputStream,
+                                                          terminal::writer);
+        this.lineReader = Objects.requireNonNullElseGet(lineReader,
+                                                        () -> LineReaderBuilder
+                                                                .builder()
+                                                                .terminal(terminal)
+                                                                .appName(settings
+                                                                        .getAppName())
+                                                                .option(Option.ERASE_LINE_ON_FINISH,
+                                                                        true)
+                                                                .build());
+        this.status = Status.getStatus(terminal);
+    }
 
     public void println(String message) {
-        println(Colours.RESET +  message);
+        println(Colours.RESET + message);
     }
 
-    public void print(String colour, String message) {
-        outputStream.print(colour + message + Colours.RESET);
-        outputStream.flush();
-    }
+    /* public void print(String colour, String message) {
+        lineReader.printAbove(colour + message + Colours.RESET);
+        //outputStream.flush();
+    } */
 
     public void println(String colour, String message) {
-        outputStream.println(colour + message + Colours.RESET);
-        outputStream.println();
-        outputStream.flush();
+        lineReader.printAbove(colour + message + Colours.RESET + System
+                .lineSeparator() + System.lineSeparator());
+        // outputStream.flush();
     }
 
-    public PrintStream colouredStream(String colour) {
-        outputStream.print(colour);
-        outputStream.flush();
-        return outputStream;
+    @Override
+    public void close() throws IOException {
+        terminal.close();
     }
 
+    @SneakyThrows
+    private static Terminal createTerminal() {
+        return TerminalBuilder.builder().system(true).build();
+    }
 
 }

@@ -18,12 +18,10 @@ package io.appform.sai;
 
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.AgentInput;
@@ -47,15 +45,15 @@ public class CommandProcessor implements AutoCloseable {
     public record InputCommand(String runId, String input) {
     }
 
+    @Builder
     public record Command(CommandType command, InputCommand input) {
     }
 
     private final String sessionId;
     private final SaiAgent agent;
     private final ExecutorService executorService;
-    private final ObjectMapper mapper;
-    private final Printer printer;
     private final DisplayMessageHandler displayMessageHandler;
+    // private final Status status;
     private final LinkedBlockingQueue<Command> inputQueue = new LinkedBlockingQueue<>();
     private Future<?> runningTask;
     private final String user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
@@ -65,18 +63,17 @@ public class CommandProcessor implements AutoCloseable {
                        @NonNull final String sessionId,
                        @NonNull final SaiAgent agent,
                        @NonNull final ExecutorService executorService,
-                       @NonNull final ObjectMapper mapper,
-                       @NonNull final Printer printer,
-                       @NonNull final DisplayMessageHandler displayMessageHandler) {
+                       @NonNull final DisplayMessageHandler displayMessageHandler/* ,
+                       @NonNull final Status status */) {
         this.sessionId = sessionId;
         this.agent = agent;
         this.executorService = executorService;
-        this.mapper = mapper;
-        this.printer = printer;
         this.displayMessageHandler = displayMessageHandler;
+        // this.status = status;
     }
 
     public CommandProcessor start() {
+        // status.update(List.of(new AttributedString("Idle")));
         runningTask = executorService.submit(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 waitForInput();
@@ -93,7 +90,44 @@ public class CommandProcessor implements AutoCloseable {
         log.info("Command processor shut down");
     }
 
-    public void handleInput(final InputCommand input) {
+    public void handle(Command command) {
+        try {
+            inputQueue.put(command);
+        }
+        catch(InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.info("Queue put interrupted");
+        }
+    }
+
+    private void waitForInput() {
+        try {
+            final var item = inputQueue.take();
+            if (item != null) {
+                try {
+                    //status.update(List.of(new AttributedString(Printer.Colours.YELLOW + "Processing input...")));
+                    switch (item.command) {
+                        case INPUT -> handleInput(item.input);
+                    }
+                }
+                finally {
+                    // status.update(List.of(new AttributedString("Idle")));
+                }
+            }
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.info("Agent runner interrupted. Exiting.");
+        }
+            
+            
+    }
+
+    private float elapsedTimeInSeconds(final Stopwatch stopwatch) {
+        return (float) stopwatch.elapsed().toMillis() / 1000.0f;
+    }
+
+    private void handleInput(final InputCommand input) {
         final var messages = new ArrayList<DisaplyMessage>();
         final var elapsedTimeCoounter = Stopwatch.createStarted();
         var message = "";
@@ -146,40 +180,6 @@ public class CommandProcessor implements AutoCloseable {
 
         }
         displayMessageHandler.handle(messages);
-    }
-
-    public String queueInput(String input) {
-        final var runId = UUID.randomUUID().toString();
-        final var command = new Command(CommandType.INPUT,
-                new InputCommand(runId, input));
-        try {
-            inputQueue.put(command);
-        }
-        catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.info("Queue put interrupted");
-        }
-        log.debug("Input Queued: runId: {}. Input: {}", runId, input);
-        return runId;
-    }
-
-    private void waitForInput() {
-        try {
-            final var item = inputQueue.take();
-            if (item != null) {
-                switch (item.command) {
-                    case INPUT -> handleInput(item.input);
-                }
-            }
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.info("Agent runner interrupted. Exiting.");
-        }
-    }
-
-    private float elapsedTimeInSeconds(final Stopwatch stopwatch) {
-        return (float) stopwatch.elapsed().toMillis() / 1000.0f;
     }
 
 }

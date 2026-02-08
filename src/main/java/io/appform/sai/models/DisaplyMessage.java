@@ -19,8 +19,6 @@ package io.appform.sai.models;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.phonepe.sentinelai.core.errors.SentinelError;
-
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.Value;

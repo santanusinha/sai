@@ -99,9 +99,10 @@
             <version>${logback.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.appform.signals</groupId>
-            <artifactId>signals</artifactId>
-            <version>${signals.version}</version>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.30.6</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
