@@ -46,30 +46,15 @@ public class Printer {
         public static final String YELLOW_ON_BLACK_BACKGROUND = "\u001B[33;40m";
     }
 
+
     @Builder.Default
     private boolean headless = false;
 
     @Builder.Default
     private final PrintStream outputStream = System.out;
 
-    public void success(String message) {
-        println(Colours.GREEN, message);
-    }
-
-    public void warning(String message) {
-        println(Colours.YELLOW, message);
-    }
-
-    public void info(String message) {
-        println(Colours.BLUE, message);
-    }
-
-    public void debug(String message) {
-        println(Colours.GRAY, message);
-    }
-
-    public void print(String message) {
-        outputStream.println(message);
+    public void println(String message) {
+        println(Colours.RESET +  message);
     }
 
     public void print(String colour, String message) {
@@ -82,5 +67,12 @@ public class Printer {
         outputStream.println();
         outputStream.flush();
     }
+
+    public PrintStream colouredStream(String colour) {
+        outputStream.print(colour);
+        outputStream.flush();
+        return outputStream;
+    }
+
 
 }

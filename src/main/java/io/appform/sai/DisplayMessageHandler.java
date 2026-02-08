@@ -16,7 +16,11 @@
 
 package io.appform.sai;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingDeque;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.core.events.AgentEvent;
@@ -38,9 +42,8 @@ import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
-@AllArgsConstructor
 @Slf4j
-public class DisplayMessageHandler {
+public class DisplayMessageHandler implements AutoCloseable {
 
     @AllArgsConstructor(access = lombok.AccessLevel.PRIVATE)
     private static final class EventToMessageConverter implements AgentEventVisitor<Optional<DisaplyMessage>> {
@@ -60,17 +63,7 @@ public class DisplayMessageHandler {
         @Override
         @SneakyThrows
         public Optional<DisaplyMessage> visit(OutputGeneratedAgentEvent outputGeneratedAgentEvent) {
-            final var textOutput = handler.mapper
-                       .readTree(outputGeneratedAgentEvent
-                               .getContent())
-                       .get("output")
-                       .asText();
-            return Optional.of(DisaplyMessage.modelSuccess(
-                                                           outputGeneratedAgentEvent
-                                                                   .getSessionId(),
-                                                           outputGeneratedAgentEvent
-                                                                   .getRunId(),
-                                                           textOutput));
+            return Optional.empty();
         }
 
         @Override
@@ -124,7 +117,44 @@ public class DisplayMessageHandler {
     private final Settings settings;
     private final Printer printer;
     private final ObjectMapper mapper;
+    private final ExecutorService executorService;
+    private final LinkedBlockingDeque<List<DisaplyMessage>> messages = new LinkedBlockingDeque<>();
     private final EventToMessageConverter eventToMessageConverter = new EventToMessageConverter(this);
+    private Future<?> queueReaderFuture = null;    
+
+    public DisplayMessageHandler(Settings settings,
+                                 ObjectMapper mapper,
+                                 Printer printer,
+                                 ExecutorService executorService) {
+        this.settings = settings;
+        this.printer = printer;
+        this.mapper = mapper;
+        this.executorService = executorService;
+
+    }
+
+    public DisplayMessageHandler start() {
+        queueReaderFuture = executorService.submit(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    final var messagesToPrint = messages.take();
+                    messagesToPrint.forEach(this::printMessage);
+                }
+                catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.info("Message printer shut down");
+                }
+            }
+        });
+        return this;
+    }
+
+    @Override
+    public void close() throws Exception {
+        if(null == queueReaderFuture) {
+            queueReaderFuture.cancel(true);
+        }
+    }
 
     public void handleEvent(final AgentEvent event) {
         try {
@@ -137,7 +167,21 @@ public class DisplayMessageHandler {
         }
     }
 
-    public void handle(DisaplyMessage message) {
+    public void handle(final DisaplyMessage message) {
+        handle(List.of(message));
+    }
+
+    public void handle(final List<DisaplyMessage> messages) {
+        try {
+            this.messages.put(messages);
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.info("Message printer shut down");
+        }
+    }
+
+    public void printMessage(DisaplyMessage message) {
 /*         final var colour = switch (message.getSeverity()) {
             case INFO -> Printer.Colours.BLUE;
             case WARNING -> Printer.Colours.YELLOW;
@@ -146,19 +190,19 @@ public class DisplayMessageHandler {
             case DEBUG -> Printer.Colours.GRAY;
         }; */
         final var colour = switch(message.getType()) {
-            case EVENT -> Printer.Colours.GRAY_ON_BLACK_BACKGROUND;
-            case MODEL_RESPONSE -> Printer.Colours.RESET;
+            case EVENT -> Printer.Colours.GRAY;
+            case MODEL_RESPONSE -> Printer.Colours.WHITE;
             case MODEL_ERROR -> Printer.Colours.RED;
             case TOOL_CALL -> Printer.Colours.YELLOW;
             case TOOL_OUTPUT -> Printer.Colours.GRAY;
             case USER_MESSAGE -> Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND;
+            case INFO -> Printer.Colours.RESET;
         };
         if (shouldDisplay(message)) {
             if (settings.isHeadless()) {
-                printer.print(message.getContent());
+                printer.println(message.getContent());
             }
             else {
-
                 printer.println(colour, formatMessage(message));
             }
         }
@@ -184,4 +228,5 @@ public class DisplayMessageHandler {
             || message.getSeverity().equals(Severity.ERROR)
             || message.getType().equals(MessageType.MODEL_RESPONSE);
     }
+
 }

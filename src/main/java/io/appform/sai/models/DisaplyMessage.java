@@ -37,7 +37,8 @@ public class DisaplyMessage {
         MODEL_ERROR,
         TOOL_CALL,
         TOOL_OUTPUT,
-        EVENT
+        EVENT,
+        INFO
     }
 
     @NonNull
@@ -114,6 +115,18 @@ public class DisaplyMessage {
     public static DisaplyMessage toolOutput(String sessionId, String runId, String content) {
         return DisaplyMessage.builder()
                 .type(MessageType.TOOL_OUTPUT)
+                .messageId(generateMessageId(sessionId, runId))
+                .sessionId(sessionId)
+                .ruinId(runId)
+                .actor(Actor.SYSTEM)
+                .severity(Severity.INFO)
+                .content(content)
+                .build();
+    }
+
+    public static DisaplyMessage info(String sessionId, String runId, String content) {
+        return DisaplyMessage.builder()
+                .type(MessageType.INFO)
                 .messageId(generateMessageId(sessionId, runId))
                 .sessionId(sessionId)
                 .ruinId(runId)

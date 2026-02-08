@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-package io.appform.sai;
+package io.appform.sai.models;
+
+import com.phonepe.sentinelai.core.model.ModelUsageStats;
+import com.phonepe.sentinelai.session.SessionSummary;
 
 import lombok.Builder;
 import lombok.Value;
 import lombok.With;
-
-import java.util.UUID;
+import lombok.extern.jackson.Jacksonized;
 
 @Value
 @Builder
 @With
-public class Settings {
-    String dataDir;
-    boolean debug;
-    boolean headless;
-    @Builder.Default
-    String sessionId = UUID.randomUUID().toString();
+@Jacksonized
+public class Session {
+    String sessionId;
+    SessionSummary sessonSummary;
+    ModelUsageStats usage;
 }
