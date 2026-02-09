@@ -151,7 +151,6 @@ public class App {
                         break;
                     }
                     //TODO::FIND OUT WHICH COMMAND AND HANDLE
-                    //commandProcessor.processInput(input);
                     commandProcessor.handle(CommandProcessor.Command.builder()
                             .command(CommandType.INPUT)
                             .input(new InputCommand("run-" + UUID.randomUUID()
@@ -167,7 +166,7 @@ public class App {
             log.error("Error processing input", e);
         }
         finally {
-            executorSerivce.shutdown();
+            executorSerivce.shutdownNow();
             executorSerivce.awaitTermination(1, TimeUnit.SECONDS);
         }
     }

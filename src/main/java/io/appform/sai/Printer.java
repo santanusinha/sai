@@ -31,6 +31,7 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedString;
+import org.jline.utils.InfoCmp.Capability;
 import org.jline.utils.Status;
 
 import io.appform.sai.models.Actor;
@@ -114,6 +115,9 @@ public class Printer implements AutoCloseable {
     }
 
     public Printer start() {
+        lineReader.getTerminal().puts(Capability.clear_screen);
+        lineReader.getTerminal().flush();
+
         printerTask = executorService.submit(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
@@ -121,11 +125,12 @@ public class Printer implements AutoCloseable {
                     if(null != printables) {
                         printables.forEach(printable -> {
                             if(printable.isStatusUpdate()) {
+                                status.update(List.of(AttributedString.EMPTY));
                                 status.update(List.of(new AttributedString(printable.getData())));
                             }
                             else {
                                 if(printable.isRaw()) {
-                                    lineReader.printAbove("%s%s".formatted(printable.getData(), Colours.RESET));
+                                    lineReader.printAbove("%s".formatted(printable.getData()));
                                 }
                                 else {
                                     final var colour = Objects.requireNonNullElseGet(printable.getColour(), () -> defaultColour(printable.getSeverity()));
@@ -141,7 +146,34 @@ public class Printer implements AutoCloseable {
                 }
             }
         });
+        this.print(markIdleStatus());
         return this;
+    }
+
+    public static Update markIdleStatus() {
+        return statusUpdate(" Idle " + Colours.GRAY + "(Waiting for input)");
+    }
+
+    public static Update statusUpdate(String status) {
+        return Update.builder()
+                .actor(Actor.SYSTEM)
+                .severity(Severity.NORMAL)
+                .data(status + Colours.RESET)
+                .statusUpdate(true)
+                .build();
+    }
+
+    public static Update empty() {
+        return raw("" + Colours.RESET);
+    }
+
+    public static Update raw(String data) {
+        return Update.builder()
+                .actor(Actor.SYSTEM)
+                .severity(Severity.NORMAL)
+                .data(data)
+                .raw(true)
+                .build();
     }
 
     public void print(Update update) {
@@ -163,6 +195,7 @@ public class Printer implements AutoCloseable {
         if(null != printerTask) {
             printerTask.cancel(true);
         }
+        lineReader.printAbove(Colours.RESET);
         terminal.close();
         log.info("Printer closed");
     }

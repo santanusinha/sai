@@ -17,6 +17,7 @@
 package io.appform.sai;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -71,7 +72,6 @@ public class CommandProcessor implements AutoCloseable {
     }
 
     public CommandProcessor start() {
-        // status.update(List.of(new AttributedString("Idle")));
         runningTask = executorService.submit(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 waitForInput();
@@ -103,7 +103,6 @@ public class CommandProcessor implements AutoCloseable {
             final var item = inputQueue.take();
             if (item != null) {
                 try {
-                    //status.update(List.of(new AttributedString(Printer.Colours.YELLOW + "Processing input...")));
                     switch (item.command) {
                         case INPUT -> handleInput(item.input);
                     }
@@ -117,8 +116,6 @@ public class CommandProcessor implements AutoCloseable {
             Thread.currentThread().interrupt();
             log.info("Agent runner interrupted. Exiting.");
         }
-            
-            
     }
 
     private float elapsedTimeInSeconds(final Stopwatch stopwatch) {
@@ -127,13 +124,16 @@ public class CommandProcessor implements AutoCloseable {
 
     private void handleInput(final InputCommand input) {
         final var prompt = input.input();
-        printer.print(Update.builder()
-                    .actor(Actor.USER)
-                    .severity(Severity.NORMAL)
-                    .colour(Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND)
-                    .data(prompt)
-                    .build());
- 
+        printer.print(List.of(Update.builder()
+                .actor(Actor.USER)
+                .severity(Severity.NORMAL)
+                .colour(Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND)
+                .data(" " + prompt + " ")
+                .build(),
+                              Printer.empty(),
+                              Printer.statusUpdate(" Processing run: "  + Printer.Colours.GRAY
+                                  + "%s ... ".formatted(input.runId()))));
+
         final var messages = new ArrayList<Update>();
         final var elapsedTimeCoounter = Stopwatch.createStarted();
         var errorMessage = "";
@@ -170,7 +170,6 @@ public class CommandProcessor implements AutoCloseable {
                         .colour(Printer.Colours.RESET)
                         .data(infoMessage)
                         .build());
-                // messages.add(DisaplyMessage.info(sessionId, input.runId(), infoMessage));
             }
             else {
                 errorMessage = "Sentinel error: [%s] %s".formatted(error
@@ -193,6 +192,8 @@ public class CommandProcessor implements AutoCloseable {
                     .data(errorMessage)
                     .build());
         }
+        messages.add(Printer.markIdleStatus());
+        messages.add(Printer.empty());
         printer.print(messages);
     }
 
