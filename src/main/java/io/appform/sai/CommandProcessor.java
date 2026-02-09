@@ -29,7 +29,8 @@ import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
 import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
-import io.appform.sai.models.DisaplyMessage;
+import io.appform.sai.Printer.Update;
+import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import lombok.Builder;
 import lombok.NonNull;
@@ -52,8 +53,7 @@ public class CommandProcessor implements AutoCloseable {
     private final String sessionId;
     private final SaiAgent agent;
     private final ExecutorService executorService;
-    private final DisplayMessageHandler displayMessageHandler;
-    // private final Status status;
+    private final Printer printer;
     private final LinkedBlockingQueue<Command> inputQueue = new LinkedBlockingQueue<>();
     private Future<?> runningTask;
     private final String user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
@@ -63,13 +63,11 @@ public class CommandProcessor implements AutoCloseable {
                        @NonNull final String sessionId,
                        @NonNull final SaiAgent agent,
                        @NonNull final ExecutorService executorService,
-                       @NonNull final DisplayMessageHandler displayMessageHandler/* ,
-                       @NonNull final Status status */) {
+                       @NonNull final Printer printer) {
         this.sessionId = sessionId;
         this.agent = agent;
         this.executorService = executorService;
-        this.displayMessageHandler = displayMessageHandler;
-        // this.status = status;
+        this.printer = printer;
     }
 
     public CommandProcessor start() {
@@ -128,9 +126,18 @@ public class CommandProcessor implements AutoCloseable {
     }
 
     private void handleInput(final InputCommand input) {
-        final var messages = new ArrayList<DisaplyMessage>();
+        final var prompt = input.input();
+        printer.print(Update.builder()
+                    .actor(Actor.USER)
+                    .severity(Severity.NORMAL)
+                    .colour(Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND)
+                    .data(prompt)
+                    .build());
+ 
+        final var messages = new ArrayList<Update>();
         final var elapsedTimeCoounter = Stopwatch.createStarted();
-        var message = "";
+        var errorMessage = "";
+        var errorActor = Actor.ASSISTANT;
         try {
             final var responseF = agent.executeAsync(AgentInput
                     .<String>builder()
@@ -138,48 +145,55 @@ public class CommandProcessor implements AutoCloseable {
                             .sessionId(sessionId)
                             .userId(user)
                             .build())
-                    .request(input.input())
+                    .request(prompt)
                     .build());
             final var response = responseF.get();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
-                messages.add(DisaplyMessage.modelSuccess(sessionId,
-                                                         input.runId(),
-                                                         response.getData()));
+                messages.add(Update.builder()
+                        .actor(Actor.ASSISTANT)
+                        .severity(Severity.NORMAL)
+                        .colour(Printer.Colours.RESET)
+                        .data(response.getData())
+                        .build());
                 var infoMessage = Printer.Colours.WHITE + "%s %s.".formatted(
-                                                                     Severity.SUCCESS
-                                                                             .getEmoji(),
-                                                                     response.getError()
-                                                                             .getMessage());
+                                                                             Severity.SUCCESS
+                                                                                     .getEmoji(),
+                                                                             response.getError()
+                                                                                     .getMessage());
                 infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
-                                                                                     .formatted(elapsedTimeInSeconds(elapsedTimeCoounter),
-                                                                                                response.getUsage()
-                                                                                                        .getTotalTokens());
-
-                messages.add(DisaplyMessage.info(sessionId, input.runId(), infoMessage));
+                        .formatted(elapsedTimeInSeconds(elapsedTimeCoounter),
+                                   response.getUsage().getTotalTokens());
+                messages.add(Update.builder()
+                        .actor(Actor.SYSTEM)
+                        .severity(Severity.NORMAL)
+                        .colour(Printer.Colours.RESET)
+                        .data(infoMessage)
+                        .build());
+                // messages.add(DisaplyMessage.info(sessionId, input.runId(), infoMessage));
             }
             else {
-                message = "Sentinel error: [%s] %s".formatted(error
+                errorMessage = "Sentinel error: [%s] %s".formatted(error
                         .getErrorType(), error.getMessage());
-                displayMessageHandler.handle(DisaplyMessage.modelError(sessionId,
-                                                                       input.runId(),
-                                                                       message));
             }
         }
         catch (Exception e) {
-            message = AgentUtils.rootCause(e).getMessage();
-            log.error("Error executing agent %s".formatted(message), e);
+            errorMessage = AgentUtils.rootCause(e).getMessage();
+            log.error("Error executing agent %s".formatted(errorMessage), e);
+            errorActor = Actor.SYSTEM;
         }
-        if (!Strings.isNullOrEmpty(message)) {
-            message = Printer.Colours.RED +
-                          "%s Error sending request:".formatted(Severity.ERROR
-                                  .getEmoji(), message);
-            message += Printer.Colours.GRAY +
-                            " (Time taken: %.3f seconds)".formatted(
-                                                                    elapsedTimeInSeconds(elapsedTimeCoounter));
-
+        if (!Strings.isNullOrEmpty(errorMessage)) {
+            errorMessage = Printer.Colours.RED + "%s Error sending request: "
+                    .formatted(Severity.ERROR.getEmoji(), errorMessage);
+            errorMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds)"
+                    .formatted(elapsedTimeInSeconds(elapsedTimeCoounter));
+            messages.add(Update.builder()
+                    .actor(errorActor)
+                    .severity(Severity.ERROR)
+                    .data(errorMessage)
+                    .build());
         }
-        displayMessageHandler.handle(messages);
+        printer.print(messages);
     }
 
 }

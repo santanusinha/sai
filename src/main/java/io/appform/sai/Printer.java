@@ -19,22 +19,30 @@ package io.appform.sai;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.AttributedString;
 import org.jline.utils.Status;
 
+import io.appform.sai.models.Actor;
+import io.appform.sai.models.Severity;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 
-@Value
+@Slf4j
 public class Printer implements AutoCloseable {
 
     public static final class Colours {
@@ -57,25 +65,42 @@ public class Printer implements AutoCloseable {
         public static final String YELLOW_ON_BLACK_BACKGROUND = "\u001B[33;40m";
     }
 
+    @Value
+    @Builder
+    public static class Update {
+        @NonNull
+        Actor actor;
+        @NonNull
+        Severity severity;
+        String colour;
+        String data;
+        boolean statusUpdate;
+        boolean raw;
+    }
+
     @NonNull
-    final Settings settings;
+    private final Settings settings;
 
-    final Terminal terminal = createTerminal();
+    @NonNull
+    private final ExecutorService executorService;
 
-    private final PrintWriter outputStream;
+    private final Terminal terminal = createTerminal();
 
     @Getter
     private final LineReader lineReader;
 
     private final Status status;
 
+    private final LinkedBlockingQueue<List<Update>> printingQueue = new LinkedBlockingQueue<>();
+    private Future<?> printerTask = null;
+
     @Builder
     public Printer(@NonNull Settings settings,
+                   @NonNull ExecutorService executorService,
                    PrintWriter outputStream,
                    LineReader lineReader) {
         this.settings = settings;
-        this.outputStream = Objects.requireNonNullElseGet(outputStream,
-                                                          terminal::writer);
+        this.executorService = executorService;
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
                                                         () -> LineReaderBuilder
                                                                 .builder()
@@ -88,29 +113,75 @@ public class Printer implements AutoCloseable {
         this.status = Status.getStatus(terminal);
     }
 
-    public void println(String message) {
-        println(Colours.RESET + message);
+    public Printer start() {
+        printerTask = executorService.submit(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    final var printables = printingQueue.take();
+                    if(null != printables) {
+                        printables.forEach(printable -> {
+                            if(printable.isStatusUpdate()) {
+                                status.update(List.of(new AttributedString(printable.getData())));
+                            }
+                            else {
+                                if(printable.isRaw()) {
+                                    lineReader.printAbove("%s%s".formatted(printable.getData(), Colours.RESET));
+                                }
+                                else {
+                                    final var colour = Objects.requireNonNullElseGet(printable.getColour(), () -> defaultColour(printable.getSeverity()));
+                                    lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(), colour, printable.getData(), Colours.RESET));
+                                }
+                            }
+                        });
+                    }
+                }
+                catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.info("Shutting down printer");
+                }
+            }
+        });
+        return this;
     }
 
-    /* public void print(String colour, String message) {
-        lineReader.printAbove(colour + message + Colours.RESET);
-        //outputStream.flush();
-    } */
+    public void print(Update update) {
+        print(List.of(update));
+    }
 
-    public void println(String colour, String message) {
-        lineReader.printAbove(colour + message + Colours.RESET + System
-                .lineSeparator() + System.lineSeparator());
-        // outputStream.flush();
+    public void print(List<Update> updates) {
+        try {
+            printingQueue.put(updates);
+        }
+        catch(InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Failed to print updates: {}", updates, e);
+        }
     }
 
     @Override
     public void close() throws IOException {
+        if(null != printerTask) {
+            printerTask.cancel(true);
+        }
         terminal.close();
+        log.info("Printer closed");
     }
 
     @SneakyThrows
     private static Terminal createTerminal() {
         return TerminalBuilder.builder().system(true).build();
     }
+
+    private static String defaultColour(final Severity severity) {
+        return switch(severity) {
+            case DEBUG -> Colours.GRAY;
+            case ERROR -> Colours.RED;
+            case INFO -> Colours.GRAY;
+            case SUCCESS -> Colours.GREEN;
+            case WARNING -> Colours.YELLOW;
+            case NORMAL -> Colours.WHITE;
+        };
+    }
+
 
 }

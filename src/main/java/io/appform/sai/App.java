@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package io.appform.sai;
 
@@ -26,6 +41,9 @@ import com.phonepe.sentinelai.models.TokenCountingConfig;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
+import io.appform.sai.Printer.Update;
+import io.appform.sai.models.Actor;
+import io.appform.sai.models.Severity;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
@@ -37,6 +55,7 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.joran.spi.JoranException;
 
+import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 import org.slf4j.LoggerFactory;
 
@@ -97,22 +116,26 @@ public class App {
         final var agent = new SaiAgent(agentSetup, List.of(), Map.of());
 
 
-        try (final var printer = Printer.builder().settings(settings).build();
-                final var displayMessageHandler = new DisplayMessageHandler(settings,
-                                                                            mapper,
-                                                                            printer,
-                                                                            executorSerivce)
-                                                                                    .start();
+        try (final var printer = Printer.builder()
+                .settings(settings)
+                .executorService(executorSerivce)
+                .build()
+                .start();
                 final var commandProcessor = CommandProcessor.builder()
                         .sessionId(settings.getSessionId())
                         .agent(agent)
                         .executorService(executorSerivce)
-                        .displayMessageHandler(displayMessageHandler)
+                        .printer(printer)
                         .build()
                         .start()) {
-            printer.println(Printer.Colours.YELLOW,
-                            "Welcome to SAI! Type 'exit' to quit.");
-            eventBus.onEvent().connect(displayMessageHandler::handleEvent);
+            printer.print(Update.builder()
+                    .actor(Actor.SYSTEM)
+                    .severity(Severity.INFO)
+                    .colour(Printer.Colours.YELLOW)
+                    .data("Welcome to SAI! Type 'exit' to quit....")
+                    .build());
+            final var eventPrinter = new EventPrinter(mapper, printer);
+            eventBus.onEvent().connect(event -> event.accept(eventPrinter));
 
             var prompt = Printer.Colours.CYAN + "Enter input ";
             prompt += Printer.Colours.GRAY + "(type 'exit' to quit)";
@@ -135,15 +158,17 @@ public class App {
                                     .toString(), input))
                             .build());
                 }
-                catch (UserInterruptException e) {
+                catch (EndOfFileException | UserInterruptException e) {
                     break;
                 }
             }
-            executorSerivce.shutdownNow();
-            executorSerivce.awaitTermination(10, TimeUnit.SECONDS);
         }
         catch (Exception e) {
             log.error("Error processing input", e);
+        }
+        finally {
+            executorSerivce.shutdown();
+            executorSerivce.awaitTermination(1, TimeUnit.SECONDS);
         }
     }
 

@@ -26,7 +26,8 @@ public enum Severity {
     WARNING("⚠️"),
     SUCCESS("✅"),
     INFO("ℹ️"),
-    DEBUG("🐞");
+    DEBUG("🐞"),
+    NORMAL("");
 
     private final String emoji;
 
