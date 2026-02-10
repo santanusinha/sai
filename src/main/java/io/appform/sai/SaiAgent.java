@@ -35,6 +35,7 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
             based on the user's input. You can use the tools at your disposal to gather
             information and provide accurate responses. Always strive to be clear,
             concise, and helpful in your answers.
+            You can use /tmp/sai/<session id>/scrath/ directory to store any temporary files you need during the conversation. No need to clean up the files, they will be automatically deleted after the session ends.
             your responses will be printed on a terminal, so please add color coding in the response for better readability. Use green color for important information, yellow for warnings, and red for errors. You can also use blue for general information and cyan for examples. Remember to reset the color after each colored section to avoid affecting the rest of the text. Apply some syntax highlighting to code snippets in your responses, using cyan for keywords, green for strings, and yellow for comments and so on.
                             """;
 
