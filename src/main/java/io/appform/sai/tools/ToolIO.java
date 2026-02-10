@@ -36,6 +36,8 @@ public class ToolIO {
         String requestReason;
         @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.")
         String command;
+        @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes.")
+        int timeoutSeconds;
     }
 
     @Value

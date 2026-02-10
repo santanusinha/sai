@@ -19,16 +19,19 @@ package io.appform.sai.tools;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
-// removed unused import: Strings.trim
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
+import dev.failsafe.Failsafe;
+import dev.failsafe.Timeout;
+import dev.failsafe.TimeoutExceededException;
 import lombok.AllArgsConstructor;
 import lombok.Value;
 
-@AllArgsConstructor
+@AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
 public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutput> {
 
     @Value
@@ -38,7 +41,14 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
         String stderr;
     }
 
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
     final String command;
+    final Duration timeout;
+
+    public BashCommandRunner(String command) {
+        this(command, DEFAULT_TIMEOUT);
+    }
 
     @Override
     public CommandOutput call() {
@@ -47,27 +57,34 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
                 ? new String[]{"cmd.exe", "/c", command}
                 : new String[]{"/bin/bash", "-c", command};
         try {
-            final var process = new ProcessBuilder(processbuilderArgs)
-                .redirectErrorStream(true)
-                .start();
+            final var timeoutPolicy = Timeout.<CommandOutput>builder(timeout)
+                    .withInterrupt()
+                    .build();
+            return Failsafe.with(timeoutPolicy).get(() -> {
+                final var process = new ProcessBuilder(processbuilderArgs)
+                        .redirectErrorStream(true)
+                        .start();
 
-            try (final var stdoutStream = reader(process.getInputStream())) {
-                final var stdout = streamToString(stdoutStream);
-                final var statusCode = process.waitFor();
-                if(statusCode == 0) {
-                    return new CommandOutput(statusCode, stdout, "");
+                try (final var stdoutStream = reader(process.getInputStream())) {
+                    final var stdout = streamToString(stdoutStream);
+                    final var statusCode = process.waitFor();
+                    if (statusCode == 0) {
+                        return new CommandOutput(statusCode, stdout, "");
+                    }
+                    return new CommandOutput(statusCode, "", stdout);
                 }
-                return new CommandOutput(statusCode, "", stdout);
+            });
+        } catch (TimeoutExceededException e) {
+            return new CommandOutput(-1, "", "Execution timed out after " + timeout.toMinutes() + " minutes");
+        } catch (Exception e) {
+            final var rootCause = AgentUtils.rootCause(e);
+            if (rootCause instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                return new CommandOutput(-1, "", "Execution interrupted");
             }
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return new CommandOutput(-1, "", "Execution interrupted");
-        }
-        catch (Exception e) {
             return new CommandOutput(-1,
-                                     "",
-                                     "Error executing command: " + AgentUtils.rootCause(e).getMessage());
+                    "",
+                    "Error executing command: " + rootCause.getMessage());
         }
     }
 
@@ -79,8 +96,4 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
     private static BufferedReader reader(final InputStream stream) {
         return new BufferedReader(new InputStreamReader(stream));
     }
-
-
-
-
 }

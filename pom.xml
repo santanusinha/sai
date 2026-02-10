@@ -17,6 +17,7 @@
         <picocli.version>4.7.7</picocli.version>
         <logback.version>1.4.14</logback.version>
         <signals.version>1.4</signals.version>
+        <failsafe.version>3.3.2</failsafe.version>
     </properties>
 
     <dependencyManagement>
@@ -95,6 +96,11 @@
             <artifactId>jline</artifactId>
             <version>3.30.6</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.failsafe</groupId>
+            <artifactId>failsafe</artifactId>
+            <version>${failsafe.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

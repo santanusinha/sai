@@ -16,6 +16,7 @@
 
 package io.appform.sai.tools;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,7 +46,7 @@ public class CoreToolBox implements ToolBox {
          // once completed we return the status code and the output as response.
          log.info("Executing bash command: {}", request.getCommand());
          try {
-             final var commandOutput = new BashCommandRunner(request.getCommand()).call();
+             final var commandOutput = new BashCommandRunner(request.getCommand(), Duration.ofSeconds(request.getTimeoutSeconds())).call();
 
              int statusCode = commandOutput.getStatusCode();
              final var stdout = commandOutput.getStdout();
