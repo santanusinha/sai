@@ -16,6 +16,9 @@
 
 package io.appform.sai;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -31,19 +34,21 @@ import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
-import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.DefaultChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
+import com.phonepe.sentinelai.session.AgentSessionExtension;
+import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.session.DiskSessionStore;
 import io.appform.sai.tools.CoreToolBox;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
@@ -113,8 +118,16 @@ public class App {
                 .build();
 
 
-        final var agent = new SaiAgent(agentSetup, List.of(), Map.of());
-
+        final var dataDir = Paths.get(settings.getDataDir(), "sessions");
+        Files.createDirectories(dataDir);
+        final var sessioStore = new DiskSessionStore(dataDir);
+        final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
+                .sessionStore(sessioStore)
+                .mapper(mapper)
+                .setup(AgentSessionExtensionSetup.builder()
+                        .build())
+                .build();
+        final var agent = new SaiAgent(agentSetup, List.of(sessionExtension), Map.of());
 
         try (final var printer = Printer.builder()
                 .settings(settings)

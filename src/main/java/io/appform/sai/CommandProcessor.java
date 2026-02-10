@@ -28,6 +28,7 @@ import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.AgentInput;
 import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
 import com.phonepe.sentinelai.core.errors.ErrorType;
+import com.phonepe.sentinelai.core.model.ModelUsageStats;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.Printer.Update;
@@ -138,11 +139,13 @@ public class CommandProcessor implements AutoCloseable {
         final var elapsedTimeCoounter = Stopwatch.createStarted();
         var errorMessage = "";
         var errorActor = Actor.ASSISTANT;
+        final var currentUsage = new ModelUsageStats();
         try {
             final var responseF = agent.executeAsync(AgentInput
                     .<String>builder()
                     .requestMetadata(AgentRequestMetadata.builder()
                             .sessionId(sessionId)
+                            .runId(input.runId())
                             .userId(user)
                             .build())
                     .request(prompt)
@@ -161,15 +164,17 @@ public class CommandProcessor implements AutoCloseable {
                                                                                      .getEmoji(),
                                                                              response.getError()
                                                                                      .getMessage());
+                final var runUsage = response.getUsage();
                 infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
                         .formatted(elapsedTimeInSeconds(elapsedTimeCoounter),
-                                   response.getUsage().getTotalTokens());
+                                   runUsage.getTotalTokens());
                 messages.add(Update.builder()
                         .actor(Actor.SYSTEM)
                         .severity(Severity.NORMAL)
                         .colour(Printer.Colours.RESET)
                         .data(infoMessage)
                         .build());
+                currentUsage.merge(runUsage);
             }
             else {
                 errorMessage = "Sentinel error: [%s] %s".formatted(error

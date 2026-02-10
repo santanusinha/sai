@@ -26,9 +26,13 @@ import java.util.UUID;
 @Builder
 @With
 public class Settings {
+    private static final String DEFAULT_DATA_DIR = System.getProperty("user.home") + "/.local/state/sai";
+
     @Builder.Default
     String appName = "sai";
-    String dataDir;
+
+    @Builder.Default
+    String dataDir = DEFAULT_DATA_DIR;
     boolean debug;
     boolean headless;
     @Builder.Default

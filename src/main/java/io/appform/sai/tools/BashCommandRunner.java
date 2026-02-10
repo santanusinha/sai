@@ -22,7 +22,7 @@ import java.io.InputStreamReader;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
-import com.bazaarvoice.jolt.modifier.function.Strings.trim;
+// removed unused import: Strings.trim
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import lombok.AllArgsConstructor;
@@ -62,7 +62,7 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
         }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new CommandOutput(-1, "", "Execuion interrupted");
+            return new CommandOutput(-1, "", "Execution interrupted");
         }
         catch (Exception e) {
             return new CommandOutput(-1,
