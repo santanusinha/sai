@@ -70,7 +70,7 @@ public class EventPrinter implements AgentEventVisitor<Void> {
 
         @Override
         public Void visit(final ToolCallCompletedAgentEvent toolCallCompleted) {
-            final var content = toolCallCompleted.getErrorType().equals(ErrorType.SUCCESS)
+/*             final var content = toolCallCompleted.getErrorType().equals(ErrorType.SUCCESS)
                     ? "%s%s%s".formatted(Printer.Colours.WHITE_ON_DARK_GRAY_BACKGROUND,
                                          toolCallCompleted.getContent(),
                                          Printer.Colours.RESET)
@@ -84,12 +84,12 @@ public class EventPrinter implements AgentEventVisitor<Void> {
                     .colour(Printer.Colours.RESET)
                     .data(content)
                     .build());
-            return null;
+  */           return null;
         }
 
         @Override
         public Void visit(final ToolCalledAgentEvent toolCalled) {
-            final var content = "Tool %s%s (id: %s)%s called with arguments: %s%s%s"
+/*             final var content = "Tool %s%s (id: %s)%s called with arguments: %s%s%s"
                     .formatted(Printer.Colours.CYAN,
                             toolCalled.getToolCallName(),
                                toolCalled.getToolCallId(),
@@ -103,7 +103,7 @@ public class EventPrinter implements AgentEventVisitor<Void> {
                     .colour(Printer.Colours.RESET)
                     .data(content)
                     .build());
-             return null;
+ */            return null;
         }
 
         @Override

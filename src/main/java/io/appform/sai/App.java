@@ -44,6 +44,7 @@ import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.tools.CoreToolBox;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
@@ -95,9 +96,8 @@ public class App {
                 .executorService(executorSerivce)
                 .mapper(mapper)
                 .eventBus(eventBus)
-                .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
                 .modelSettings(ModelSettings.builder()
-                        .parallelToolCalls(true)
+                        .parallelToolCalls(false)
                         .modelAttributes(ModelAttributes.builder()
                                 .contextWindowSize(128_000)
                                 .encodingType(EncodingType.O200K_BASE)
@@ -128,6 +128,7 @@ public class App {
                         .printer(printer)
                         .build()
                         .start()) {
+            agent.registerToolbox(new CoreToolBox(printer));
             printer.print(Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)

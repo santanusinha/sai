@@ -182,7 +182,7 @@ public class CommandProcessor implements AutoCloseable {
             errorActor = Actor.SYSTEM;
         }
         if (!Strings.isNullOrEmpty(errorMessage)) {
-            errorMessage = Printer.Colours.RED + "%s Error sending request: "
+            errorMessage = Printer.Colours.RED + "%s Error sending request: %s"
                     .formatted(Severity.ERROR.getEmoji(), errorMessage);
             errorMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds)"
                     .formatted(elapsedTimeInSeconds(elapsedTimeCoounter));
