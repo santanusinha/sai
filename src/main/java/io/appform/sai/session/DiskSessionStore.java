@@ -15,26 +15,6 @@
  */
 package io.appform.sai.session;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.phonepe.sentinelai.core.agentmessages.AgentMessage;
-import com.phonepe.sentinelai.core.agentmessages.AgentMessageType;
-import com.phonepe.sentinelai.core.utils.JsonUtils;
-import com.phonepe.sentinelai.session.BiScrollable;
-import com.phonepe.sentinelai.session.QueryDirection;
-import com.phonepe.sentinelai.session.SessionStore;
-import com.phonepe.sentinelai.session.SessionSummary;
-
-import io.appform.sai.session.internal.FileOps;
-import io.appform.sai.session.internal.MessageMeta;
-import io.appform.sai.session.internal.PointerCodec;
-import io.appform.sai.session.internal.SessionCache;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -58,14 +38,35 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.agentmessages.AgentMessage;
+import com.phonepe.sentinelai.core.agentmessages.AgentMessageType;
+import com.phonepe.sentinelai.core.utils.JsonUtils;
+import com.phonepe.sentinelai.session.BiScrollable;
+import com.phonepe.sentinelai.session.QueryDirection;
+import com.phonepe.sentinelai.session.SessionStore;
+import com.phonepe.sentinelai.session.SessionSummary;
+
+import io.appform.sai.session.internal.FileOps;
+import io.appform.sai.session.internal.MessageMeta;
+import io.appform.sai.session.internal.PointerCodec;
+import io.appform.sai.session.internal.SessionCache;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Disk-backed implementation of SessionStore based on DISK_SESSION.md design.
  */
+@Slf4j
 public class DiskSessionStore implements SessionStore {
-    private static final Logger log = LoggerFactory.getLogger(DiskSessionStore.class);
+
+    private static final String ID_FIELD = "id";
+    private static final String META_TIMESTAMP = "ts";
+    private static final String META_MESSAGE_TYPE = "type";
 
     private final Path dataDir;
     private final int maxCacheMessagesPerSession;
@@ -81,11 +82,11 @@ public class DiskSessionStore implements SessionStore {
     }
 
     public DiskSessionStore(
-            Path dataDir,
-            int maxCacheMessagesPerSession,
-            boolean fsyncOnAppend,
-            boolean indexOnStartup,
-            int pageScanBatchSize
+                            Path dataDir,
+                            int maxCacheMessagesPerSession,
+                            boolean fsyncOnAppend,
+                            boolean indexOnStartup,
+                            int pageScanBatchSize
     ) {
         this.dataDir = dataDir;
         this.maxCacheMessagesPerSession = maxCacheMessagesPerSession;
@@ -97,10 +98,10 @@ public class DiskSessionStore implements SessionStore {
             // Preload indices for existing sessions
             try {
                 if (Files.exists(dataDir) && Files.isDirectory(dataDir)) {
-                    try (DirectoryStream<Path> ds = Files.newDirectoryStream(dataDir)) {
-                        for (Path p : ds) {
-                            if (Files.isDirectory(p)) {
-                                String sessionId = p.getFileName().toString();
+                    try (final var directoryStream = Files.newDirectoryStream(dataDir)) {
+                        for (final var leafDir : directoryStream) {
+                            if (Files.isDirectory(leafDir)) {
+                                final var sessionId = leafDir.getFileName().toString();
                                 loadCache(sessionId);
                             }
                         }
@@ -113,12 +114,12 @@ public class DiskSessionStore implements SessionStore {
         }
     }
 
-    private static long optLong(JsonNode node, String field) {
+    private static long longOrZero(JsonNode node, String field) {
         JsonNode f = node.get(field);
         return (f != null && f.isNumber()) ? f.asLong() : 0L;
     }
 
-    private static String optText(JsonNode node, String field) {
+    private static String textOrNull(JsonNode node, String field) {
         JsonNode f = node.get(field);
         return (f != null && !f.isNull()) ? f.asText() : null;
     }
@@ -159,14 +160,14 @@ public class DiskSessionStore implements SessionStore {
 
     @Override
     public BiScrollable<AgentMessage> readMessages(
-            String sessionId,
-            int count,
-            boolean skipSystemPrompt,
-            BiScrollable.DataPointer pointer,
-            QueryDirection queryDirection
+                                                   String sessionId,
+                                                   int count,
+                                                   boolean skipSystemPrompt,
+                                                   BiScrollable.DataPointer pointer,
+                                                   QueryDirection queryDirection
     ) {
         SessionCache cache = loadCache(sessionId);
-        ReentrantReadWriteLock.ReadLock rl = cache.lock.readLock();
+        final var rl = cache.lock.readLock();
         rl.lock();
         try {
             List<MessageMeta> metas = cache.metaIndex;
@@ -247,7 +248,7 @@ public class DiskSessionStore implements SessionStore {
     public void saveMessages(String sessionId, String runId, List<AgentMessage> messages) {
         if (messages == null || messages.isEmpty()) return;
         SessionCache cache = loadCache(sessionId);
-        ReentrantReadWriteLock.WriteLock wl = cache.lock.writeLock();
+        final var wl = cache.lock.writeLock();
         wl.lock();
         try {
             Path dir = sessionDir(sessionId);
@@ -260,10 +261,10 @@ public class DiskSessionStore implements SessionStore {
                 for (AgentMessage msg : messages) {
                     long offset = channel.position();
                     Map<String, Object> envelope = new LinkedHashMap<>();
-                    envelope.put("id", msg.getMessageId());
-                    envelope.put("ts", msg.getTimestamp());
+                    envelope.put(ID_FIELD, msg.getMessageId());
+                    envelope.put(META_TIMESTAMP, msg.getTimestamp());
                     envelope.put("runId", runId);
-                    envelope.put("type", msg.getMessageType().name());
+                    envelope.put(META_MESSAGE_TYPE, msg.getMessageType().name());
                     envelope.put("message", msg);
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     try (OutputStreamWriter osw = new OutputStreamWriter(baos, StandardCharsets.UTF_8);
@@ -398,26 +399,29 @@ public class DiskSessionStore implements SessionStore {
         return new BiScrollable<>(page, new BiScrollable.DataPointer(older, newer));
     }
 
+    /**
+     * Build the in-memory meta index for a session by reading the messages file line by line and extracting metadata.
+     */
     private void buildMetaIndex(SessionCache cache, Path mf) {
-        ReentrantReadWriteLock.WriteLock wl = cache.lock.writeLock();
-        wl.lock();
-        try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(mf));
-             InputStreamReader isr = new InputStreamReader(bis, StandardCharsets.UTF_8);
-             BufferedReader br = new BufferedReader(isr)) {
-            long offset = 0L;
-            String line;
+        final var wwriteLock = cache.lock.writeLock();
+        wwriteLock.lock();
+        try (final var bis = new BufferedInputStream(Files.newInputStream(mf));
+             final var isr = new InputStreamReader(bis, StandardCharsets.UTF_8);
+             final var br = new BufferedReader(isr)) {
+            var offset = 0L;
+            var line = "";
             while ((line = br.readLine()) != null) {
-                int bytes = line.getBytes(StandardCharsets.UTF_8).length + 1; // +1 for newline
+                final var bytes = line.getBytes(StandardCharsets.UTF_8).length + 1; // +1 for newline
                 try {
-                    JsonNode node = mapper.readTree(line);
-                    String id = optText(node, "id");
-                    long ts = optLong(node, "ts");
-                    String typeStr = optText(node, "type");
-                    boolean isSystem = false;
+                    final var node = mapper.readTree(line);
+                    final var id = textOrNull(node, ID_FIELD);
+                    final var ts = longOrZero(node, META_TIMESTAMP);
+                    final var typeStr = textOrNull(node, META_MESSAGE_TYPE);
+                    var isSystem = false;
                     if (typeStr != null) {
                         try {
-                            AgentMessageType t = AgentMessageType.valueOf(typeStr);
-                            isSystem = (t == AgentMessageType.SYSTEM_PROMPT_REQUEST_MESSAGE);
+                            isSystem = AgentMessageType.SYSTEM_PROMPT_REQUEST_MESSAGE
+                                    .equals(AgentMessageType.valueOf(typeStr));
                         }
                         catch (IllegalArgumentException ignore) {
                         }
@@ -435,7 +439,7 @@ public class DiskSessionStore implements SessionStore {
             log.error("Error building meta index for {}: {}", mf, e.getMessage());
         }
         finally {
-            wl.unlock();
+            wwriteLock.unlock();
         }
     }
 
@@ -519,15 +523,15 @@ public class DiskSessionStore implements SessionStore {
 
     private SessionCache loadCache(String sessionId) {
         return sessionCaches.computeIfAbsent(sessionId, sid -> {
-            SessionCache cache = new SessionCache(maxCacheMessagesPerSession);
-            Path dir = sessionDir(sid);
+            final var cache = new SessionCache(maxCacheMessagesPerSession);
+            final var dir = sessionDir(sid);
             try {
                 Files.createDirectories(dir);
             }
             catch (IOException e) {
                 log.error("Failed to create session directory {}: {}", dir, e.getMessage());
             }
-            Path mf = messagesFile(sid);
+            final var mf = messagesFile(sid);
             if (Files.exists(mf)) {
                 buildMetaIndex(cache, mf);
             }

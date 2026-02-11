@@ -51,6 +51,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @AllArgsConstructor(access = AccessLevel.PUBLIC)
+@SuppressWarnings("unused")
 public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>> {
 
     private static final String BASH_TOOL = "core_tool_box_bash";
@@ -68,7 +69,6 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
     @Override
     public List<Update> visit(AgentGenericMessage genericMessage) {
-        // TODO Auto-generated method stub
         return List.of();
     }
 
@@ -78,9 +78,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
             @Override
             public List<Update> visit(SystemPrompt systemPrompt) {
-                return List.of(
-                               Printer.debug(Actor.SYSTEM,
-                                             "System Prompt:\n" + prettyPrintXML(systemPrompt.getContent())),
+                return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
                                Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent())
                                        + Printer.Colours.RESET).withDebug(true),
                                Printer.empty());
@@ -196,7 +194,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     default -> {
                         messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "("
                                 + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
-                                .formatted(toolCall.getToolName(), toolCall.getArguments())));
+                                        .formatted(toolCall.getToolName(), toolCall.getArguments())));
 
                     }
                 }
@@ -206,9 +204,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
             @SneakyThrows
             private List<Update> handleResponse(
-                    String content,
-                    ModelUsageStats stats,
-                    long elapsedTimeMs
+                                                String content,
+                                                ModelUsageStats stats,
+                                                long elapsedTimeMs
             ) {
                 final var messages = new ArrayList<Update>();
                 if (historical) {

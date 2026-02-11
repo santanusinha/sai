@@ -15,21 +15,26 @@
  */
 package io.appform.sai.session.internal;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.utils.AgentUtils;
+
+import lombok.experimental.UtilityClass;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@UtilityClass
 public class FileOps {
     public static boolean atomicWriteJson(Path target, Object data, ObjectMapper mapper) {
-        Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
-        try (OutputStream os = Files.newOutputStream(tmp)) {
+        final var tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
+        try (final var os = Files.newOutputStream(tmp)) {
             mapper.writeValue(os, data);
         }
         catch (IOException e) {
@@ -46,19 +51,21 @@ public class FileOps {
                 return true;
             }
             catch (IOException ex) {
+                final var root = AgentUtils.rootCause(ex);
+                log.error("Could not create file %s: %s".formatted(target, root.getMessage()), root);
                 return false;
             }
         }
     }
 
     public static String readLineAtOffset(Path file, long offset) throws IOException {
-        try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
+        try (final var raf = new RandomAccessFile(file.toFile(), "r")) {
             raf.seek(offset);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            int b;
-            while ((b = raf.read()) != -1) {
-                if (b == 10) break; // newline character\n
-                baos.write(b);
+            final var baos = new ByteArrayOutputStream();
+            var bytesRead = -1;
+            while ((bytesRead = raf.read()) != -1) {
+                if (bytesRead == 10) break; // newline character\n
+                baos.write(bytesRead);
             }
             return new String(baos.toByteArray(), StandardCharsets.UTF_8);
         }

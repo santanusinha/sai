@@ -22,11 +22,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SessionCache {
     public final List<MessageMeta> metaIndex = new ArrayList<>();
-    public final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    public final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final int maxCacheMessages;
 
     private final LinkedHashMap<String, AgentMessage> messageCache;
