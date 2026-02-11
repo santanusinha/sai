@@ -41,6 +41,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.Value;
+import lombok.With;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -68,6 +69,7 @@ public class Printer implements AutoCloseable {
 
     @Value
     @Builder
+    @With
     public static class Update {
         @NonNull
         Actor actor;
@@ -77,6 +79,8 @@ public class Printer implements AutoCloseable {
         String data;
         boolean statusUpdate;
         boolean raw;
+        boolean debug;
+        boolean important; // Gets printed even in headless mode
     }
 
     @NonNull
@@ -124,6 +128,9 @@ public class Printer implements AutoCloseable {
                     final var printables = printingQueue.take();
                     if(null != printables) {
                         printables.forEach(printable -> {
+                            if(!settings.isDebug() && printable.isDebug()) {
+                                return;
+                            }
                             if(printable.isStatusUpdate()) {
                                 status.update(List.of(AttributedString.EMPTY));
                                 status.update(List.of(new AttributedString(printable.getData())));
@@ -165,6 +172,41 @@ public class Printer implements AutoCloseable {
 
     public static Update empty() {
         return raw("" + Colours.RESET);
+    }
+
+    public static Update debug(Actor actor, String data) {
+        return Update.builder()
+                .actor(actor)
+                .severity(Severity.DEBUG)
+                .data(data)
+                .debug(true)
+                .build();
+    }
+
+    public static Update systemMessage(String data) {
+        return Update.builder()
+                .actor(Actor.SYSTEM)
+                .severity(Severity.NORMAL)
+                .data(data)
+                .build();
+    }
+
+    public static Update userMessage(String data) {
+        return Update.builder()
+                .actor(Actor.USER)
+                .severity(Severity.NORMAL)
+                .colour(Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND)
+                .data(data)
+                .build();
+    }
+        
+    public static Update assistantMessage(String data) {
+        return Update.builder()
+                .actor(Actor.ASSISTANT)
+                .severity(Severity.NORMAL)
+                .colour(Printer.Colours.WHITE)
+                .data(data)
+                .build();
     }
 
     public static Update raw(String data) {

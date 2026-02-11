@@ -42,6 +42,8 @@ import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
+import com.phonepe.sentinelai.session.BiScrollable;
+import com.phonepe.sentinelai.session.QueryDirection;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
@@ -69,6 +71,10 @@ import org.slf4j.LoggerFactory;
 public class App {
     @SneakyThrows
     public static void main(String[] args) {
+        final var providedId = args.length > 0 ? args[0] : null;
+        boolean sessionIdProvided = !Strings.isNullOrEmpty(providedId);
+        final var sessionId = Objects.requireNonNullElseGet(providedId,
+                () -> UUID.randomUUID().toString());
         final var dotenv = Dotenv.configure()
                 .ignoreIfMissing()
                 .ignoreIfMalformed()
@@ -92,6 +98,7 @@ public class App {
                                                       okHttpClient);
 
         final var settings = Settings.builder()
+                .sessionId(sessionId)
                 .debug(false)
                 .headless(false)
                 .build();
@@ -120,9 +127,9 @@ public class App {
 
         final var dataDir = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(dataDir);
-        final var sessioStore = new DiskSessionStore(dataDir);
-        final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
-                .sessionStore(sessioStore)
+        final var sessionStore = new DiskSessionStore(dataDir);
+       final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
+                .sessionStore(sessionStore)
                 .mapper(mapper)
                 .setup(AgentSessionExtensionSetup.builder()
                         .build())
@@ -146,17 +153,38 @@ public class App {
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
                     .colour(Printer.Colours.YELLOW)
-                    .data("Welcome to SAI! Type 'exit' to quit....")
+                    .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
+                            .formatted(sessionId))
                     .build());
-            final var eventPrinter = new EventPrinter(mapper, printer);
-            eventBus.onEvent().connect(event -> event.accept(eventPrinter));
+            final var eventPrinter = new EventPrinter(printer,
+                                                      (ObjectMapper) mapper);
+            eventBus.onEvent().connect(event -> {
+                final var eventSessionId = event.getSessionId();
+                // There might be events for other LLM capps like for example compaction, memory extraction etc, so we filter based on session id to avoid printing irrelevant events
+                if (!Strings.isNullOrEmpty(eventSessionId) && sessionId.equals(
+                                                                               eventSessionId)) {
+                    event.accept(eventPrinter);
+                }
+            });
+
+            if (sessionIdProvided) {
+                final var response = sessionStore.readMessages(sessionId,
+                                                               Integer.MAX_VALUE,
+                                                               true,
+                                                               null,
+                                                               QueryDirection.OLDER);
+                final var messagePrinter = new MessagePrinter( printer, mapper, true);
+                response.getItems().forEach(message -> {
+                    final var updates = message.accept(messagePrinter);
+                    printer.print(updates);
+                });
+            }
 
             var prompt = Printer.Colours.CYAN + "Enter input ";
             prompt += Printer.Colours.GRAY + "(type 'exit' to quit)";
             prompt += Printer.Colours.WHITE + ": ";
             while (true) {
                 try {
-
                     final var input = printer.getLineReader().readLine(prompt);
                     if (Strings.isNullOrEmpty(input)) {
                         continue;

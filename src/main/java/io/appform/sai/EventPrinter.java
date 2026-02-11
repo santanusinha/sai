@@ -17,7 +17,6 @@
 package io.appform.sai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.events.AgentEventVisitor;
 import com.phonepe.sentinelai.core.events.InputReceivedAgentEvent;
 import com.phonepe.sentinelai.core.events.MessageReceivedAgentEvent;
@@ -34,19 +33,27 @@ import io.appform.sai.models.Severity;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 
-@AllArgsConstructor
 public class EventPrinter implements AgentEventVisitor<Void> {
 
         private final ObjectMapper mapper;
         private final Printer printer;
+        public EventPrinter(Printer printer, ObjectMapper mapper) {
+            this.printer = printer;
+            this.mapper = mapper;
+            this.messagePrinter = new MessagePrinter(printer, mapper, false);
+        }
+
+        private final MessagePrinter messagePrinter;
 
         @Override
         public Void visit(final MessageReceivedAgentEvent messageReceived) {
+            printer.print(messageReceived.getMessage().accept(messagePrinter));
             return null;
         }
 
         @Override
         public Void visit(final MessageSentAgentEvent messageSent) {
+            printer.print(messageSent.getCurrentMessage().accept(messagePrinter));
             return null;
         }
 

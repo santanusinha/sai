@@ -38,6 +38,8 @@ import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
+import static io.appform.sai.Utils.elapsedTimeInSeconds;
+
 @Slf4j
 public class CommandProcessor implements AutoCloseable {
 
@@ -119,22 +121,9 @@ public class CommandProcessor implements AutoCloseable {
         }
     }
 
-    private float elapsedTimeInSeconds(final Stopwatch stopwatch) {
-        return (float) stopwatch.elapsed().toMillis() / 1000.0f;
-    }
 
     private void handleInput(final InputCommand input) {
         final var prompt = input.input();
-        printer.print(List.of(Update.builder()
-                .actor(Actor.USER)
-                .severity(Severity.NORMAL)
-                .colour(Printer.Colours.BOLD_WHITE_ON_BLACK_BACKGROUND)
-                .data(" " + prompt + " ")
-                .build(),
-                              Printer.empty(),
-                              Printer.statusUpdate(" Processing run: "  + Printer.Colours.GRAY
-                                  + "%s ... ".formatted(input.runId()))));
-
         final var messages = new ArrayList<Update>();
         final var elapsedTimeCoounter = Stopwatch.createStarted();
         var errorMessage = "";
@@ -153,12 +142,8 @@ public class CommandProcessor implements AutoCloseable {
             final var response = responseF.get();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
-                messages.add(Update.builder()
-                        .actor(Actor.ASSISTANT)
-                        .severity(Severity.NORMAL)
-                        .colour(Printer.Colours.RESET)
-                        .data(response.getData())
-                        .build());
+                messages.add(Printer.assistantMessage(response.getData())
+                        .withImportant(true));
                 var infoMessage = Printer.Colours.WHITE + "%s %s.".formatted(
                                                                              Severity.SUCCESS
                                                                                      .getEmoji(),
@@ -168,12 +153,7 @@ public class CommandProcessor implements AutoCloseable {
                 infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
                         .formatted(elapsedTimeInSeconds(elapsedTimeCoounter),
                                    runUsage.getTotalTokens());
-                messages.add(Update.builder()
-                        .actor(Actor.SYSTEM)
-                        .severity(Severity.NORMAL)
-                        .colour(Printer.Colours.RESET)
-                        .data(infoMessage)
-                        .build());
+                messages.add(Printer.assistantMessage(infoMessage));
                 currentUsage.merge(runUsage);
             }
             else {

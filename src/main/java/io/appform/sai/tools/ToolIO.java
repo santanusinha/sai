@@ -46,7 +46,11 @@ public class ToolIO {
     public static class BashResponse {
         @JsonPropertyDescription("The status code of the bash command execution. A status code of 0 indicates success, while any non-zero value indicates an error.")
         int statusCode;
-        @JsonPropertyDescription("The output of the bash command execution. This includes both stdout and stderr.")
-        String output;
+
+        @JsonPropertyDescription("The stdout output of the bash command execution.")
+        String stdout;
+
+        @JsonPropertyDescription("The stderr output of the bash command execution.")
+        String stderr;
     }
 }
