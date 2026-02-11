@@ -1,11 +1,11 @@
 /*
- * Copyright 2026 authors
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,19 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.appform.sai;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
@@ -42,7 +30,6 @@ import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
-import com.phonepe.sentinelai.session.BiScrollable;
 import com.phonepe.sentinelai.session.QueryDirection;
 
 import io.appform.sai.CommandProcessor.CommandType;
@@ -56,16 +43,27 @@ import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
-import okhttp3.OkHttpClient;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
-import ch.qos.logback.core.joran.spi.JoranException;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 import org.slf4j.LoggerFactory;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.joran.spi.JoranException;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 
 @Slf4j
 public class App {
@@ -74,7 +72,7 @@ public class App {
         final var providedId = args.length > 0 ? args[0] : null;
         boolean sessionIdProvided = !Strings.isNullOrEmpty(providedId);
         final var sessionId = Objects.requireNonNullElseGet(providedId,
-                () -> UUID.randomUUID().toString());
+                                                            () -> UUID.randomUUID().toString());
         final var dotenv = Dotenv.configure()
                 .ignoreIfMissing()
                 .ignoreIfMalformed()
@@ -128,7 +126,7 @@ public class App {
         final var dataDir = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(dataDir);
         final var sessionStore = new DiskSessionStore(dataDir);
-       final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
+        final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
                 .sessionStore(sessionStore)
                 .mapper(mapper)
                 .setup(AgentSessionExtensionSetup.builder()
@@ -141,13 +139,13 @@ public class App {
                 .executorService(executorSerivce)
                 .build()
                 .start();
-                final var commandProcessor = CommandProcessor.builder()
-                        .sessionId(settings.getSessionId())
-                        .agent(agent)
-                        .executorService(executorSerivce)
-                        .printer(printer)
-                        .build()
-                        .start()) {
+             final var commandProcessor = CommandProcessor.builder()
+                     .sessionId(settings.getSessionId())
+                     .agent(agent)
+                     .executorService(executorSerivce)
+                     .printer(printer)
+                     .build()
+                     .start()) {
             agent.registerToolbox(new CoreToolBox(printer));
             printer.print(Update.builder()
                     .actor(Actor.SYSTEM)
@@ -173,7 +171,7 @@ public class App {
                                                                true,
                                                                null,
                                                                QueryDirection.OLDER);
-                final var messagePrinter = new MessagePrinter( printer, mapper, true);
+                final var messagePrinter = new MessagePrinter(printer, mapper, true);
                 response.getItems().forEach(message -> {
                     final var updates = message.accept(messagePrinter);
                     printer.print(updates);
@@ -213,9 +211,11 @@ public class App {
         }
     }
 
-    private static ChatCompletionServiceFactory modelFactory(final Dotenv dotenv,
-                                                             final ObjectMapper mapper,
-                                                             final OkHttpClient okHttpClient) {
+    private static ChatCompletionServiceFactory modelFactory(
+            final Dotenv dotenv,
+            final ObjectMapper mapper,
+            final OkHttpClient okHttpClient
+    ) {
         final var gpt5 = SimpleOpenAIAzure.builder()
                 .baseUrl(dotenv.get("AZURE_GPT5_ENDPOINT"))
                 .apiKey(dotenv.get("AZURE_API_KEY"))

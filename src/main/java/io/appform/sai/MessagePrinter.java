@@ -1,11 +1,11 @@
 /*
- * Copyright 2026 authors
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,21 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.appform.sai;
 
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.zip.Deflater;
-
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
-
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
@@ -53,6 +40,10 @@ import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.ToolIO;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
@@ -88,9 +79,11 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @Override
             public List<Update> visit(SystemPrompt systemPrompt) {
                 return List.of(
-                        Printer.debug(Actor.SYSTEM, "System Prompt:\n" + prettyPrintXML(systemPrompt.getContent())),
-                        Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent()) + Printer.Colours.RESET).withDebug(true),
-                        Printer.empty());
+                               Printer.debug(Actor.SYSTEM,
+                                             "System Prompt:\n" + prettyPrintXML(systemPrompt.getContent())),
+                               Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent())
+                                       + Printer.Colours.RESET).withDebug(true),
+                               Printer.empty());
             }
 
             @Override
@@ -152,8 +145,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 final var messages = new ArrayList<Update>();
                 messages.add(Printer.userMessage(" " + prompt(userPrompt.getContent()) + " "));
                 messages.add(Printer.empty());
-                if(!historical) {
-                    messages.add(Printer.statusUpdate(" Processing run: "  + Printer.Colours.GRAY
+                if (!historical) {
+                    messages.add(Printer.statusUpdate(" Processing run: " + Printer.Colours.GRAY
                             + "%s ... ".formatted(userPrompt.getRunId())));
                 }
                 return messages;
@@ -168,7 +161,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
             @Override
             public List<Update> visit(StructuredOutput structuredOutput) {
-                return handleResponse(structuredOutput.getContent(), structuredOutput.getStats(), structuredOutput.getElapsedTimeMs());
+                return handleResponse(structuredOutput.getContent(),
+                                      structuredOutput.getStats(),
+                                      structuredOutput.getElapsedTimeMs());
             }
 
             @Override
@@ -180,23 +175,27 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             public List<Update> visit(ToolCall toolCall) {
                 final var messages = new ArrayList<Update>();
-                switch(toolCall.getToolName()) {
+                switch (toolCall.getToolName()) {
                     case BASH_TOOL -> {
                         final var node = mapper.readTree(toolCall.getArguments());
                         final var fieldName = node.fieldNames().next();
                         // there is only one paramter in this node which is the request.
                         final var request = mapper.treeToValue(node.get(fieldName), ToolIO.BashRequest.class);
-                        log.info("Received bash tool call with arguments: {}. Request: {}", toolCall.getArguments(), request);
+                        log.info("Received bash tool call with arguments: {}. Request: {}",
+                                 toolCall.getArguments(),
+                                 request);
                         messages.add(Printer.assistantMessage(request.getRequestReason()));
-                        messages.add(Printer.assistantMessage(Printer.Colours.YELLOW + "$ " + Printer.Colours.WHITE + request
-                                .getCommand() + Printer.Colours.GRAY + " (Timeout: " + request
-                                        .getTimeoutSeconds() + " seconds)" + Printer.Colours.RESET));
+                        messages.add(Printer.assistantMessage(Printer.Colours.YELLOW + "$ " + Printer.Colours.WHITE
+                                + request
+                                        .getCommand() + Printer.Colours.GRAY + " (Timeout: " + request
+                                                .getTimeoutSeconds() + " seconds)" + Printer.Colours.RESET));
                     }
                     case Agent.OUTPUT_GENERATOR_ID -> {
                         messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
                     }
                     default -> {
-                        messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "(" + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
+                        messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "("
+                                + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
                                 .formatted(toolCall.getToolName(), toolCall.getArguments())));
 
                     }
@@ -206,9 +205,11 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             }
 
             @SneakyThrows
-            private List<Update> handleResponse(String content,
-                                                ModelUsageStats stats,
-                                                long elapsedTimeMs) {
+            private List<Update> handleResponse(
+                    String content,
+                    ModelUsageStats stats,
+                    long elapsedTimeMs
+            ) {
                 final var messages = new ArrayList<Update>();
                 if (historical) {
                     final var node = mapper.readTree(content);
@@ -224,7 +225,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 }
                 return messages;
             }
-            
+
         });
     }
 
@@ -236,7 +237,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     @SneakyThrows
     private static final String prettyPrintXML(String xml) {
         return xmlMapper.writerWithDefaultPrettyPrinter()
-            .writeValueAsString(xmlMapper.readTree(xml));
+                .writeValueAsString(xmlMapper.readTree(xml));
     }
 
 }

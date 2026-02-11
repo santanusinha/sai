@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 authors
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package io.appform.sai;
 
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
+import io.appform.sai.models.Actor;
+import io.appform.sai.models.Severity;
 
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
@@ -34,8 +27,14 @@ import org.jline.utils.AttributedString;
 import org.jline.utils.InfoCmp.Capability;
 import org.jline.utils.Status;
 
-import io.appform.sai.models.Actor;
-import io.appform.sai.models.Severity;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -100,10 +99,12 @@ public class Printer implements AutoCloseable {
     private Future<?> printerTask = null;
 
     @Builder
-    public Printer(@NonNull Settings settings,
-                   @NonNull ExecutorService executorService,
-                   PrintWriter outputStream,
-                   LineReader lineReader) {
+    public Printer(
+            @NonNull Settings settings,
+            @NonNull ExecutorService executorService,
+            PrintWriter outputStream,
+            LineReader lineReader
+    ) {
         this.settings = settings;
         this.executorService = executorService;
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
@@ -126,28 +127,33 @@ public class Printer implements AutoCloseable {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     final var printables = printingQueue.take();
-                    if(null != printables) {
+                    if (null != printables) {
                         printables.forEach(printable -> {
-                            if(!settings.isDebug() && printable.isDebug()) {
+                            if (!settings.isDebug() && printable.isDebug()) {
                                 return;
                             }
-                            if(printable.isStatusUpdate()) {
+                            if (printable.isStatusUpdate()) {
                                 status.update(List.of(AttributedString.EMPTY));
                                 status.update(List.of(new AttributedString(printable.getData())));
                             }
                             else {
-                                if(printable.isRaw()) {
+                                if (printable.isRaw()) {
                                     lineReader.printAbove("%s".formatted(printable.getData()));
                                 }
                                 else {
-                                    final var colour = Objects.requireNonNullElseGet(printable.getColour(), () -> defaultColour(printable.getSeverity()));
-                                    lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(), colour, printable.getData(), Colours.RESET));
+                                    final var colour = Objects.requireNonNullElseGet(printable.getColour(),
+                                                                                     () -> defaultColour(printable
+                                                                                             .getSeverity()));
+                                    lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(),
+                                                                                colour,
+                                                                                printable.getData(),
+                                                                                Colours.RESET));
                                 }
                             }
                         });
                     }
                 }
-                catch(InterruptedException e) {
+                catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.info("Shutting down printer");
                 }
@@ -199,7 +205,7 @@ public class Printer implements AutoCloseable {
                 .data(data)
                 .build();
     }
-        
+
     public static Update assistantMessage(String data) {
         return Update.builder()
                 .actor(Actor.ASSISTANT)
@@ -226,7 +232,7 @@ public class Printer implements AutoCloseable {
         try {
             printingQueue.put(updates);
         }
-        catch(InterruptedException e) {
+        catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Failed to print updates: {}", updates, e);
         }
@@ -234,7 +240,7 @@ public class Printer implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        if(null != printerTask) {
+        if (null != printerTask) {
             printerTask.cancel(true);
         }
         lineReader.printAbove(Colours.RESET);
@@ -248,7 +254,7 @@ public class Printer implements AutoCloseable {
     }
 
     private static String defaultColour(final Severity severity) {
-        return switch(severity) {
+        return switch (severity) {
             case DEBUG -> Colours.GRAY;
             case ERROR -> Colours.RED;
             case INFO -> Colours.GRAY;

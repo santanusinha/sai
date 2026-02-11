@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Original Author(s)
+ * Copyright (c) $YEAR Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,3 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai.models;
-
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-
-@Getter
-@AllArgsConstructor
-public enum Actor {
-    USER("User", "👤"),
-    SYSTEM("System", "⚙️"),
-    ASSISTANT("Assistant", "🤖");
-
-    private final String displayName;
-    private final String emoji;
-}

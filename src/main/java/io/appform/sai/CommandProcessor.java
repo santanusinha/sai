@@ -1,11 +1,11 @@
 /*
- * Copyright 2026 authors
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,15 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.appform.sai;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
@@ -34,11 +26,18 @@ import com.phonepe.sentinelai.core.utils.AgentUtils;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+
+import java.util.ArrayList;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import static io.appform.sai.Utils.elapsedTimeInSeconds;
+
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
-
-import static io.appform.sai.Utils.elapsedTimeInSeconds;
 
 @Slf4j
 public class CommandProcessor implements AutoCloseable {
@@ -47,11 +46,17 @@ public class CommandProcessor implements AutoCloseable {
         INPUT
     }
 
-    public record InputCommand(String runId, String input) {
+    public record InputCommand(
+            String runId,
+            String input
+    ) {
     }
 
     @Builder
-    public record Command(CommandType command, InputCommand input) {
+    public record Command(
+            CommandType command,
+            InputCommand input
+    ) {
     }
 
     private final String sessionId;
@@ -64,10 +69,11 @@ public class CommandProcessor implements AutoCloseable {
 
     @Builder
     public CommandProcessor(
-                       @NonNull final String sessionId,
-                       @NonNull final SaiAgent agent,
-                       @NonNull final ExecutorService executorService,
-                       @NonNull final Printer printer) {
+            @NonNull final String sessionId,
+            @NonNull final SaiAgent agent,
+            @NonNull final ExecutorService executorService,
+            @NonNull final Printer printer
+    ) {
         this.sessionId = sessionId;
         this.agent = agent;
         this.executorService = executorService;
@@ -95,7 +101,7 @@ public class CommandProcessor implements AutoCloseable {
         try {
             inputQueue.put(command);
         }
-        catch(InterruptedException e) {
+        catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.info("Queue put interrupted");
         }
