@@ -15,6 +15,23 @@
  */
 package io.appform.sai.session;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.agentmessages.AgentMessage;
+import com.phonepe.sentinelai.core.agentmessages.AgentMessageType;
+import com.phonepe.sentinelai.core.utils.JsonUtils;
+import com.phonepe.sentinelai.session.BiScrollable;
+import com.phonepe.sentinelai.session.QueryDirection;
+import com.phonepe.sentinelai.session.SessionStore;
+import com.phonepe.sentinelai.session.SessionSummary;
+
+import io.appform.sai.session.internal.FileOps;
+import io.appform.sai.session.internal.MessageMeta;
+import io.appform.sai.session.internal.PointerCodec;
+import io.appform.sai.session.internal.SessionCache;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -40,22 +57,6 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.phonepe.sentinelai.core.agentmessages.AgentMessage;
-import com.phonepe.sentinelai.core.agentmessages.AgentMessageType;
-import com.phonepe.sentinelai.core.utils.JsonUtils;
-import com.phonepe.sentinelai.session.BiScrollable;
-import com.phonepe.sentinelai.session.QueryDirection;
-import com.phonepe.sentinelai.session.SessionStore;
-import com.phonepe.sentinelai.session.SessionSummary;
-
-import io.appform.sai.session.internal.FileOps;
-import io.appform.sai.session.internal.MessageMeta;
-import io.appform.sai.session.internal.PointerCodec;
-import io.appform.sai.session.internal.SessionCache;
 import lombok.extern.slf4j.Slf4j;
 
 /**

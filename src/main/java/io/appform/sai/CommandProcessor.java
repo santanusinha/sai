@@ -69,10 +69,10 @@ public class CommandProcessor implements AutoCloseable {
 
     @Builder
     public CommandProcessor(
-            @NonNull final String sessionId,
-            @NonNull final SaiAgent agent,
-            @NonNull final ExecutorService executorService,
-            @NonNull final Printer printer
+                            @NonNull final String sessionId,
+                            @NonNull final SaiAgent agent,
+                            @NonNull final ExecutorService executorService,
+                            @NonNull final Printer printer
     ) {
         this.sessionId = sessionId;
         this.agent = agent;

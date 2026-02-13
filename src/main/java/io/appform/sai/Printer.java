@@ -100,10 +100,10 @@ public class Printer implements AutoCloseable {
 
     @Builder
     public Printer(
-            @NonNull Settings settings,
-            @NonNull ExecutorService executorService,
-            PrintWriter outputStream,
-            LineReader lineReader
+                   @NonNull Settings settings,
+                   @NonNull ExecutorService executorService,
+                   PrintWriter outputStream,
+                   LineReader lineReader
     ) {
         this.settings = settings;
         this.executorService = executorService;

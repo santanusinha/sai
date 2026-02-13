@@ -194,7 +194,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     default -> {
                         messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "("
                                 + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
-                                        .formatted(toolCall.getToolName(), toolCall.getArguments())));
+                                .formatted(toolCall.getToolName(), toolCall.getArguments())));
 
                     }
                 }

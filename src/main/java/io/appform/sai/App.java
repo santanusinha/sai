@@ -22,7 +22,9 @@ import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
+import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
+import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.DefaultChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
@@ -37,7 +39,6 @@ import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
-import io.appform.sai.session.DiskSessionStore;
 import io.appform.sai.tools.CoreToolBox;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
@@ -120,12 +121,13 @@ public class App {
                                                        .builder()
                                                        .tokenCountingConfig(TokenCountingConfig.DEFAULT)
                                                        .build()))
+                .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
                 .build();
 
 
         final var dataDir = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(dataDir);
-        final var sessionStore = new DiskSessionStore(dataDir);
+        final var sessionStore = new FileSystemSessionStore(dataDir.toAbsolutePath().normalize().toString(), mapper, 1);
         final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
                 .sessionStore(sessionStore)
                 .mapper(mapper)
@@ -212,9 +214,9 @@ public class App {
     }
 
     private static ChatCompletionServiceFactory modelFactory(
-            final Dotenv dotenv,
-            final ObjectMapper mapper,
-            final OkHttpClient okHttpClient
+                                                             final Dotenv dotenv,
+                                                             final ObjectMapper mapper,
+                                                             final OkHttpClient okHttpClient
     ) {
         final var gpt5 = SimpleOpenAIAzure.builder()
                 .baseUrl(dotenv.get("AZURE_GPT5_ENDPOINT"))

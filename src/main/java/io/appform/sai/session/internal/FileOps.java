@@ -15,6 +15,9 @@
  */
 package io.appform.sai.session.internal;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.utils.AgentUtils;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -22,9 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
