@@ -52,4 +52,81 @@ public class ToolIO {
         @JsonPropertyDescription("The stderr output of the bash command execution.")
         String stderr;
     }
+
+    @Value
+    @JsonClassDescription("Input for the edit tool.")
+    @Builder
+    @Jacksonized
+    public static class EditRequest {
+        @JsonPropertyDescription("The absolute path to the file to edit.")
+        String path;
+        @JsonPropertyDescription("The patch content to apply.")
+        String patchContent;
+        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing.")
+        String expectedChecksum;
+        @JsonPropertyDescription("Reason for editing the file.")
+        String requestReason;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    public static class EditResponse {
+        @JsonPropertyDescription("Whether the edit was successful.")
+        boolean success;
+        @JsonPropertyDescription("The new SHA-256 checksum of the file after editing.")
+        String newChecksum;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
+
+    @Value
+    @JsonClassDescription("Input for the read tool.")
+    @Builder
+    @Jacksonized
+    public static class ReadRequest {
+        @JsonPropertyDescription("The absolute path to the file to read.")
+        String path;
+        @JsonPropertyDescription("Reason for reading the file.")
+        String requestReason;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    public static class ReadResponse {
+        @JsonPropertyDescription("The content of the file.")
+        String content;
+        @JsonPropertyDescription("The SHA-256 checksum of the file content.")
+        String checksum;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
+
+    @Value
+    @JsonClassDescription("Input for the write tool.")
+    @Builder
+    @Jacksonized
+    public static class WriteRequest {
+        @JsonPropertyDescription("The absolute path to the file to write.")
+        String path;
+        @JsonPropertyDescription("The content to write to the file.")
+        String content;
+        @JsonPropertyDescription("Reason for writing the file.")
+        String requestReason;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    public static class WriteResponse {
+        @JsonPropertyDescription("Whether the write was successful.")
+        boolean success;
+        @JsonPropertyDescription("The number of bytes written to the file.")
+        long bytesWritten;
+        @JsonPropertyDescription("The SHA-256 checksum of the written content.")
+        String checksum;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
 }
