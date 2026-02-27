@@ -34,13 +34,12 @@ import lombok.SneakyThrows;
 
 public class EventPrinter implements AgentEventVisitor<Void> {
 
-    private final ObjectMapper mapper;
+
     private final Printer printer;
     private final MessagePrinter messagePrinter;
 
     public EventPrinter(Printer printer, ObjectMapper mapper) {
         this.printer = printer;
-        this.mapper = mapper;
         this.messagePrinter = new MessagePrinter(printer, mapper, false);
     }
 
@@ -52,13 +51,19 @@ public class EventPrinter implements AgentEventVisitor<Void> {
 
     @Override
     public Void visit(final MessageReceivedAgentEvent messageReceived) {
-        printer.print(messageReceived.getMessage().accept(messagePrinter));
+        printer.print(messageReceived.getNewMessages()
+                .stream()
+                .flatMap(message -> message.accept(messagePrinter).stream())
+                .toList());
         return null;
     }
 
     @Override
     public Void visit(final MessageSentAgentEvent messageSent) {
-        printer.print(messageSent.getCurrentMessage().accept(messagePrinter));
+        printer.print(messageSent.getNewMessages()
+                .stream()
+                .flatMap(message -> message.accept(messagePrinter).stream())
+                .toList());
         return null;
     }
 

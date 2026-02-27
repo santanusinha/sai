@@ -22,7 +22,7 @@ import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
-import com.phonepe.sentinelai.core.model.OutputGenerationMode;
+import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
@@ -33,7 +33,10 @@ import com.phonepe.sentinelai.models.TokenCountingConfig;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
+import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelector;
 
+import io.appform.copilot.client.provider.SimpleOpenAICopilot;
+import io.appform.copilot.client.service.CopilotAuthService;
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
@@ -74,11 +77,6 @@ public class App {
         boolean sessionIdProvided = !Strings.isNullOrEmpty(providedId);
         final var sessionId = Objects.requireNonNullElseGet(providedId,
                                                             () -> UUID.randomUUID().toString());
-        final var dotenv = Dotenv.configure()
-                .ignoreIfMissing()
-                .ignoreIfMalformed()
-                .systemProperties()
-                .load();
 
         setupLogging();
 
@@ -92,9 +90,10 @@ public class App {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
-        final var modelProviderFactory = modelFactory(dotenv,
-                                                      mapper,
-                                                      okHttpClient);
+        final var provider = EnvLoader.readEnv(
+                                               "MODEL_PROVIDER")
+                .orElseThrow(() -> new IllegalArgumentException("MODEL_PROVIDER environment variable is required to specify the model provider to use. Supported values are 'azure', 'openai' and 'copilot-proxy'"));
+        final var modelProviderFactory = new ConfigurableDefaultChatCompletionFactory(provider, mapper, okHttpClient);
 
         final var settings = Settings.builder()
                 .sessionId(sessionId)
@@ -103,6 +102,7 @@ public class App {
                 .build();
         final var eventBus = new EventBus(executorSerivce);
 
+        final var modelName = EnvLoader.readEnv("MODEL", "gemini-3-pro-preview");
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorSerivce)
                 .mapper(mapper)
@@ -114,14 +114,14 @@ public class App {
                                 .encodingType(EncodingType.O200K_BASE)
                                 .build())
                         .build())
-                .model(new SimpleOpenAIModel<>("gpt-5",
+                .model(new SimpleOpenAIModel<>(modelName,
                                                modelProviderFactory,
                                                mapper,
                                                SimpleOpenAIModelOptions
                                                        .builder()
                                                        .tokenCountingConfig(TokenCountingConfig.DEFAULT)
                                                        .build()))
-                .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
+                // .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
                 .build();
 
 
@@ -132,8 +132,10 @@ public class App {
                 .sessionStore(sessionStore)
                 .mapper(mapper)
                 .setup(AgentSessionExtensionSetup.builder()
+                        .autoSummarizationThresholdPercentage(50)
                         .build())
-                .build();
+                .build()
+                .addMessageSelector(new RemoveAllToolCallsSelector());
         final var agent = new SaiAgent(agentSetup, List.of(sessionExtension), Map.of());
 
         try (final var printer = Printer.builder()
@@ -213,37 +215,6 @@ public class App {
         }
     }
 
-    private static ChatCompletionServiceFactory modelFactory(
-                                                             final Dotenv dotenv,
-                                                             final ObjectMapper mapper,
-                                                             final OkHttpClient okHttpClient
-    ) {
-        final var gpt5 = SimpleOpenAIAzure.builder()
-                .baseUrl(dotenv.get("AZURE_GPT5_ENDPOINT"))
-                .apiKey(dotenv.get("AZURE_API_KEY"))
-                .apiVersion("2024-10-21")
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
-                .retryConfig(RetryConfig.builder()
-                        .maxAttempts(1) // disabling implicit retries by default for tests
-                        .build())
-                .build();
-
-        final var gpt5Mini = SimpleOpenAIAzure.builder()
-                .baseUrl(dotenv.get("AZURE_GPT5_MINI_ENDPOINT"))
-                .apiKey(dotenv.get("AZURE_API_KEY"))
-                .apiVersion("2024-10-21")
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
-                .retryConfig(RetryConfig.builder()
-                        .maxAttempts(1) // disabling implicit retries by default for tests
-                        .build())
-                .build();
-        return new DefaultChatCompletionServiceFactory()
-                .registerDefaultProvider(gpt5)
-                .registerProvider("gpt-5-mini", gpt5Mini);
-    }
-
     private static void setupLogging() {
         try {
             final var context = (LoggerContext) LoggerFactory
@@ -251,8 +222,7 @@ public class App {
             final var configurator = new JoranConfigurator();
             configurator.setContext(context);
             context.reset();
-            configurator.doConfigure(App.class.getResourceAsStream(
-                                                                   "/logback.xml"));
+            configurator.doConfigure(App.class.getResourceAsStream("/logback.xml"));
         }
         catch (JoranException je) {
             je.printStackTrace();
