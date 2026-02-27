@@ -25,7 +25,7 @@ import lombok.With;
 @Builder
 @With
 public class Settings {
-    private static final String DEFAULT_DATA_DIR = System.getProperty("user.home") + "/.local/state/sai";
+    public static final String DEFAULT_DATA_DIR = System.getProperty("user.home") + "/.local/state/sai";
 
     @Builder.Default
     String appName = "sai";

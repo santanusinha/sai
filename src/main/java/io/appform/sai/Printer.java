@@ -120,8 +120,10 @@ public class Printer implements AutoCloseable {
     }
 
     public Printer start() {
-        lineReader.getTerminal().puts(Capability.clear_screen);
-        lineReader.getTerminal().flush();
+        if (!settings.isHeadless()) {
+            lineReader.getTerminal().puts(Capability.clear_screen);
+            lineReader.getTerminal().flush();
+        }
 
         printerTask = executorService.submit(() -> {
             while (!Thread.currentThread().isInterrupted()) {
@@ -130,6 +132,16 @@ public class Printer implements AutoCloseable {
                     if (null != printables) {
                         printables.forEach(printable -> {
                             if (!settings.isDebug() && printable.isDebug()) {
+                                return;
+                            }
+                            if (settings.isHeadless()) {
+                                if (printable.isStatusUpdate()) {
+                                    return;
+                                }
+                                if (settings.isDebug() || printable.getActor() == Actor.ASSISTANT || printable
+                                        .isImportant()) {
+                                    System.out.println(printable.getData());
+                                }
                                 return;
                             }
                             if (printable.isStatusUpdate()) {
@@ -243,8 +255,10 @@ public class Printer implements AutoCloseable {
         if (null != printerTask) {
             printerTask.cancel(true);
         }
-        lineReader.printAbove(Colours.RESET);
-        terminal.close();
+        if (!settings.isHeadless()) {
+            lineReader.printAbove(Colours.RESET);
+            terminal.close();
+        }
         log.info("Printer closed");
     }
 

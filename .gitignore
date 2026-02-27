@@ -44,3 +44,5 @@ data
 out
 deps
 *.log
+.opencode
+output.txt

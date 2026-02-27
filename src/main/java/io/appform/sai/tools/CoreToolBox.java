@@ -20,6 +20,8 @@ import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.Printer;
+import io.appform.sai.models.Actor;
+import io.appform.sai.models.Severity;
 
 import java.time.Duration;
 
@@ -36,6 +38,13 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.BashResponse bash(ToolIO.BashRequest request) {
         // We run the command in the same thread and print the update to the printer. We can do streaming later if needed.
         // once completed we return the status code and the output as response.
+        if (null != printer) {
+            printer.print(Printer.Update.builder()
+                    .actor(Actor.SYSTEM)
+                    .severity(Severity.INFO)
+                    .data("Executing bash command: " + request.getCommand())
+                    .build());
+        }
         log.info("Executing bash command: {}", request.getCommand());
         try {
             final var commandOutput = new BashCommandRunner(request.getCommand(),
