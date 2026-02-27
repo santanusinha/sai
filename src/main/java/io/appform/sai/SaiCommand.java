@@ -39,6 +39,7 @@ import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelect
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
+import io.appform.sai.commands.DeleteCommand;
 import io.appform.sai.commands.ListCommand;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
@@ -69,7 +70,8 @@ import picocli.CommandLine.Option;
 @Slf4j
 @Getter
 @Command(name = "sai", mixinStandardHelpOptions = true, version = "1.0", description = "Sai AI Agent", subcommands = {
-        ListCommand.class
+        ListCommand.class,
+        DeleteCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
 
