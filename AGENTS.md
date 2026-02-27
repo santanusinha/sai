@@ -1,110 +1,133 @@
 # SAI Agent - Developer Guide
 
-SAI (Sentinel AI) is a CLI-based AI agent built using Java and the Sentinel AI framework. It is designed to interact with Large Language Models (LLMs) such as Azure OpenAI or GitHub Copilot to assist users with various tasks directly from the command line.
+SAI (Sentinel AI) is a CLI-based AI agent built in Java on the Sentinel AI framework. It interacts with Large Language Models (LLMs) via configurable providers (Azure OpenAI, OpenAI, or a GitHub Copilot Proxy) to assist users from the command line.
 
 ## Table of Contents
-- [Prerequisites](#prerequisites)
-- [Configuration](#configuration)
-- [Building the Project](#building-the-project)
-- [Running the Agent](#running-the-agent)
-- [Basic Architecture](#basic-architecture)
-- [Documentation Maintenance](#documentation-maintenance)
+- Prerequisites
+- Configuration
+- Building the Project
+- Running the Agent
+- Basic Architecture
+- Documentation Maintenance
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
--   **Java 17** or higher
--   **Maven** (for building the project)
+Ensure you have the following installed:
+- Java 17 or higher
+- Maven
 
 ## Configuration
 
-The application requires specific environment variables to function, particularly for connecting to LLM providers. These can be set in a `.env` file in the root directory or exported as system environment variables.
+The agent is configured via environment variables. Set them in your shell or in a `.env` file in the project root.
 
-### Required Environment Variables
-Based on the default configuration in `App.java`:
+### Provider selection
 
--   `COPILOT_PAT`: GitHub Copilot Personal Access Token. This is **required** if using the default GitHub Copilot model configuration.
+- MODEL_PROVIDER: Required. Selects the model provider.
+  - Supported values: `azure`, `openai`, `copilot-proxy`
+- MODEL: Optional. Specifies the model name to use.
+  - Default: `gemini-3-pro-preview` (override as appropriate for your chosen provider)
 
-### Optional / Azure Configuration
-If you are configuring the agent to use Azure OpenAI models:
--   `AZURE_GPT5_ENDPOINT`: Endpoint URL for the Azure OpenAI GPT-5 model.
--   `AZURE_GPT5_MINI_ENDPOINT`: Endpoint URL for the Azure OpenAI GPT-5 Mini model.
--   `AZURE_API_KEY`: API Key for authenticating with Azure OpenAI.
+### Azure OpenAI configuration
+
+- AZURE_ENDPOINT: Required. Base URL for your Azure OpenAI resource, for example: `https://<resource>.openai.azure.com`.
+- AZURE_API_KEY: Required. API key for the Azure OpenAI resource.
+- AZURE_API_VERSION: Optional. API version; defaults to `2024-10-21`.
+
+### OpenAI configuration
+
+- OPENAI_API_KEY: Required. OpenAI API key.
+- OPENAI_ENDPOINT: Optional. Base URL; defaults to `https://api.openai.com/v1`.
+- OPENAI_ORGANIZATION: Optional. Organization ID.
+- OPENAI_PROJECT_ID: Optional. Project ID.
+- OPENAI_EXTRA_HEADERS: Optional. Comma-separated list of additional headers to include with requests, in the form `Header-Name: value,Another-Header: value`.
+
+### GitHub Copilot Proxy configuration
+
+- COPILOT_GITHUB_PAT: Required. GitHub Personal Access Token used by the Copilot proxy.
+- COPILOT_PROXY_ENDPOINT: Optional. Base URL for the proxy; defaults to `http://localhost:4141`.
 
 ## Building the Project
 
-To build the project and generate the executable JAR file, run the following Maven command in the project root:
+Build the shaded JAR:
 
 ```bash
 mvn clean package
 ```
 
-This will compile the source code, run tests, and package the application into a shaded JAR file located in the `target/` directory (e.g., `sai-1.0-SNAPSHOT.jar`).
+The artifact will be generated at `target/sai-1.0-SNAPSHOT.jar`.
 
 ## Running the Agent
 
-Once built, you can run the agent using the `java` command.
+Use the `java -jar` command to launch the agent.
 
-### Basic Run
-To start a new session:
-```bash
-java -jar target/sai-1.0-SNAPSHOT.jar
+### CLI usage
+
+```text
+Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-p=<prompt>]
+           [-s=<sessionId>] [COMMAND]
+Sai AI Agent
+  -d, --debug                Enable debug mode
+      --data-dir=<dataDir>   Override data directory
+  -h, --help                 Show this help message and exit.
+      --headless             Run in headless mode
+  -p, --prompt=<prompt>      Execute a single prompt and exit
+  -s, --session-id=<sessionId>
+                             Resume a specific session
+  -V, --version              Print version information and exit.
+Commands:
+  list    List available sessions
+  delete  Delete a session
 ```
 
-### Resuming a Session
-To resume a specific session, provide the Session ID as an argument:
-```bash
-java -jar target/sai-1.0-SNAPSHOT.jar <session-id>
-```
-*The Session ID is displayed when you start a new session.*
+### Examples
 
-### Interactive Mode
-Once running, the agent will prompt you for input:
--   Type your query to interact with the agent.
--   Type `exit` to quit the application.
+- Start a new interactive session:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar
+  ```
+
+- Execute a single prompt and exit:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --prompt "Summarize this project in three bullet points"
+  ```
+
+- Resume a specific session:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
+  ```
+
+- List sessions:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar list
+  ```
+
+- Delete a session:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar delete
+  ```
 
 ## Basic Architecture
 
-SAI is built upon the **Sentinel AI** framework and follows a modular architecture:
+SAI leverages Sentinel AI components and follows a modular design.
 
-### Core Components
-
-1.  **App.java**: The main entry point. It handles:
-    -   Loading configuration (Environment variables).
-    -   Setting up the HTTP client and Model Provider (Azure/Copilot).
-    -   Initializing the `SaiAgent`.
-    -   Managing the main input loop and event processing.
-
-2.  **SaiAgent**: The core agent logic that coordinates between the user, the LLM, and available tools. It utilizes `AgentSessionExtension` to maintain state across interactions.
-
-3.  **CommandProcessor**: Handles user input commands. It processes the input and delegates it to the agent for execution.
-
-4.  **Tools**: The agent is equipped with tools to perform actions.
-    -   `CoreToolBox`: Contains basic system tools (likely file operations, command execution, etc.).
-    -   `BashCommandRunner`: A specific tool wrapper for executing bash commands.
-
-5.  **Session Management**:
-    -   Sessions are stored locally using `FileSystemSessionStore`.
-    -   Data is typically stored in a `sessions/` directory within the configured data path.
-
-6.  **Models**:
-    -   The agent uses `SimpleOpenAIModel` to communicate with LLM providers.
-    -   It supports switching between providers like Azure OpenAI and GitHub Copilot Proxy.
-
-### Flow
-1.  **Startup**: The app initializes, connects to the model provider, and either creates a new session or loads an existing one.
-2.  **Input**: User types a command or query.
-3.  **Processing**: `CommandProcessor` sends the input to the `SaiAgent`.
-4.  **Reasoning**: The LLM processes the query, potentially deciding to call tools (Tool Calling).
-5.  **Execution**: If tools are called, the agent executes them (e.g., running a bash command) and feeds the result back to the LLM.
-6.  **Response**: The final response is streamed or printed back to the user via the `Printer` or `MessagePrinter`.
+- SaiCommand: Picocli-based CLI entrypoint. Reads environment, configures provider, and starts interactive or single-prompt execution.
+- ConfigurableDefaultChatCompletionFactory: Builds ChatCompletionServices for the selected provider (`azure`, `openai`, or `copilot-proxy`) using environment variables.
+- SimpleOpenAIModel: Wraps provider-specific ChatCompletionServices and model options.
+- CommandProcessor: Processes user input, delegates to the agent, and manages tool invocation.
+- Tools:
+  - CoreToolBox: Basic system/file/tools
+  - BashCommandRunner: Executes shell commands
+- Session Management:
+  - Uses a file-system backed store to persist conversations and usage statistics.
+- Printers:
+  - MessagePrinter / EventPrinter: Stream and render agent/LLM responses and events.
 
 ## Documentation Maintenance
 
-Keep README.md accurate and in sync with the codebase. When you change any of the following, update the README in the same pull request:
+Keep README.md and AGENTS.md accurate and in sync with the codebase. When you change any of the following, update documentation in the same pull request:
 
 - CLI surface (flags, options, subcommands), default values, or behavior
-- Environment variables and provider configuration (e.g., Azure/Copilot endpoints, API keys)
+- Environment variables and provider configuration (Azure/OpenAI/Copilot Proxy)
 - Session management behavior, data directories, or examples
 
 Recommended workflow:
@@ -113,10 +136,10 @@ Recommended workflow:
    ```bash
    mvn clean package
    ```
-2. Refresh the CLI usage block by capturing authoritative help output and pasting it into README.md:
+2. Refresh the CLI usage block by capturing authoritative help output and pasting it into README.md and AGENTS.md:
    ```bash
    java -jar target/sai-1.0-SNAPSHOT.jar --help
    ```
-3. Verify provider/env var docs reflect the actual names used in App.java and related config.
-4. Ensure examples are wrapped in fenced code blocks with appropriate language hints and keep the tone professional. Do not use emojis.
-5. In your PR description, include a note such as: "docs(readme): synced with current CLI and configuration".
+3. Verify provider/env var docs reflect the actual names used in SaiCommand and ConfigurableDefaultChatCompletionFactory.
+4. Ensure examples use fenced code blocks with language hints and keep the tone professional. Do not use emojis.
+5. In your PR description, include a note such as: "docs: synced with current CLI and configuration".
