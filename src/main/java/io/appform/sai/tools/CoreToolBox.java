@@ -20,8 +20,6 @@ import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.Printer;
-import io.appform.sai.models.Actor;
-import io.appform.sai.models.Severity;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -45,13 +43,13 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.BashResponse bash(ToolIO.BashRequest request) {
         // We run the command in the same thread and print the update to the printer. We can do streaming later if needed.
         // once completed we return the status code and the output as response.
-        if (null != printer) {
+        /* if (null != printer) {
             printer.print(Printer.Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
                     .data("Executing bash command: " + request.getCommand())
                     .build());
-        }
+        } */
         log.info("Executing bash command: {}", request.getCommand());
         try {
             final var commandOutput = new BashCommandRunner(request.getCommand(),
@@ -72,13 +70,13 @@ public class CoreToolBox implements ToolBox {
 
     @Tool("Apply a patch to a file. Verifies file hasn't changed using checksum before applying.")
     public ToolIO.EditResponse edit(ToolIO.EditRequest request) {
-        if (null != printer) {
+        /* if (null != printer) {
             printer.print(Printer.Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
                     .data("Editing file: " + request.getPath())
                     .build());
-        }
+        } */
         log.info("Editing file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());
@@ -157,13 +155,13 @@ public class CoreToolBox implements ToolBox {
 
     @Tool("Read a file from the local filesystem. Returns content and a checksum for verification.")
     public ToolIO.ReadResponse read(ToolIO.ReadRequest request) {
-        if (null != printer) {
+        /* if (null != printer) {
             printer.print(Printer.Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
                     .data("Reading file: " + request.getPath())
                     .build());
-        }
+        } */
         log.info("Reading file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());
@@ -190,13 +188,13 @@ public class CoreToolBox implements ToolBox {
 
     @Tool("Write content to a file. This will create the file if it doesn't exist, or overwrite it if it does.")
     public ToolIO.WriteResponse write(ToolIO.WriteRequest request) {
-        if (null != printer) {
+        /* if (null != printer) {
             printer.print(Printer.Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
                     .data("Writing file: " + request.getPath())
                     .build());
-        }
+        } */
         log.info("Writing file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());

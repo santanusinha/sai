@@ -42,7 +42,13 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                     List<AgentExtension<String, String, SaiAgent>> extensions,
                     Map<String, ExecutableTool> knownTools
     ) {
-        super(String.class, DEFAULT_SYSTEM_PROMPT, setup, extensions, knownTools);
+        super(
+              String.class,
+              DEFAULT_SYSTEM_PROMPT + "\nCurrent working directory: " + System.getProperty("user.dir") + "\n",
+              setup,
+              extensions,
+              knownTools
+        );
     }
 
     @Override

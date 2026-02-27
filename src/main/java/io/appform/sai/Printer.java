@@ -60,7 +60,7 @@ public class Printer implements AutoCloseable {
         public static final String BOLD_WHITE_ON_RED_BACKGROUND = "\u001B[1;37;41m";
         public static final String BOLD_WHITE_ON_BLACK_BACKGROUND = "\u001B[1;37;40m";
         public static final String WHITE_ON_BLACK_BACKGROUND = "\u001B[37;40m";
-        public static final String WHITE_ON_DARK_GRAY_BACKGROUND = "\u001B[37;100m";
+        public static final String WHITE_ON_DARK_GRAY_BACKGROUND = "\u001B[97;100m";
         public static final String GRAY_ON_BLACK_BACKGROUND = "\u001B[90;40m";
         public static final String RED_ON_BLACK_BACKGROUND = "\u001B[31;40m";
         public static final String YELLOW_ON_BLACK_BACKGROUND = "\u001B[33;40m";
