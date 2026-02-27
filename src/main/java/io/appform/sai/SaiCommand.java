@@ -47,6 +47,8 @@ import io.appform.sai.tools.CoreToolBox;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -120,6 +122,99 @@ public class SaiCommand implements Callable<Integer> {
                 .sessionId(effectiveSessionId)
                 .debug(debug)
                 .headless(headless);
+
+        if (headless && Strings.isNullOrEmpty(prompt)) {
+            // If we are in headless mode and no prompt is provided, we read from stdin line by line
+            // and execute the prompt
+            settingsBuilder.headless(true);
+            if (!Strings.isNullOrEmpty(dataDir)) {
+                settingsBuilder.dataDir(dataDir);
+            }
+            final var settings = settingsBuilder.build();
+            final var eventBus = new EventBus(executorService);
+            final var modelName = EnvLoader.readEnv("MODEL", "gemini-3-pro-preview");
+            final var agentSetup = AgentSetup.builder()
+                    .executorService(executorService)
+                    .mapper(mapper)
+                    .eventBus(eventBus)
+                    .modelSettings(ModelSettings.builder()
+                            .parallelToolCalls(false)
+                            .modelAttributes(ModelAttributes.builder()
+                                    .contextWindowSize(128_000)
+                                    .encodingType(EncodingType.O200K_BASE)
+                                    .build())
+                            .build())
+                    .model(new SimpleOpenAIModel<>(modelName,
+                                                   modelProviderFactory,
+                                                   mapper,
+                                                   SimpleOpenAIModelOptions
+                                                           .builder()
+                                                           .tokenCountingConfig(TokenCountingConfig.DEFAULT)
+                                                           .build()))
+                    // .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
+                    .build();
+            final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
+            Files.createDirectories(dataDirPath);
+            final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
+                                                                mapper,
+                                                                1);
+            final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
+                    .sessionStore(sessionStore)
+                    .mapper(mapper)
+                    .setup(AgentSessionExtensionSetup.builder()
+                            .autoSummarizationThresholdPercentage(50)
+                            .build())
+                    .build()
+                    .addMessageSelector(new RemoveAllToolCallsSelector());
+            final var agent = new SaiAgent(agentSetup,
+                                           List.of(sessionExtension),
+                                           Map.of());
+            final var printer = Printer.builder()
+                    .settings(settings)
+                    .executorService(executorService)
+                    .build()
+                    .start();
+            agent.registerToolbox(new CoreToolBox(printer));
+            try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (Strings.isNullOrEmpty(line)) {
+                        continue;
+                    }
+                    if (Objects.equals(line, "exit")) {
+                        break;
+                    }
+                    try {
+                        final var user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
+                        final var responseF = agent.executeAsync(AgentInput
+                                .<String>builder()
+                                .requestMetadata(AgentRequestMetadata.builder()
+                                        .sessionId(settings.getSessionId())
+                                        .runId("run-" + UUID.randomUUID())
+                                        .userId(user)
+                                        .build())
+                                .request(line)
+                                .build());
+                        final var response = responseF.get();
+                        if (response.getError().getErrorType().equals(ErrorType.SUCCESS)) {
+                            System.out.println(response.getData());
+                        }
+                        else {
+                            System.err.println("Error: " + response.getError().getMessage());
+                        }
+                    }
+                    catch (Exception e) {
+                        log.error("Error executing prompt", e);
+                    }
+                }
+            }
+            finally {
+                printer.close();
+                executorService.shutdownNow();
+                executorService.awaitTermination(1, TimeUnit.SECONDS);
+            }
+            return 0;
+        }
 
         if (!Strings.isNullOrEmpty(prompt)) {
             settingsBuilder.headless(true);
