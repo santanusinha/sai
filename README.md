@@ -1,95 +1,229 @@
 # SAI (Sentinel AI) - CLI Agent
 
-SAI is a CLI-based AI agent built on the Sentinel AI framework. It connects to Large Language Models (LLMs) such as GitHub Copilot (via Copilot proxy) or Azure OpenAI to assist you from the command line. It supports interactive sessions, basic tool use, and local session persistence so you can resume where you left off.
+SAI is a command-line AI agent built on the Sentinel AI framework. It connects to model providers like OpenAI, Azure OpenAI, or a GitHub Copilot proxy, supports interactive and headless modes, and persists local sessions so you can resume where you left off.
 
 - Java 17+
 - Maven build producing a single shaded JAR
-- Model providers: GitHub Copilot or Azure OpenAI
-- Tools: Sentinel AI toolboxes (MCP, Remote HTTP, Embeddings, Filesystem, Sessions)
-- Logging via Logback
+- Model providers: openai, azure, copilot-proxy
+- Local session storage with simple session management commands
+- Clean terminal UX with streaming output and event printing
 
 ## Table of Contents
-- Prerequisites
-- Quickstart
+- Requirements
+- Build
+- Quick Start
 - Configuration
-- Running
-- Usage
+- Running the Agent
+- CLI Reference
+- Examples
+- Data and Sessions
 - Logging
-- Development Notes
-- Project Structure
-- Acknowledgements
+- Development
 
-## Prerequisites
+## Requirements
 - Java 17 or newer
 - Maven 3.8+ (to build from source)
-- Network access to your chosen LLM provider
-- Credentials for at least one provider:
-  - GitHub Copilot Personal Access Token (PAT), or
-  - Azure OpenAI endpoint and API key
+- Network access to your chosen model provider
 
-## Quickstart
-1) Clone and enter the project directory.
-2) Provide your credentials via environment variables (see Configuration).
-   - Optionally create a .env file in the repo root with the variables.
-3) Build:
-   - mvn clean package
-4) Run:
-   - java -jar target/sai-1.0-SNAPSHOT.jar
+## Build
+
+```bash
+mvn clean package
+```
+
+This creates a shaded JAR at:
+
+```text
+target/sai-1.0-SNAPSHOT.jar
+```
+
+## Quick Start
+
+1) Set required environment variables (see Configuration below).
+2) Build the JAR:
+   ```bash
+   mvn clean package
+   ```
+3) Run interactively:
+   ```bash
+   java -jar target/sai-1.0-SNAPSHOT.jar
+   ```
 
 ## Configuration
-You can set environment variables in your shell or in a .env file at the project root.
 
-Required for the default GitHub Copilot model:
-- COPILOT_PAT: Your GitHub Copilot Personal Access Token
+The agent is configured via environment variables. One variable is always required to choose the provider:
 
-Optional / Azure configuration:
-- AZURE_GPT5_ENDPOINT: Azure OpenAI GPT-5 endpoint URL
-- AZURE_GPT5_MINI_ENDPOINT: Azure OpenAI GPT-5 Mini endpoint URL
-- AZURE_API_KEY: Azure OpenAI API key
+- MODEL_PROVIDER: one of `openai`, `azure`, `copilot-proxy`
 
-Notes:
-- By default, the application is configured to work with GitHub Copilot when COPILOT_PAT is available. To use Azure OpenAI, provide the AZURE_* variables and ensure the model selection in the app configuration points to Azure.
+Common variables:
 
-## Running
-Basic run (starts a new session):
-- java -jar target/sai-1.0-SNAPSHOT.jar
+- MODEL: model name to use. Defaults to `gemini-3-pro-preview` if not set.
 
-Resume a session by ID:
-- java -jar target/sai-1.0-SNAPSHOT.jar <session-id>
+Provider-specific variables:
 
-Exit the application by typing:
-- exit
+OpenAI
+- OPENAI_API_KEY: required
+- OPENAI_ENDPOINT: optional, default `https://api.openai.com/v1`
+- OPENAI_ORGANIZATION: optional
+- OPENAI_PROJECT_ID: optional
+- OPENAI_EXTRA_HEADERS: optional, comma-separated `Key:Value` pairs to add to requests
 
-## Usage
-- Start the application and type your query or instruction at the prompt.
-- The agent will process your input, optionally call tools, and stream back results.
-- Sessions are stored locally so you can resume by passing the session ID the next time you launch.
+Azure OpenAI
+- AZURE_ENDPOINT: required (base URL)
+- AZURE_API_KEY: required
+- AZURE_API_VERSION: optional, default `2024-10-21`
+
+GitHub Copilot Proxy
+- COPILOT_GITHUB_PAT: required (GitHub token)
+- COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
+
+Example .env file:
+
+```env
+MODEL_PROVIDER=openai
+MODEL=gpt-4o-mini
+OPENAI_API_KEY=your_key_here
+# OPENAI_ENDPOINT=https://api.openai.com/v1
+# OPENAI_ORGANIZATION=org_...
+# OPENAI_PROJECT_ID=proj_...
+# OPENAI_EXTRA_HEADERS=Helicone-Auth:Bearer xyz,Another-Header:abc
+```
+
+Switching to Azure:
+
+```env
+MODEL_PROVIDER=azure
+MODEL=gpt-4o-mini
+AZURE_ENDPOINT=https://your-azure-openai-endpoint
+AZURE_API_KEY=your_azure_key
+# AZURE_API_VERSION=2024-10-21
+```
+
+Using a Copilot proxy:
+
+```env
+MODEL_PROVIDER=copilot-proxy
+MODEL=claude-3.5-sonnet
+COPILOT_GITHUB_PAT=ghp_...
+# COPILOT_PROXY_ENDPOINT=http://localhost:4141
+```
+
+## Running the Agent
+
+Interactive mode (new session):
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar
+```
+
+Resume an existing session by ID:
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
+```
+
+Single-prompt mode (run once and exit):
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --prompt "Summarize the repository"
+```
+
+Headless mode reading from stdin (process each line until EOF or `exit`):
+
+```bash
+echo "What can you do?" | java -jar target/sai-1.0-SNAPSHOT.jar --headless
+```
+
+Override the data directory:
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --data-dir /path/to/state
+```
+
+## CLI Reference
+
+Help output:
+
+```text
+Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-p=<prompt>]
+           [-s=<sessionId>] [COMMAND]
+Sai AI Agent
+  -d, --debug                Enable debug mode
+      --data-dir=<dataDir>   Override data directory
+  -h, --help                 Show this help message and exit.
+      --headless             Run in headless mode
+  -p, --prompt=<prompt>      Execute a single prompt and exit
+  -s, --session-id=<sessionId>
+                             Resume a specific session
+  -V, --version              Print version information and exit.
+Commands:
+  list    List available sessions
+  delete  Delete a session
+```
+
+Subcommands:
+
+- list
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar list
+  ```
+  Lists sessions found under the configured data directory. Honors `--data-dir` when provided.
+
+- delete
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar delete <session-id>
+  ```
+  Deletes a session directory by ID. Honors `--data-dir` when provided.
+
+## Examples
+
+- Start a new interactive session:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar
+  ```
+
+- Resume a session and continue chatting:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar -s 2f1e4f7a-...-a1b2
+  ```
+
+- One-off prompt (no session persisted):
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar -p "List the key modules in this repo"
+  ```
+
+- Headless with multiple inputs from a file:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --headless < prompts.txt
+  ```
+
+- List sessions:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar list
+  ```
+
+- Delete a session:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar delete 2f1e4f7a-...-a1b2
+  ```
+
+## Data and Sessions
+
+- Default data directory: `~/.local/state/sai`
+- Sessions are stored under: `<dataDir>/sessions/<sessionId>`
+- You can override the directory with `--data-dir`.
+- When using `--prompt`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
+- In `--headless` mode without `--prompt`, input is read line-by-line from stdin until EOF or `exit`.
 
 ## Logging
-Logging is configured via src/main/resources/logback.xml. Edit this file to adjust log levels, appenders, and formats. By default, logs print to the console; you can add file appenders if desired.
 
-## Development Notes
-- JDK level: 17 (configured via maven.compiler.release)
+Logging is configured via `src/main/resources/logback.xml` and is initialized on startup. Adjust levels and appenders as needed.
+
+## Development
+
+- Java release level: 17
 - Build system: Maven
-- Packaging: maven-shade-plugin produces target/sai-1.0-SNAPSHOT.jar with the main class io.appform.sai.App
-- Code style/formatting: Spotless is configured.
-  - To check formatting: mvn compile (Spotless runs in the compile phase)
-  - To apply formatting locally: mvn com.diffplug.spotless:spotless-maven-plugin:apply
-- Lombok is used (provided scope). Ensure annotation processing is enabled in your IDE.
-- Testing: mvn test
+- Packaging: shaded JAR with main class `io.appform.sai.App`
+- Code style: Spotless is configured via `spotless-maven-plugin`
 
-## Project Structure
-- pom.xml: Project metadata, dependencies, plugins
-- src/main/resources/logback.xml: Logback configuration
-- target/: Build artifacts (including the shaded JAR)
-- AGENTS.md: Developer-oriented guide and architecture overview
-
-## Acknowledgements
-- Sentinel AI framework (core, models, toolboxes, session, filesystem)
-- GitHub Copilot client
-- Picocli (CLI)
-- Logback (logging)
-- JLine (terminal interaction)
-
----
-If you need a different README structure or additional sections (screenshots, examples, FAQs, or detailed provider setup), let me know and I can tailor it further.
+Contributions and issues are welcome.
