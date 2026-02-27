@@ -25,8 +25,6 @@ import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
-import com.phonepe.sentinelai.models.DefaultChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
@@ -35,18 +33,12 @@ import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelector;
 
-import io.appform.copilot.client.provider.SimpleOpenAICopilot;
-import io.appform.copilot.client.service.CopilotAuthService;
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
-import io.github.cdimascio.dotenv.Dotenv;
-import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
-import io.github.sashirestela.cleverclient.retry.RetryConfig;
-import io.github.sashirestela.openai.SimpleOpenAIAzure;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
