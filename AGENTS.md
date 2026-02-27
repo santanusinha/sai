@@ -8,6 +8,7 @@ SAI (Sentinel AI) is a CLI-based AI agent built using Java and the Sentinel AI f
 - [Building the Project](#building-the-project)
 - [Running the Agent](#running-the-agent)
 - [Basic Architecture](#basic-architecture)
+- [Documentation Maintenance](#documentation-maintenance)
 
 ## Prerequisites
 
@@ -98,3 +99,24 @@ SAI is built upon the **Sentinel AI** framework and follows a modular architectu
 5.  **Execution**: If tools are called, the agent executes them (e.g., running a bash command) and feeds the result back to the LLM.
 6.  **Response**: The final response is streamed or printed back to the user via the `Printer` or `MessagePrinter`.
 
+## Documentation Maintenance
+
+Keep README.md accurate and in sync with the codebase. When you change any of the following, update the README in the same pull request:
+
+- CLI surface (flags, options, subcommands), default values, or behavior
+- Environment variables and provider configuration (e.g., Azure/Copilot endpoints, API keys)
+- Session management behavior, data directories, or examples
+
+Recommended workflow:
+
+1. Rebuild the JAR:
+   ```bash
+   mvn clean package
+   ```
+2. Refresh the CLI usage block by capturing authoritative help output and pasting it into README.md:
+   ```bash
+   java -jar target/sai-1.0-SNAPSHOT.jar --help
+   ```
+3. Verify provider/env var docs reflect the actual names used in App.java and related config.
+4. Ensure examples are wrapped in fenced code blocks with appropriate language hints and keep the tone professional. Do not use emojis.
+5. In your PR description, include a note such as: "docs(readme): synced with current CLI and configuration".
