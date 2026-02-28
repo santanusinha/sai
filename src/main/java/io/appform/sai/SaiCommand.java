@@ -38,6 +38,7 @@ import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelect
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
+import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.commands.DeleteCommand;
 import io.appform.sai.commands.ListCommand;
@@ -116,8 +117,7 @@ public class SaiCommand implements Callable<Integer> {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
-        final var provider = EnvLoader.readEnv(
-                                               "MODEL_PROVIDER")
+        final var provider = EnvLoader.readEnv("MODEL_PROVIDER")
                 .orElseThrow(() -> new IllegalArgumentException("MODEL_PROVIDER environment variable is required to specify the model provider to use. Supported values are 'azure', 'openai' and 'copilot-proxy'"));
         final var modelProviderFactory = new ConfigurableDefaultChatCompletionFactory(provider, mapper, okHttpClient);
 
@@ -156,6 +156,11 @@ public class SaiCommand implements Callable<Integer> {
                                                            .build()))
                     // .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
                     .build();
+            final var printer = Printer.builder()
+                    .settings(settings)
+                    .executorService(executorService)
+                    .build()
+                    .start();
             final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
             Files.createDirectories(dataDirPath);
             final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
@@ -169,14 +174,13 @@ public class SaiCommand implements Callable<Integer> {
                             .build())
                     .build()
                     .addMessageSelector(new RemoveAllToolCallsSelector());
+            sessionExtension.onSessionSummarized()
+                    .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
+                            + "Session compacted with summary: " + Colours.WHITE
+                            + sessionSummary.getTitle() + Colours.RESET)));
             final var agent = new SaiAgent(agentSetup,
                                            List.of(sessionExtension),
                                            Map.of());
-            final var printer = Printer.builder()
-                    .settings(settings)
-                    .executorService(executorService)
-                    .build()
-                    .start();
             agent.registerToolbox(new CoreToolBox(printer));
             try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
                 String line;
