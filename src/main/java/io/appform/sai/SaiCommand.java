@@ -50,6 +50,7 @@ import org.jline.reader.UserInterruptException;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -96,9 +97,9 @@ public class SaiCommand implements Callable<Integer> {
     private String dataDir;
 
     @Option(names = {
-            "-p", "--prompt"
-    }, description = "Execute a single prompt and exit")
-    private String prompt;
+            "-i", "--input"
+    }, description = "Execute a single input and exit. If the value starts with '@', read input from the specified file.")
+    private String input;
 
     @Override
     public Integer call() throws Exception {
@@ -125,9 +126,9 @@ public class SaiCommand implements Callable<Integer> {
                 .debug(debug)
                 .headless(headless);
 
-        if (headless && Strings.isNullOrEmpty(prompt)) {
-            // If we are in headless mode and no prompt is provided, we read from stdin line by line
-            // and execute the prompt
+        if (headless && Strings.isNullOrEmpty(input)) {
+            // If we are in headless mode and no input is provided, we read from stdin line by line
+            // and execute the input
             settingsBuilder.headless(true);
             if (!Strings.isNullOrEmpty(dataDir)) {
                 settingsBuilder.dataDir(dataDir);
@@ -206,7 +207,7 @@ public class SaiCommand implements Callable<Integer> {
                         }
                     }
                     catch (Exception e) {
-                        log.error("Error executing prompt", e);
+                        log.error("Error executing input", e);
                     }
                 }
             }
@@ -218,7 +219,7 @@ public class SaiCommand implements Callable<Integer> {
             return 0;
         }
 
-        if (!Strings.isNullOrEmpty(prompt)) {
+        if (!Strings.isNullOrEmpty(input)) {
             settingsBuilder.headless(true);
         }
         if (!Strings.isNullOrEmpty(dataDir)) {
@@ -265,7 +266,7 @@ public class SaiCommand implements Callable<Integer> {
                 .build()
                 .addMessageSelector(new RemoveAllToolCallsSelector());
         final var agent = new SaiAgent(agentSetup,
-                                       Strings.isNullOrEmpty(prompt)
+                                       Strings.isNullOrEmpty(input)
                                                ? List.of(sessionExtension)
                                                : List.of(),
                                        Map.of());
@@ -275,10 +276,29 @@ public class SaiCommand implements Callable<Integer> {
                 .build()
                 .start();
 
-        if (!Strings.isNullOrEmpty(prompt)) {
+        if (!Strings.isNullOrEmpty(input)) {
             agent.registerToolbox(new CoreToolBox(printer));
             final var user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
             try {
+                final String requestText;
+                if (input.startsWith("@")) {
+                    final var filePath = input.substring(1);
+                    if (Strings.isNullOrEmpty(filePath)) {
+                        System.err.println("Error: --input '@' requires a file path");
+                        return 2;
+                    }
+                    try {
+                        requestText = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
+                    }
+                    catch (Exception readEx) {
+                        log.error("Error reading input file: {}", filePath, readEx);
+                        System.err.println("Error: Could not read input file: " + filePath);
+                        return 1;
+                    }
+                }
+                else {
+                    requestText = input;
+                }
                 final var responseF = agent.executeAsync(AgentInput
                         .<String>builder()
                         .requestMetadata(AgentRequestMetadata.builder()
@@ -286,7 +306,7 @@ public class SaiCommand implements Callable<Integer> {
                                 .runId("run-" + UUID.randomUUID())
                                 .userId(user)
                                 .build())
-                        .request(prompt)
+                        .request(requestText)
                         .build());
                 final var response = responseF.get();
                 if (response.getError().getErrorType().equals(ErrorType.SUCCESS)) {
@@ -298,7 +318,7 @@ public class SaiCommand implements Callable<Integer> {
                 }
             }
             catch (Exception e) {
-                log.error("Error executing prompt", e);
+                log.error("Error executing input", e);
                 return 1;
             }
             finally {

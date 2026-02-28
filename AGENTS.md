@@ -63,14 +63,16 @@ Use the `java -jar` command to launch the agent.
 ### CLI usage
 
 ```text
-Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-p=<prompt>]
+Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
            [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
       --data-dir=<dataDir>   Override data directory
   -h, --help                 Show this help message and exit.
       --headless             Run in headless mode
-  -p, --prompt=<prompt>      Execute a single prompt and exit
+  -i, --input=<input>        Execute a single input and exit. If the value
+                               starts with '@', read input from the specified
+                               file.
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
@@ -86,9 +88,13 @@ Commands:
   java -jar target/sai-1.0-SNAPSHOT.jar
   ```
 
-- Execute a single prompt and exit:
+- Execute a single input and exit:
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar --prompt "Summarize this project in three bullet points"
+  java -jar target/sai-1.0-SNAPSHOT.jar --input "Summarize this project in three bullet points"
+  ```
+  Or read input from a file using @-syntax:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --input @prompt.txt
   ```
 
 - Resume a specific session:
@@ -110,7 +116,7 @@ Commands:
 
 SAI leverages Sentinel AI components and follows a modular design.
 
-- SaiCommand: Picocli-based CLI entrypoint. Reads environment, configures provider, and starts interactive or single-prompt execution.
+- SaiCommand: Picocli-based CLI entrypoint. Reads environment, configures provider, and starts interactive or single-input execution.
 - ConfigurableDefaultChatCompletionFactory: Builds ChatCompletionServices for the selected provider (`azure`, `openai`, or `copilot-proxy`) using environment variables.
 - SimpleOpenAIModel: Wraps provider-specific ChatCompletionServices and model options.
 - CommandProcessor: Processes user input, delegates to the agent, and manages tool invocation.

@@ -28,7 +28,10 @@ public class App {
     @SneakyThrows
     public static void main(String[] args) {
         setupLogging();
-        final var exitCode = new picocli.CommandLine(new SaiCommand()).execute(args);
+        final var commandLine = new picocli.CommandLine(new SaiCommand());
+        // Disable picocli "@file" expansion so we can implement our own @file semantics for --input
+        commandLine.setExpandAtFiles(false);
+        final var exitCode = commandLine.execute(args);
         System.exit(exitCode);
     }
 

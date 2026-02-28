@@ -122,10 +122,16 @@ Resume an existing session by ID:
 java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
 ```
 
-Single-prompt mode (run once and exit):
+Single-input mode (run once and exit):
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --prompt "Summarize the repository"
+java -jar target/sai-1.0-SNAPSHOT.jar --input "Summarize the repository"
+```
+
+Read input from a file using @-syntax:
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --input @prompt.txt
 ```
 
 Headless mode reading from stdin (process each line until EOF or `exit`):
@@ -145,14 +151,16 @@ java -jar target/sai-1.0-SNAPSHOT.jar --data-dir /path/to/state
 Help output:
 
 ```text
-Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-p=<prompt>]
+Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
            [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
       --data-dir=<dataDir>   Override data directory
   -h, --help                 Show this help message and exit.
       --headless             Run in headless mode
-  -p, --prompt=<prompt>      Execute a single prompt and exit
+  -i, --input=<input>        Execute a single input and exit. If the value
+                               starts with '@', read input from the specified
+                               file.
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
@@ -187,9 +195,9 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar -s 2f1e4f7a-...-a1b2
   ```
 
-- One-off prompt (no session persisted):
+- One-off input (no session persisted):
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar -p "List the key modules in this repo"
+  java -jar target/sai-1.0-SNAPSHOT.jar -i "List the key modules in this repo"
   ```
 
 - Headless with multiple inputs from a file:
@@ -212,8 +220,8 @@ Subcommands:
 - Default data directory: `~/.local/state/sai`
 - Sessions are stored under: `<dataDir>/sessions/<sessionId>`
 - You can override the directory with `--data-dir`.
-- When using `--prompt`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
-- In `--headless` mode without `--prompt`, input is read line-by-line from stdin until EOF or `exit`.
+- When using `--input`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
+- In `--headless` mode without `--input`, input is read line-by-line from stdin until EOF or `exit`.
 
 ## Logging
 
