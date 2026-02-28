@@ -247,17 +247,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             messages.add(Printer.raw(Colours.GRAY + stdout + Colours.RESET));
         }
         if (!Strings.isNullOrEmpty(stderr)) {
-            messages.add(Printer.systemMessage(
-                                               "Status: %s -> %s"
-                                                       .formatted(statusCode,
-                                                                  stderr))
-                    .withSeverity(Severity.ERROR));
+            messages.add(Printer.raw(Colours.RED
+                    + "Status: %s -> %s".formatted(statusCode, stderr)
+                    + Colours.RESET));
         }
-        if (messages.isEmpty()) {
-            messages.add(Printer.systemMessage(
-                                               "Status: %s -> Command executed successfully"
-                                                       .formatted(statusCode)));
-        }
+        messages.add(Printer.systemMessage("Status: %s -> Command executed successfully"
+                .formatted(statusCode)));
     }
 
     @SneakyThrows
@@ -284,9 +279,10 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (!Strings.isNullOrEmpty(content)) {
             messages.add(Printer.raw(Printer.Colours.GRAY
                     + content + Printer.Colours.RESET));
+            messages.add(Printer.systemMessage("File read successfully."));
         }
         if (!Strings.isNullOrEmpty(error)) {
-            messages.add(Printer.systemMessage(error)
+            messages.add(Printer.systemMessage("Error reading file: %s".formatted(error))
                     .withSeverity(Severity.ERROR));
         }
     }
@@ -317,7 +313,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             messages.add(Printer.systemMessage("File edited successfully."));
         }
         else {
-            messages.add(Printer.systemMessage(error)
+            messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
                     .withSeverity(Severity.ERROR));
         }
     }
@@ -346,12 +342,11 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var bytesWritten = response.getBytesWritten();
         final var error = response.getError();
         if (success) {
-            messages.add(Printer.systemMessage(
-                                               "Wrote %d bytes successfully."
-                                                       .formatted(bytesWritten)));
+            messages.add(Printer.systemMessage("Wrote %d bytes successfully."
+                    .formatted(bytesWritten)));
         }
         else {
-            messages.add(Printer.systemMessage(error)
+            messages.add(Printer.systemMessage("Error writing file: %s".formatted(error))
                     .withSeverity(Severity.ERROR));
         }
     }
