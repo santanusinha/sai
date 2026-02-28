@@ -51,6 +51,19 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
         );
     }
 
+    public SaiAgent(@NonNull AgentSetup setup,
+                    final String systemPrompt,
+                    List<AgentExtension<String, String, SaiAgent>> extensions,
+                    Map<String, ExecutableTool> knownTools) {
+        super(
+              String.class,
+              systemPrompt,
+              setup,
+              extensions,
+              knownTools
+        );
+    }
+
     @Override
     public String name() {
         return "sai";

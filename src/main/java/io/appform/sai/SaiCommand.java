@@ -40,6 +40,7 @@ import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
+import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.commands.DeleteCommand;
 import io.appform.sai.commands.ListCommand;
 import io.appform.sai.models.Actor;
@@ -178,9 +179,18 @@ public class SaiCommand implements Callable<Integer> {
                     .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
                             + "Session compacted with summary: " + Colours.WHITE
                             + sessionSummary.getTitle() + Colours.RESET)));
-            final var agent = new SaiAgent(agentSetup,
-                                           List.of(sessionExtension),
-                                           Map.of());
+            final var agentFactory = new AgentFactory(
+                                                      sessionExtension,
+                                                      executorService,
+                                                      modelProviderFactory,
+                                                      mapper,
+                                                      eventBus,
+                                                      okHttpClient);
+            final var agent = agentFactory.createAgent(AgentConfig.builder()
+                    .agentId("sai-agent")
+                    .name("Sai Agent")
+                    .description("An AI agent that can execute tasks and answer questions.")
+                    .build());
             agent.registerToolbox(new CoreToolBox(printer));
             try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
                 String line;
