@@ -128,17 +128,17 @@ public class SaiCommand implements Callable<Integer> {
                 .debug(debug)
                 .headless(headless || (!Strings.isNullOrEmpty(input)))
                 .noSession(!sessionIdProvided);
-        if (sessionIdProvided) {
+        if (!Strings.isNullOrEmpty(configDir)) {
+            settingsBuilder.configDir(configDir);
+        }
+        if (Strings.isNullOrEmpty(input)) {
             if (!Strings.isNullOrEmpty(dataDir)) {
                 settingsBuilder.dataDir(dataDir);
             }
-            if (!Strings.isNullOrEmpty(configDir)) {
-                settingsBuilder.configDir(configDir);
-            }
         }
         else {
-            // When no session, we still create session to allow for the session extension
-            // to perform compaction etc. We create a temp directory for this
+            // If input is provided, we don't care about session persistence, so we can skip setting up data dir
+            // However we do care about compaction etc so we provide the session extension a temporary directory
             final var tempDataDir = Files.createTempDirectory("sai-data-")
                     .toAbsolutePath()
                     .normalize()
