@@ -153,15 +153,23 @@ Override the data directory:
 java -jar target/sai-1.0-SNAPSHOT.jar --data-dir /path/to/state
 ```
 
+Override the config directory:
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --config-dir /path/to/config
+```
+
 ## CLI Reference
 
 Help output:
 
 ```text
-Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
-           [-p=<persona>] [-s=<sessionId>] [COMMAND]
+Usage: sai [-dhV] [--headless] [--config-dir=<configDir>] [--data-dir=<dataDir>]
+           [-i=<input>] [-p=<persona>] [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
+      --config-dir=<configDir>
+                             Override config directory
       --data-dir=<dataDir>   Override data directory
   -h, --help                 Show this help message and exit.
       --headless             Run in headless mode
@@ -236,8 +244,10 @@ Subcommands:
 ## Data and Sessions
 
 - Default data directory: `~/.local/state/sai`
+- Default config directory: `~/.config/sai`
 - Sessions are stored under: `<dataDir>/sessions/<sessionId>`
-- You can override the directory with `--data-dir`.
+- You can override the data directory with `--data-dir`.
+- You can override the config directory with `--config-dir`.
 - When using `--input`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
 - In `--headless` mode without `--input`, input is read line-by-line from stdin until EOF or `exit`.
 

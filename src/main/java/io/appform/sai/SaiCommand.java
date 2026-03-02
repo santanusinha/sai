@@ -88,6 +88,11 @@ public class SaiCommand implements Callable<Integer> {
     private String dataDir;
 
     @Option(names = {
+            "--config-dir"
+    }, description = "Override config directory")
+    private String configDir;
+
+    @Option(names = {
             "-i", "--input"
     }, description = "Execute a single input and exit. If the value starts with '@', read input from the specified file.")
     private String input;
@@ -127,6 +132,9 @@ public class SaiCommand implements Callable<Integer> {
             if (!Strings.isNullOrEmpty(dataDir)) {
                 settingsBuilder.dataDir(dataDir);
             }
+            if (!Strings.isNullOrEmpty(configDir)) {
+                settingsBuilder.configDir(configDir);
+            }
         }
         else {
             // When no session, we still create session to allow for the session extension
@@ -136,6 +144,10 @@ public class SaiCommand implements Callable<Integer> {
                     .normalize()
                     .toString();
             settingsBuilder.dataDir(tempDataDir);
+        }
+        // Apply configDir override regardless of session
+        if (!Strings.isNullOrEmpty(configDir)) {
+            settingsBuilder.configDir(configDir);
         }
         final var settings = settingsBuilder.build();
 

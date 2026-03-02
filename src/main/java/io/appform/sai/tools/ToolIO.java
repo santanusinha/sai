@@ -60,7 +60,7 @@ public class ToolIO {
     public static class EditRequest {
         @JsonPropertyDescription("The absolute path to the file to edit.")
         String path;
-        @JsonPropertyDescription("The patch content to apply.")
+        @JsonPropertyDescription("The patch content in unified diff format. CRITICAL: Every context line (unchanged lines) MUST start with a single space character. Lines starting with '-' are removed, lines starting with '+' are added. Example: ' unchanged line' (note the leading space), '-old line', '+new line'. The hunk header line counts must match actual lines.")
         String patchContent;
         @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing.")
         String expectedChecksum;
@@ -80,6 +80,53 @@ public class ToolIO {
         String error;
     }
 
+    /**
+     * Operations supported by the line-based edit tool.
+     */
+    public enum LineEditOperation {
+        /** Insert content before the specified line */
+        INSERT_BEFORE,
+        /** Insert content after the specified line */
+        INSERT_AFTER,
+        /** Replace lines from startLine to endLine (inclusive) with new content */
+        REPLACE,
+        /** Delete lines from startLine to endLine (inclusive) */
+        DELETE
+    }
+
+    @Value
+    @JsonClassDescription("Input for the line-based edit tool. Use this to insert, replace, or delete lines in a file.")
+    @Builder
+    @Jacksonized
+    public static class LineEditRequest {
+        @JsonPropertyDescription("The absolute path to the file to edit.")
+        String path;
+        @JsonPropertyDescription("The operation to perform: INSERT_BEFORE, INSERT_AFTER, REPLACE, or DELETE.")
+        LineEditOperation operation;
+        @JsonPropertyDescription("The starting line number (1-indexed). For INSERT_BEFORE/INSERT_AFTER, this is the reference line.")
+        int startLine;
+        @JsonPropertyDescription("The ending line number (1-indexed, inclusive). Only used for REPLACE and DELETE operations. If not specified, defaults to startLine.")
+        Integer endLine;
+        @JsonPropertyDescription("The content to insert or replace with. Not used for DELETE operation.")
+        String content;
+        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.")
+        String expectedChecksum;
+        @JsonPropertyDescription("Reason for editing the file.")
+        String requestReason;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    public static class LineEditResponse {
+        @JsonPropertyDescription("Whether the line edit was successful.")
+        boolean success;
+        @JsonPropertyDescription("The new SHA-256 checksum of the file after editing.")
+        String newChecksum;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
+
     @Value
     @JsonClassDescription("Input for the read tool.")
     @Builder
@@ -91,6 +138,8 @@ public class ToolIO {
         String requestReason;
     }
 
+    // ==================== Search & Replace Tool ====================
+
     @Value
     @Builder
     @Jacksonized
@@ -99,6 +148,41 @@ public class ToolIO {
         String content;
         @JsonPropertyDescription("The SHA-256 checksum of the file content.")
         String checksum;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
+
+    @Value
+    @JsonClassDescription("Input for the search and replace tool. Use this to find and replace text in a file.")
+    @Builder
+    @Jacksonized
+    public static class SearchReplaceRequest {
+        @JsonPropertyDescription("The absolute path to the file to edit.")
+        String path;
+        @JsonPropertyDescription("The exact text to search for in the file. Include enough context to make the match unique.")
+        String searchText;
+        @JsonPropertyDescription("The text to replace the search text with.")
+        String replaceText;
+        @JsonPropertyDescription("Which occurrence to replace: 1 for first, 2 for second, etc. Use 0 or negative to replace ALL occurrences.")
+        int occurrence;
+        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.")
+        String expectedChecksum;
+        @JsonPropertyDescription("Reason for editing the file.")
+        String requestReason;
+    }
+
+    // ==================== Line-Based Edit Tool ====================
+
+    @Value
+    @Builder
+    @Jacksonized
+    public static class SearchReplaceResponse {
+        @JsonPropertyDescription("Whether the search and replace was successful.")
+        boolean success;
+        @JsonPropertyDescription("The new SHA-256 checksum of the file after editing.")
+        String newChecksum;
+        @JsonPropertyDescription("Number of replacements made.")
+        int replacementCount;
         @JsonPropertyDescription("Error message if any.")
         String error;
     }

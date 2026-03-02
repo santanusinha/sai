@@ -28,7 +28,12 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,19 +42,13 @@ import lombok.extern.slf4j.Slf4j;
 @AllArgsConstructor
 public class CoreToolBox implements ToolBox {
 
+    private static final Pattern HUNK_PATTERN = Pattern.compile(
+                                                                "^@@\\s+-(\\d+)(?:,(\\d+))?\\s+\\+(\\d+)(?:,(\\d+))?\\s+@@");
+
     private final Printer printer;
 
     @Tool("Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore")
     public ToolIO.BashResponse bash(ToolIO.BashRequest request) {
-        // We run the command in the same thread and print the update to the printer. We can do streaming later if needed.
-        // once completed we return the status code and the output as response.
-        /* if (null != printer) {
-            printer.print(Printer.Update.builder()
-                    .actor(Actor.SYSTEM)
-                    .severity(Severity.INFO)
-                    .data("Executing bash command: " + request.getCommand())
-                    .build());
-        } */
         log.info("Executing bash command: {}", request.getCommand());
         try {
             final var commandOutput = new BashCommandRunner(request.getCommand(),
@@ -67,16 +66,9 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-
-    @Tool("Apply a patch to a file. Verifies file hasn't changed using checksum before applying.")
+    // Patch-based edit - kept for internal use but not exposed to LLM due to formatting issues
+    @SuppressWarnings("java:S3776")
     public ToolIO.EditResponse edit(ToolIO.EditRequest request) {
-        /* if (null != printer) {
-            printer.print(Printer.Update.builder()
-                    .actor(Actor.SYSTEM)
-                    .severity(Severity.INFO)
-                    .data("Editing file: " + request.getPath())
-                    .build());
-        } */
         log.info("Editing file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());
@@ -98,6 +90,15 @@ public class CoreToolBox implements ToolBox {
                         .build();
             }
 
+            // Validate patch format before applying
+            final var validationError = validatePatchFormat(request.getPatchContent());
+            if (validationError.isPresent()) {
+                return ToolIO.EditResponse.builder()
+                        .success(false)
+                        .error("Invalid patch format: " + validationError.get())
+                        .build();
+            }
+
             // Create temporary patch file
             final var patchFile = Files.createTempFile("sai-patch-", ".diff");
             Files.writeString(patchFile,
@@ -106,12 +107,6 @@ public class CoreToolBox implements ToolBox {
                               StandardOpenOption.TRUNCATE_EXISTING);
 
             try {
-                // Apply patch using patch command
-                // Command: patch <file> <patchFile>
-                // Note: 'patch' command might need -u (unified) or normal. Usually it auto-detects.
-                // We'll use: patch -u -N <file> <patchFile> (unified, allow creating new files?) No, just default.
-                // Actually, standard usage: patch [options] [originalfile [patchfile]]
-
                 final var command = String.format("patch %s %s", path.toAbsolutePath(), patchFile.toAbsolutePath());
                 final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30)).call();
 
@@ -148,6 +143,138 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
+    @Tool("Edit a file by line number. Use this to insert, replace, or delete lines at specific positions.")
+    @SuppressWarnings("java:S3776")
+    public ToolIO.LineEditResponse lineEdit(ToolIO.LineEditRequest request) {
+        log.info("Line edit in file: {} operation: {}", request.getPath(), request.getOperation());
+        try {
+            final var path = Path.of(request.getPath());
+            if (!Files.exists(path)) {
+                return ToolIO.LineEditResponse.builder()
+                        .success(false)
+                        .error("File not found: " + request.getPath())
+                        .build();
+            }
+
+            final var content = Files.readString(path, StandardCharsets.UTF_8);
+            final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+
+            if (!currentChecksum.equals(request.getExpectedChecksum())) {
+                return ToolIO.LineEditResponse.builder()
+                        .success(false)
+                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum() + ", Actual: "
+                                + currentChecksum + ". Re-read the file to get the current checksum.")
+                        .build();
+            }
+
+            // Split into lines, preserving trailing empty line if present
+            final var lines = new ArrayList<>(List.of(content.split("\n", -1)));
+            final var totalLines = lines.size();
+
+            final var startLine = request.getStartLine();
+            final var endLine = request.getEndLine() != null ? request.getEndLine() : startLine;
+            final var operation = request.getOperation();
+
+            // Validate line numbers
+            if (startLine < 1) {
+                return ToolIO.LineEditResponse.builder()
+                        .success(false)
+                        .error("Start line must be >= 1. Got: " + startLine)
+                        .build();
+            }
+
+            if (endLine < startLine) {
+                return ToolIO.LineEditResponse.builder()
+                        .success(false)
+                        .error("End line (" + endLine + ") cannot be less than start line (" + startLine + ").")
+                        .build();
+            }
+
+            // For operations that reference existing lines, check bounds
+            if (operation != ToolIO.LineEditOperation.INSERT_BEFORE || startLine > 1) {
+                if (startLine > totalLines) {
+                    return ToolIO.LineEditResponse.builder()
+                            .success(false)
+                            .error("Start line " + startLine + " is beyond file length (" + totalLines + " lines).")
+                            .build();
+                }
+            }
+
+            if ((operation == ToolIO.LineEditOperation.REPLACE || operation == ToolIO.LineEditOperation.DELETE)
+                    && endLine > totalLines) {
+                return ToolIO.LineEditResponse.builder()
+                        .success(false)
+                        .error("End line " + endLine + " is beyond file length (" + totalLines + " lines).")
+                        .build();
+            }
+
+            // Parse content to insert (split by newlines)
+            final List<String> contentLines;
+            if (request.getContent() != null && !request.getContent().isEmpty()) {
+                contentLines = List.of(request.getContent().split("\n", -1));
+            }
+            else {
+                contentLines = List.of();
+            }
+
+            switch (operation) {
+                case INSERT_BEFORE:
+                    // Insert content before the specified line
+                    // startLine is 1-indexed, so insert at index startLine-1
+                    lines.addAll(startLine - 1, contentLines);
+                    break;
+
+                case INSERT_AFTER:
+                    // Insert content after the specified line
+                    // startLine is 1-indexed, so insert at index startLine
+                    lines.addAll(startLine, contentLines);
+                    break;
+
+                case REPLACE:
+                    // Remove lines from startLine to endLine (inclusive), then insert new content
+                    // startLine and endLine are 1-indexed
+                    for (int i = endLine; i >= startLine; i--) {
+                        lines.remove(i - 1);
+                    }
+                    lines.addAll(startLine - 1, contentLines);
+                    break;
+
+                case DELETE:
+                    // Remove lines from startLine to endLine (inclusive)
+                    for (int i = endLine; i >= startLine; i--) {
+                        lines.remove(i - 1);
+                    }
+                    break;
+
+                default:
+                    return ToolIO.LineEditResponse.builder()
+                            .success(false)
+                            .error("Unknown operation: " + operation)
+                            .build();
+            }
+
+            // Join lines back together
+            final var newContent = String.join("\n", lines);
+
+            // Write the new content
+            Files.writeString(path, newContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+
+            return ToolIO.LineEditResponse.builder()
+                    .success(true)
+                    .newChecksum(newChecksum)
+                    .build();
+        }
+        catch (Exception e) {
+            final var errorMessage = "Error during line edit: " + AgentUtils.rootCause(e).getMessage();
+            log.error(errorMessage, e);
+            return ToolIO.LineEditResponse.builder()
+                    .success(false)
+                    .error(errorMessage)
+                    .build();
+        }
+    }
+
     @Override
     public String name() {
         return "core";
@@ -155,13 +282,6 @@ public class CoreToolBox implements ToolBox {
 
     @Tool("Read a file from the local filesystem. Returns content and a checksum for verification.")
     public ToolIO.ReadResponse read(ToolIO.ReadRequest request) {
-        /* if (null != printer) {
-            printer.print(Printer.Update.builder()
-                    .actor(Actor.SYSTEM)
-                    .severity(Severity.INFO)
-                    .data("Reading file: " + request.getPath())
-                    .build());
-        } */
         log.info("Reading file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());
@@ -186,15 +306,100 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
+    @Tool("Search and replace text in a file. Use this for precise text substitutions.")
+    public ToolIO.SearchReplaceResponse searchReplace(ToolIO.SearchReplaceRequest request) {
+        log.info("Search and replace in file: {}", request.getPath());
+        try {
+            final var path = Path.of(request.getPath());
+            if (!Files.exists(path)) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .success(false)
+                        .error("File not found: " + request.getPath())
+                        .build();
+            }
+
+            final var content = Files.readString(path, StandardCharsets.UTF_8);
+            final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+
+            if (!currentChecksum.equals(request.getExpectedChecksum())) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .success(false)
+                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum() + ", Actual: "
+                                + currentChecksum + ". Re-read the file to get the current checksum.")
+                        .build();
+            }
+
+            final var searchText = request.getSearchText();
+            if (searchText == null || searchText.isEmpty()) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .success(false)
+                        .error("Search text cannot be empty.")
+                        .build();
+            }
+
+            if (!content.contains(searchText)) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .success(false)
+                        .error("Search text not found in file. Make sure the search text matches exactly, including whitespace and newlines.")
+                        .build();
+            }
+
+            final var replaceText = request.getReplaceText() != null ? request.getReplaceText() : "";
+            final var occurrence = request.getOccurrence();
+            String newContent;
+            int replacementCount;
+
+            if (occurrence <= 0) {
+                // Replace all occurrences
+                newContent = content.replace(searchText, replaceText);
+                // Count occurrences
+                int count = 0;
+                int index = 0;
+                while ((index = content.indexOf(searchText, index)) != -1) {
+                    count++;
+                    index += searchText.length();
+                }
+                replacementCount = count;
+            }
+            else {
+                // Replace specific occurrence
+                int index = -1;
+                for (int i = 0; i < occurrence; i++) {
+                    index = content.indexOf(searchText, index + 1);
+                    if (index == -1) {
+                        return ToolIO.SearchReplaceResponse.builder()
+                                .success(false)
+                                .error("Occurrence " + occurrence + " not found. Only found " + i + " occurrence(s).")
+                                .build();
+                    }
+                }
+                newContent = content.substring(0, index) + replaceText
+                        + content.substring(index + searchText.length());
+                replacementCount = 1;
+            }
+
+            // Write the new content
+            Files.writeString(path, newContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+
+            return ToolIO.SearchReplaceResponse.builder()
+                    .success(true)
+                    .newChecksum(newChecksum)
+                    .replacementCount(replacementCount)
+                    .build();
+        }
+        catch (Exception e) {
+            final var errorMessage = "Error during search and replace: " + AgentUtils.rootCause(e).getMessage();
+            log.error(errorMessage, e);
+            return ToolIO.SearchReplaceResponse.builder()
+                    .success(false)
+                    .error(errorMessage)
+                    .build();
+        }
+    }
+
     @Tool("Write content to a file. This will create the file if it doesn't exist, or overwrite it if it does.")
     public ToolIO.WriteResponse write(ToolIO.WriteRequest request) {
-        /* if (null != printer) {
-            printer.print(Printer.Update.builder()
-                    .actor(Actor.SYSTEM)
-                    .severity(Severity.INFO)
-                    .data("Writing file: " + request.getPath())
-                    .build());
-        } */
         log.info("Writing file: {}", request.getPath());
         try {
             final var path = Path.of(request.getPath());
@@ -232,6 +437,93 @@ public class CoreToolBox implements ToolBox {
         catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
+    }
+
+    /**
+     * Validates unified diff patch format.
+     * Returns an error message if validation fails, empty otherwise.
+     */
+    @SuppressWarnings("java:S3776")
+    private Optional<String> validatePatchFormat(String patchContent) {
+        if (patchContent == null || patchContent.isBlank()) {
+            return Optional.of("Patch content is empty");
+        }
+
+        final var lines = patchContent.split("\n", -1);
+        boolean hasHunkHeader = false;
+        int expectedOldLines = 0;
+        int expectedNewLines = 0;
+        int actualOldLines = 0;
+        int actualNewLines = 0;
+
+        for (int i = 0; i < lines.length; i++) {
+            final var line = lines[i];
+
+            // Skip file headers
+            if (line.startsWith("---") || line.startsWith("+++")) {
+                continue;
+            }
+
+            // Check for hunk header
+            final Matcher matcher = HUNK_PATTERN.matcher(line);
+            if (matcher.find()) {
+                // Verify previous hunk was complete
+                if (hasHunkHeader && (actualOldLines != expectedOldLines || actualNewLines != expectedNewLines)) {
+                    return Optional.of(String.format(
+                                                     "Hunk line count mismatch. Expected %d old/%d new lines, got %d old/%d new lines. "
+                                                             + "Make sure context lines start with a space character.",
+                                                     expectedOldLines,
+                                                     expectedNewLines,
+                                                     actualOldLines,
+                                                     actualNewLines));
+                }
+                hasHunkHeader = true;
+                expectedOldLines = matcher.group(2) != null ? Integer.parseInt(matcher.group(2)) : 1;
+                expectedNewLines = matcher.group(4) != null ? Integer.parseInt(matcher.group(4)) : 1;
+                actualOldLines = 0;
+                actualNewLines = 0;
+                continue;
+            }
+
+            if (hasHunkHeader) {
+                if (line.startsWith(" ")) {
+                    // Context line - counts for both old and new
+                    actualOldLines++;
+                    actualNewLines++;
+                }
+                else if (line.startsWith("-")) {
+                    actualOldLines++;
+                }
+                else if (line.startsWith("+")) {
+                    actualNewLines++;
+                }
+                else if (!line.isEmpty()) {
+                    // Line doesn't start with space, -, or + and is not empty
+                    return Optional.of(String.format(
+                                                     "Line %d in patch is malformed. Context lines MUST start with a space character, "
+                                                             + "removed lines with '-', added lines with '+'. Got: '%s'",
+                                                     i + 1,
+                                                     line.length() > 50 ? line.substring(0, 50) + "..." : line));
+                }
+            }
+        }
+
+        // Verify final hunk
+        if (hasHunkHeader && (actualOldLines != expectedOldLines || actualNewLines != expectedNewLines)) {
+            return Optional.of(String.format(
+                                             "Hunk line count mismatch. Expected %d old/%d new lines, got %d old/%d new lines. "
+                                                     + "Make sure context lines start with a space character.",
+                                             expectedOldLines,
+                                             expectedNewLines,
+                                             actualOldLines,
+                                             actualNewLines));
+        }
+
+        if (!hasHunkHeader) {
+            return Optional.of("No hunk header (@@ ... @@) found in patch");
+        }
+
+        return Optional.empty();
     }
 
 }

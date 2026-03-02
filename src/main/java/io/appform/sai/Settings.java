@@ -30,6 +30,7 @@ import lombok.With;
 @With
 public class Settings {
     public static final String DEFAULT_DATA_DIR_SUFFIX = "/.local/state/sai";
+    public static final String DEFAULT_CONFIG_DIR_SUFFIX = "/.config/sai";
 
     @Builder.Default
     String appName = "sai";
@@ -52,6 +53,12 @@ public class Settings {
             .or(() -> Optional.ofNullable(System.getenv("HOME")))
             .orElseThrow(() -> new IllegalStateException("Cannot determine user home directory"))
             + DEFAULT_DATA_DIR_SUFFIX;
+
+    @Builder.Default
+    String configDir = Optional.ofNullable(System.getProperty("user.home"))
+            .or(() -> Optional.ofNullable(System.getenv("HOME")))
+            .orElseThrow(() -> new IllegalStateException("Cannot determine user home directory"))
+            + DEFAULT_CONFIG_DIR_SUFFIX;
 
     @Builder.Default
     String workDir = ensureWorkDir();

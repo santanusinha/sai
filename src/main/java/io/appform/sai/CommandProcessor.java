@@ -17,10 +17,6 @@ package io.appform.sai;
 
 import static io.appform.sai.Utils.elapsedTimeInSeconds;
 
-import java.util.ArrayList;
-import java.util.Optional;
-import java.util.concurrent.Future;
-
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.AgentInput;
@@ -32,6 +28,11 @@ import com.phonepe.sentinelai.core.utils.AgentUtils;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.concurrent.Future;
+
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;

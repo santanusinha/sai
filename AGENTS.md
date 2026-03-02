@@ -105,10 +105,12 @@ Use the `java -jar` command to launch the agent.
 ### CLI usage
 
 ```text
-Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
-           [-p=<persona>] [-s=<sessionId>] [COMMAND]
+Usage: sai [-dhV] [--headless] [--config-dir=<configDir>] [--data-dir=<dataDir>]
+           [-i=<input>] [-p=<persona>] [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
+      --config-dir=<configDir>
+                             Override config directory
       --data-dir=<dataDir>   Override data directory
   -h, --help                 Show this help message and exit.
       --headless             Run in headless mode
@@ -156,6 +158,11 @@ Commands:
   java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
   ```
 
+- Override config directory:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --config-dir /path/to/config
+  ```
+
 - List sessions:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar list
@@ -183,6 +190,12 @@ SAI leverages Sentinel AI components and follows a modular design.
 - Printers:
   - MessagePrinter / EventPrinter: Stream and render agent/LLM responses and events.
 
+## Directories
+
+- Default data directory: `~/.local/state/sai` (stores session data)
+- Default config directory: `~/.config/sai` (stores configuration files)
+- You can override these with `--data-dir` and `--config-dir` respectively.
+
 ## Security and privacy
 
 - Persona HTTP tools can perform network requests. Use trusted personas and endpoints to avoid SSRF or data exfiltration.
@@ -194,7 +207,7 @@ Keep README.md and AGENTS.md accurate and in sync with the codebase. When you ch
 
 - CLI surface (flags, options, subcommands), default values, or behavior
 - Environment variables and provider configuration (Azure/OpenAI/Copilot Proxy)
-- Session management behavior, data directories, or examples
+- Session management behavior, data directories, config directories, or examples
 - Code formatting rules or spotless configuration
 
 Recommended workflow:
