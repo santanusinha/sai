@@ -23,11 +23,15 @@ import io.appform.sai.AgentConfig;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public final class AgentConfigLoader {
+
+    private static final List<String> SUPPORTED_EXTENSIONS = List.of(".yaml", ".yml", ".json");
 
     public static AgentConfig load(Path path, ObjectMapper jsonMapper) {
         if (path == null) {
@@ -62,5 +66,53 @@ public final class AgentConfigLoader {
         catch (Exception e) {
             throw new IllegalArgumentException("Failed to load persona from: " + path + "; " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Resolves the persona path based on the following rules:
+     * <ol>
+     * <li>Absolute path (starts with '/'): use directly</li>
+     * <li>Relative path (contains '/'): resolve from PWD</li>
+     * <li>Simple name (no '/'): look up in {configDir}/persona/ with auto-extension</li>
+     * </ol>
+     *
+     * @param persona   the persona identifier (name, relative path, or absolute path)
+     * @param configDir the configuration directory (e.g., ~/.config/sai)
+     * @return the resolved path to the persona file
+     * @throws IllegalArgumentException if the persona file cannot be found
+     */
+    public static Path resolvePersonaPath(String persona, String configDir) {
+        if (persona == null || persona.isBlank()) {
+            throw new IllegalArgumentException("Persona path is required");
+        }
+
+        // 1. Absolute path - use directly
+        if (persona.startsWith("/")) {
+            return Paths.get(persona);
+        }
+
+        // 2. Relative path (contains path separator) - resolve from PWD
+        if (persona.contains("/")) {
+            return Paths.get(persona).toAbsolutePath().normalize();
+        }
+
+        // 3. Simple name - look in {configDir}/persona/
+        Path personaDir = Paths.get(configDir, "persona");
+        for (String ext : SUPPORTED_EXTENSIONS) {
+            Path candidate = personaDir.resolve(persona + ext);
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        // If no extension matched, check if persona has an extension already
+        Path directPath = personaDir.resolve(persona);
+        if (Files.exists(directPath)) {
+            return directPath;
+        }
+
+        throw new IllegalArgumentException(
+                                           "Persona '" + persona + "' not found. Looked in: " + personaDir
+                                                   + " with extensions: " + SUPPORTED_EXTENSIONS);
     }
 }

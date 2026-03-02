@@ -172,7 +172,7 @@ public class SaiCommand implements Callable<Integer> {
                                                   okHttpClient);
         final AgentConfig agentConfig;
         try {
-            agentConfig = resolveAgentConfig(persona, mapper);
+            agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
         }
         catch (Exception e) {
             log.error("Error loading persona: {}", persona, e);
@@ -272,7 +272,7 @@ public class SaiCommand implements Callable<Integer> {
         }
     }
 
-    private AgentConfig resolveAgentConfig(String persona, ObjectMapper mapper) {
+    private AgentConfig resolveAgentConfig(String persona, String configDir, ObjectMapper mapper) {
         if (Strings.isNullOrEmpty(persona)) {
             return AgentConfig.builder()
                     .agentId("sai-agent")
@@ -280,7 +280,8 @@ public class SaiCommand implements Callable<Integer> {
                     .description("An AI agent that can execute tasks and answer questions.")
                     .build();
         }
-        return AgentConfigLoader.load(Paths.get(persona), mapper);
+        final var resolvedPath = AgentConfigLoader.resolvePersonaPath(persona, configDir);
+        return AgentConfigLoader.load(resolvedPath, mapper);
     }
 
     @SneakyThrows

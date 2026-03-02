@@ -120,7 +120,14 @@ java -jar target/sai-1.0-SNAPSHOT.jar
 Start with a persona file (YAML/JSON):
 
 ```bash
+# Load persona by name from ~/.config/sai/persona/
+java -jar target/sai-1.0-SNAPSHOT.jar --persona reviewer
+
+# Load from relative path (resolved from current directory)
 java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+
+# Load from absolute path
+java -jar target/sai-1.0-SNAPSHOT.jar --persona /path/to/custom-persona.yaml
 ```
 
 Resume an existing session by ID:
@@ -176,7 +183,11 @@ Sai AI Agent
   -i, --input=<input>        Execute a single input and exit. If the value
                                starts with '@', read input from the specified
                                file.
-  -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
+  -p, --persona=<persona>    Persona name or path to AgentConfig file (.yaml/.yml/.json).
+                               If a simple name (e.g., 'reviewer'), looks in
+                               {configDir}/persona/ with auto-extension.
+                               Relative paths resolve from current directory.
+                               Absolute paths are used directly.
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
@@ -208,7 +219,14 @@ Subcommands:
 
 - Start with a persona file (YAML/JSON):
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+  # By name (looks in ~/.config/sai/persona/)
+  java -jar target/sai-1.0-SNAPSHOT.jar -p reviewer
+  
+  # By relative path
+  java -jar target/sai-1.0-SNAPSHOT.jar -p examples/personas/basic.yaml
+  
+  # By absolute path
+  java -jar target/sai-1.0-SNAPSHOT.jar -p /path/to/persona.yaml
   ```
 
 - Resume a session and continue chatting:
@@ -245,6 +263,7 @@ Subcommands:
 
 - Default data directory: `~/.local/state/sai`
 - Default config directory: `~/.config/sai`
+- **Persona files directory**: `~/.config/sai/persona/` (for `-p <name>` lookup)
 - Sessions are stored under: `<dataDir>/sessions/<sessionId>`
 - You can override the data directory with `--data-dir`.
 - You can override the config directory with `--config-dir`.
