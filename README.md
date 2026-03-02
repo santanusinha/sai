@@ -17,6 +17,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - CLI Reference
 - Examples
 - Data and Sessions
+- Security and privacy
 - Logging
 - Development
 
@@ -116,6 +117,12 @@ Interactive mode (new session):
 java -jar target/sai-1.0-SNAPSHOT.jar
 ```
 
+Start with a persona file (YAML/JSON):
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+```
+
 Resume an existing session by ID:
 
 ```bash
@@ -152,7 +159,7 @@ Help output:
 
 ```text
 Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
-           [-s=<sessionId>] [COMMAND]
+           [-p=<persona>] [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
       --data-dir=<dataDir>   Override data directory
@@ -161,6 +168,7 @@ Sai AI Agent
   -i, --input=<input>        Execute a single input and exit. If the value
                                starts with '@', read input from the specified
                                file.
+  -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
@@ -190,6 +198,11 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar
   ```
 
+- Start with a persona file (YAML/JSON):
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+  ```
+
 - Resume a session and continue chatting:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar -s 2f1e4f7a-...-a1b2
@@ -198,6 +211,11 @@ Subcommands:
 - One-off input (no session persisted):
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar -i "List the key modules in this repo"
+  ```
+
+- Persona with a one-off input:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar -p examples/personas/basic.yaml -i "What can you do?"
   ```
 
 - Headless with multiple inputs from a file:
@@ -222,6 +240,11 @@ Subcommands:
 - You can override the directory with `--data-dir`.
 - When using `--input`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
 - In `--headless` mode without `--input`, input is read line-by-line from stdin until EOF or `exit`.
+
+## Security and privacy
+
+- Persona-defined HTTP tools can make network requests. Only use trusted personas and endpoints to avoid SSRF or data exfiltration.
+- Prompt context: the agent includes the current working directory name in its system prompt to give models context.
 
 ## Logging
 

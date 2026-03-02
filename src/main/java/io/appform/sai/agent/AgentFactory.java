@@ -17,6 +17,7 @@ package io.appform.sai.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.knuddels.jtokkit.api.EncodingType;
+import com.phonepe.sentinelai.core.agent.AgentExtension;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
@@ -26,7 +27,6 @@ import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.models.TokenCountingConfig;
-import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.toolbox.mcp.ComposingMCPToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.HttpToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders.ConfiguredHttpTool;
@@ -36,6 +36,7 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 import io.appform.sai.AgentConfig;
 import io.appform.sai.SaiAgent;
 
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,12 +49,12 @@ import okhttp3.OkHttpClient;
 public class AgentFactory {
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
-            You are a helpful assistant that provides information and answers questions based on the user's input.You can use the tools at your disposal to gather information and provide accurate responses.Always strive to be clear,concise, and helpful in your answers.
+            You are a helpful assistant that provides information and answers questions based on the user's input. You can use the tools at your disposal to gather information and provide accurate responses. Always strive to be clear, concise, and helpful in your answers.
             You can use /tmp/sai/< session id>/scrath/ directory to store any temporary files you need during the conversation.No need to clean up the files, they will be automatically deleted after the session ends.
             If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
             """;
 
-    AgentSessionExtension<String, String, SaiAgent> sessionExtension;
+    AgentExtension<String, String, SaiAgent> sessionExtension;
     ExecutorService executorService;
     ChatCompletionServiceFactory modelProviderFactory;
     ObjectMapper mapper;
@@ -64,7 +65,8 @@ public class AgentFactory {
         final var modelName = Objects.requireNonNullElseGet(config.getModel(),
                                                             () -> EnvLoader.readEnv("MODEL", "gemini-3-pro-preview"));
         final var modelSettings = Objects.requireNonNullElseGet(config.getModelSettings(),
-                                                                this::defaultModelSettings);
+                                                                this::defaultModelSettings)
+                .withParallelToolCalls(false); //To keep context usage and console output sane
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorService)
                 .mapper(mapper)
@@ -80,8 +82,9 @@ public class AgentFactory {
                 .outputGenerationMode(config.getOutputGenerationMode())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);
-        final var cwd = "\nCurrent working directory: " + System.getProperty("user.dir") + "\n";
-        final var saiAgent = new SaiAgent(
+        final var cwdName = Paths.get("").toAbsolutePath().getFileName();
+        final var cwd = "\nCurrent working directory: " + (cwdName != null ? cwdName.toString() : "/tmp") + "\n";
+        final var saiAgent = new SaiAgent(config.getName(),
                                           agentSetup,
                                           systemPrompt + cwd,
                                           List.of(sessionExtension),
@@ -116,14 +119,11 @@ public class AgentFactory {
         final var httpToolSource = InMemoryHttpToolSource.builder()
                 .mapper(mapper)
                 .build();
-        httpTools.forEach((upstream, configuredUpstream) -> {
-
-            httpToolSource.register(upstream,
-                                    configuredUpstream.tools()
-                                            .stream()
-                                            .map(this::createTool)
-                                            .toList());
-        });
+        httpTools.forEach((upstream, configuredUpstream) -> httpToolSource.register(upstream,
+                                                                                    configuredUpstream.tools()
+                                                                                            .stream()
+                                                                                            .map(this::createTool)
+                                                                                            .toList()));
         saiAgent.registerToolbox(HttpToolBox.builder()
                 .httpToolSource(httpToolSource)
                 .httpClient(httpClient)

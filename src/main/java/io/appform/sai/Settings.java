@@ -15,9 +15,13 @@
  */
 package io.appform.sai;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.Optional;
 import java.util.UUID;
 
 import lombok.Builder;
+import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.With;
 
@@ -25,15 +29,45 @@ import lombok.With;
 @Builder
 @With
 public class Settings {
-    public static final String DEFAULT_DATA_DIR = System.getProperty("user.home") + "/.local/state/sai";
+    public static final String DEFAULT_DATA_DIR_SUFFIX = "/.local/state/sai";
 
     @Builder.Default
     String appName = "sai";
 
-    @Builder.Default
-    String dataDir = DEFAULT_DATA_DIR;
     boolean debug;
+
     boolean headless;
+
+    boolean noSession;
+
     @Builder.Default
     String sessionId = UUID.randomUUID().toString();
+
+    @Builder.Default
+    String user = Optional.ofNullable(System.getProperty("user.name"))
+            .orElseGet(() -> System.getenv().getOrDefault("USER", "User"));
+
+    @Builder.Default
+    String dataDir = Optional.ofNullable(System.getProperty("user.home"))
+            .or(() -> Optional.ofNullable(System.getenv("HOME")))
+            .orElseThrow(() -> new IllegalStateException("Cannot determine user home directory"))
+            + DEFAULT_DATA_DIR_SUFFIX;
+
+    @Builder.Default
+    String workDir = ensureWorkDir();
+
+    @SneakyThrows
+    private static String ensureWorkDir() {
+        return Optional.ofNullable(System.getProperty("user.dir"))
+                .orElseGet(() -> {
+                    try {
+                        return System.getenv()
+                                .getOrDefault("PWD",
+                                              Files.createTempDirectory("sai-workdir").toString());
+                    }
+                    catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+    }
 }

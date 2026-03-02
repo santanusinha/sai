@@ -46,3 +46,4 @@ deps
 *.log
 .opencode
 output.txt
+*.orig

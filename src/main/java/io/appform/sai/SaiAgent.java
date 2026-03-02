@@ -32,26 +32,12 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                 your responses will be printed on a terminal, so please add color coding in the response for better readability. Use green color for important information, yellow for warnings, and red for errors. You can also use blue for general information and cyan for examples. Remember to reset the color after each colored section to avoid affecting the rest of the text. Apply some syntax highlighting to code snippets in your responses, using cyan for keywords, green for strings, and yellow for comments and so on.
             """;
 
-    private static final String DEFAULT_SYSTEM_PROMPT = """
-            You are a helpful assistant that provides information and answers questions based on the user's input.You can use the tools at your disposal to gather information and provide accurate responses.Always strive to be clear,concise, and helpful in your answers.
-            You can use /tmp/sai/< session id>/scrath/ directory to store any temporary files you need during the conversation.No need to clean up the files, they will be automatically deleted after the session ends.
-            If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
-            """;
+    private final String name;
 
-    public SaiAgent(@NonNull AgentSetup setup,
-                    List<AgentExtension<String, String, SaiAgent>> extensions,
-                    Map<String, ExecutableTool> knownTools
-    ) {
-        super(
-              String.class,
-              DEFAULT_SYSTEM_PROMPT + "\nCurrent working directory: " + System.getProperty("user.dir") + "\n",
-              setup,
-              extensions,
-              knownTools
-        );
-    }
+    public SaiAgent(
+                    final String name,
 
-    public SaiAgent(@NonNull AgentSetup setup,
+                    @NonNull AgentSetup setup,
                     final String systemPrompt,
                     List<AgentExtension<String, String, SaiAgent>> extensions,
                     Map<String, ExecutableTool> knownTools) {
@@ -62,11 +48,11 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
               extensions,
               knownTools
         );
+        this.name = name;
     }
 
     @Override
     public String name() {
-        return "sai";
+        return name;
     }
-
 }

@@ -17,20 +17,10 @@ package io.appform.sai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
-import com.knuddels.jtokkit.api.EncodingType;
-import com.phonepe.sentinelai.core.agent.AgentInput;
-import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
-import com.phonepe.sentinelai.core.agent.AgentSetup;
-import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.events.EventBus;
-import com.phonepe.sentinelai.core.model.ModelAttributes;
-import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
-import com.phonepe.sentinelai.models.SimpleOpenAIModel;
-import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
-import com.phonepe.sentinelai.models.TokenCountingConfig;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
@@ -43,6 +33,7 @@ import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.commands.DeleteCommand;
 import io.appform.sai.commands.ListCommand;
+import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
@@ -50,21 +41,19 @@ import io.appform.sai.tools.CoreToolBox;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import picocli.CommandLine.Command;
@@ -103,7 +92,13 @@ public class SaiCommand implements Callable<Integer> {
     }, description = "Execute a single input and exit. If the value starts with '@', read input from the specified file.")
     private String input;
 
+    @Option(names = {
+            "-p", "--persona"
+    }, description = "Path to AgentConfig persona file (.yaml/.yml/.json)")
+    private String persona;
+
     @Override
+    @SuppressWarnings("java:S106")
     public Integer call() throws Exception {
         final var sessionIdProvided = !Strings.isNullOrEmpty(sessionId);
         final var effectiveSessionId = Objects.requireNonNullElseGet(sessionId,
@@ -111,6 +106,7 @@ public class SaiCommand implements Callable<Integer> {
 
         final var mapper = JsonUtils.createMapper();
         final var executorService = Executors.newCachedThreadPool();
+        final var eventBus = new EventBus(executorService);
 
         final var okHttpClient = new OkHttpClient.Builder().readTimeout(Duration
                 .ofSeconds(300))
@@ -122,155 +118,31 @@ public class SaiCommand implements Callable<Integer> {
                 .orElseThrow(() -> new IllegalArgumentException("MODEL_PROVIDER environment variable is required to specify the model provider to use. Supported values are 'azure', 'openai' and 'copilot-proxy'"));
         final var modelProviderFactory = new ConfigurableDefaultChatCompletionFactory(provider, mapper, okHttpClient);
 
-        var settingsBuilder = Settings.builder()
+        final var settingsBuilder = Settings.builder()
                 .sessionId(effectiveSessionId)
                 .debug(debug)
-                .headless(headless);
-
-        if (headless && Strings.isNullOrEmpty(input)) {
-            // If we are in headless mode and no input is provided, we read from stdin line by line
-            // and execute the input
-            settingsBuilder.headless(true);
+                .headless(headless || (!Strings.isNullOrEmpty(input)))
+                .noSession(!sessionIdProvided);
+        if (sessionIdProvided) {
             if (!Strings.isNullOrEmpty(dataDir)) {
                 settingsBuilder.dataDir(dataDir);
             }
-            final var settings = settingsBuilder.build();
-            final var eventBus = new EventBus(executorService);
-            final var modelName = EnvLoader.readEnv("MODEL", "gemini-3-pro-preview");
-            final var agentSetup = AgentSetup.builder()
-                    .executorService(executorService)
-                    .mapper(mapper)
-                    .eventBus(eventBus)
-                    .modelSettings(ModelSettings.builder()
-                            .parallelToolCalls(false)
-                            .modelAttributes(ModelAttributes.builder()
-                                    .contextWindowSize(128_000)
-                                    .encodingType(EncodingType.O200K_BASE)
-                                    .build())
-                            .build())
-                    .model(new SimpleOpenAIModel<>(modelName,
-                                                   modelProviderFactory,
-                                                   mapper,
-                                                   SimpleOpenAIModelOptions
-                                                           .builder()
-                                                           .tokenCountingConfig(TokenCountingConfig.DEFAULT)
-                                                           .build()))
-                    // .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
-                    .build();
-            final var printer = Printer.builder()
-                    .settings(settings)
-                    .executorService(executorService)
-                    .build()
-                    .start();
-            final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
-            Files.createDirectories(dataDirPath);
-            final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
-                                                                mapper,
-                                                                1);
-            final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
-                    .sessionStore(sessionStore)
-                    .mapper(mapper)
-                    .setup(AgentSessionExtensionSetup.builder()
-                            .autoSummarizationThresholdPercentage(50)
-                            .build())
-                    .build()
-                    .addMessageSelector(new RemoveAllToolCallsSelector());
-            sessionExtension.onSessionSummarized()
-                    .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
-                            + "Session compacted with summary: " + Colours.WHITE
-                            + sessionSummary.getTitle() + Colours.RESET)));
-            final var agentFactory = new AgentFactory(
-                                                      sessionExtension,
-                                                      executorService,
-                                                      modelProviderFactory,
-                                                      mapper,
-                                                      eventBus,
-                                                      okHttpClient);
-            final var agent = agentFactory.createAgent(AgentConfig.builder()
-                    .agentId("sai-agent")
-                    .name("Sai Agent")
-                    .description("An AI agent that can execute tasks and answer questions.")
-                    .build());
-            agent.registerToolbox(new CoreToolBox(printer));
-            try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (Strings.isNullOrEmpty(line)) {
-                        continue;
-                    }
-                    if (Objects.equals(line, "exit")) {
-                        break;
-                    }
-                    try {
-                        final var user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
-                        final var responseF = agent.executeAsync(AgentInput
-                                .<String>builder()
-                                .requestMetadata(AgentRequestMetadata.builder()
-                                        .sessionId(settings.getSessionId())
-                                        .runId("run-" + UUID.randomUUID())
-                                        .userId(user)
-                                        .build())
-                                .request(line)
-                                .build());
-                        final var response = responseF.get();
-                        if (response.getError().getErrorType().equals(ErrorType.SUCCESS)) {
-                            System.out.println(response.getData());
-                        }
-                        else {
-                            System.err.println("Error: " + response.getError().getMessage());
-                        }
-                    }
-                    catch (Exception e) {
-                        log.error("Error executing input", e);
-                    }
-                }
-            }
-            finally {
-                printer.close();
-                executorService.shutdownNow();
-                executorService.awaitTermination(1, TimeUnit.SECONDS);
-            }
-            return 0;
         }
-
-        if (!Strings.isNullOrEmpty(input)) {
-            settingsBuilder.headless(true);
+        else {
+            // When no session, we still create session to allow for the session extension
+            // to perform compaction etc. We create a temp directory for this
+            final var tempDataDir = Files.createTempDirectory("sai-data-")
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString();
+            settingsBuilder.dataDir(tempDataDir);
         }
-        if (!Strings.isNullOrEmpty(dataDir)) {
-            settingsBuilder.dataDir(dataDir);
-        }
-
         final var settings = settingsBuilder.build();
-        final var eventBus = new EventBus(executorService);
 
-        final var modelName = EnvLoader.readEnv("MODEL", "gemini-3-pro-preview");
-        final var agentSetup = AgentSetup.builder()
-                .executorService(executorService)
-                .mapper(mapper)
-                .eventBus(eventBus)
-                .modelSettings(ModelSettings.builder()
-                        .parallelToolCalls(false)
-                        .modelAttributes(ModelAttributes.builder()
-                                .contextWindowSize(128_000)
-                                .encodingType(EncodingType.O200K_BASE)
-                                .build())
-                        .build())
-                .model(new SimpleOpenAIModel<>(modelName,
-                                               modelProviderFactory,
-                                               mapper,
-                                               SimpleOpenAIModelOptions
-                                                       .builder()
-                                                       .tokenCountingConfig(TokenCountingConfig.DEFAULT)
-                                                       .build()))
-                // .outputGenerationMode(OutputGenerationMode.STRUCTURED_OUTPUT)
-                .build();
+        final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
+        Files.createDirectories(sessionDataPath);
 
-
-        final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
-        Files.createDirectories(dataDirPath);
-        final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
-                                                            mapper,
-                                                            1);
+        final var sessionStore = new FileSystemSessionStore(sessionDataPath.toString(), mapper, 1);
         final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
                 .sessionStore(sessionStore)
                 .mapper(mapper)
@@ -279,98 +151,60 @@ public class SaiCommand implements Callable<Integer> {
                         .build())
                 .build()
                 .addMessageSelector(new RemoveAllToolCallsSelector());
-        final var agent = new SaiAgent(agentSetup,
-                                       Strings.isNullOrEmpty(input)
-                                               ? List.of(sessionExtension)
-                                               : List.of(),
-                                       Map.of());
-        final var printer = Printer.builder()
+        final var agentFactory = new AgentFactory(
+                                                  sessionExtension,
+                                                  executorService,
+                                                  modelProviderFactory,
+                                                  mapper,
+                                                  eventBus,
+                                                  okHttpClient);
+        final AgentConfig agentConfig;
+        try {
+            agentConfig = resolveAgentConfig(persona, mapper);
+        }
+        catch (Exception e) {
+            log.error("Error loading persona: {}", persona, e);
+            System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
+            return 1;
+        }
+        final var agent = agentFactory.createAgent(agentConfig);
+
+        try (final var printer = Printer.builder()
                 .settings(settings)
                 .executorService(executorService)
                 .build()
-                .start();
-
-        if (!Strings.isNullOrEmpty(input)) {
+                .start()) {
+            // Setup rest of the connentcions
             agent.registerToolbox(new CoreToolBox(printer));
-            final var user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
-            try {
-                final String requestText;
-                if (input.startsWith("@")) {
-                    final var filePath = input.substring(1);
-                    if (Strings.isNullOrEmpty(filePath)) {
-                        System.err.println("Error: --input '@' requires a file path");
-                        return 2;
-                    }
-                    try {
-                        requestText = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
-                    }
-                    catch (Exception readEx) {
-                        log.error("Error reading input file: {}", filePath, readEx);
-                        System.err.println("Error: Could not read input file: " + filePath);
-                        return 1;
-                    }
+            sessionExtension.onSessionSummarized()
+                    .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
+                            + "Session compacted with summary: " + Colours.WHITE
+                            + sessionSummary.getTitle() + Colours.RESET)));
+            final var eventPrinter = new EventPrinter(printer, mapper);
+            eventBus.onEvent().connect(event -> {
+                final var eventSessionId = event.getSessionId();
+                // There might be events for other LLM events like for example compaction,
+                // memory extraction etc, so we filter based on session id to avoid printing irrelevant events
+                if (!Strings.isNullOrEmpty(eventSessionId) && effectiveSessionId.equals(eventSessionId)) {
+                    event.accept(eventPrinter);
                 }
-                else {
-                    requestText = input;
-                }
-                final var responseF = agent.executeAsync(AgentInput
-                        .<String>builder()
-                        .requestMetadata(AgentRequestMetadata.builder()
-                                .sessionId(settings.getSessionId())
-                                .runId("run-" + UUID.randomUUID())
-                                .userId(user)
-                                .build())
-                        .request(requestText)
-                        .build());
-                final var response = responseF.get();
-                if (response.getError().getErrorType().equals(ErrorType.SUCCESS)) {
-                    System.out.println(response.getData());
-                }
-                else {
-                    System.err.println("Error: " + response.getError().getMessage());
-                    return 1;
-                }
-            }
-            catch (Exception e) {
-                log.error("Error executing input", e);
-                return 1;
-            }
-            finally {
-                printer.close();
-                executorService.shutdownNow();
-                executorService.awaitTermination(1, TimeUnit.SECONDS);
-            }
-            return 0;
-        }
-
-        try (printer) {
-            agent.registerToolbox(new CoreToolBox(printer));
+            });
 
             try (final var commandProcessor = CommandProcessor.builder()
                     .sessionId(settings.getSessionId())
                     .agent(agent)
-                    .executorService(executorService)
                     .printer(printer)
                     .build()
                     .start()) {
-                printer.print(Update.builder()
-                        .actor(Actor.SYSTEM)
-                        .severity(Severity.INFO)
-                        .colour(Printer.Colours.YELLOW)
-                        .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
-                                .formatted(effectiveSessionId))
-                        .build());
-                final var eventPrinter = new EventPrinter(printer,
-                                                          (ObjectMapper) mapper);
-                eventBus.onEvent().connect(event -> {
-                    final var eventSessionId = event.getSessionId();
-                    // There might be events for other LLM capps like for example compaction, memory extraction etc, so we filter based on session id to avoid printing irrelevant events
-                    if (!Strings.isNullOrEmpty(eventSessionId) && effectiveSessionId.equals(
-                                                                                            eventSessionId)) {
-                        event.accept(eventPrinter);
-                    }
-                });
-
+                if (!settings.isHeadless()) {
+                    printer.print(Update.builder()
+                            .actor(Actor.SYSTEM)
+                            .severity(Severity.INFO)
+                            .colour(Printer.Colours.YELLOW)
+                            .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
+                                    .formatted(effectiveSessionId))
+                            .build());
+                }
                 if (sessionIdProvided) {
                     final var response = sessionStore.readMessages(effectiveSessionId,
                                                                    Integer.MAX_VALUE,
@@ -384,27 +218,23 @@ public class SaiCommand implements Callable<Integer> {
                     });
                 }
 
-                var prompt = Printer.Colours.CYAN + "Enter input ";
-                prompt += Printer.Colours.GRAY + "(type 'exit' to quit)";
-                prompt += Printer.Colours.WHITE + ": ";
-                while (true) {
-                    try {
-                        final var input = printer.getLineReader().readLine(prompt);
-                        if (Strings.isNullOrEmpty(input)) {
-                            continue;
-                        }
-                        if (Objects.equals(input, "exit")) {
-                            break;
-                        }
-                        //TODO::FIND OUT WHICH COMMAND AND HANDLE
-                        commandProcessor.handle(CommandProcessor.Command.builder()
+                var userInput = Strings.isNullOrEmpty(input) ? null : resolveInput(input);
+                while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
+                    if (Strings.isNullOrEmpty(userInput)) {
+                        userInput = readInput(printer).orElse("exit");
+                    }
+                    else {
+                        final var command = CommandProcessor.Command.builder()
                                 .command(CommandType.INPUT)
                                 .input(new InputCommand("run-" + UUID.randomUUID()
-                                        .toString(), input))
-                                .build());
-                    }
-                    catch (EndOfFileException | UserInterruptException e) {
-                        break;
+                                        .toString(), userInput))
+                                .build();
+                        try {
+                            commandProcessor.handle(command);
+                        }
+                        finally {
+                            userInput = !Strings.isNullOrEmpty(input) ? "exit" : null;
+                        }
                     }
                 }
             }
@@ -414,9 +244,43 @@ public class SaiCommand implements Callable<Integer> {
             return 1;
         }
         finally {
-            executorService.shutdownNow();
+            executorService.shutdown();
             executorService.awaitTermination(1, TimeUnit.SECONDS);
         }
         return 0;
     }
+
+    private Optional<String> readInput(final Printer printer) {
+        var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
+        try {
+            return Optional.of(printer.getLineReader().readLine(prompt));
+        }
+        catch (EndOfFileException | UserInterruptException e) {
+            return Optional.empty();
+        }
+    }
+
+    private AgentConfig resolveAgentConfig(String persona, ObjectMapper mapper) {
+        if (Strings.isNullOrEmpty(persona)) {
+            return AgentConfig.builder()
+                    .agentId("sai-agent")
+                    .name("Sai Agent")
+                    .description("An AI agent that can execute tasks and answer questions.")
+                    .build();
+        }
+        return AgentConfigLoader.load(Paths.get(persona), mapper);
+    }
+
+    @SneakyThrows
+    private String resolveInput(String input) {
+        if (input.startsWith("@")) {
+            final var filePath = input.substring(1);
+            if (Strings.isNullOrEmpty(filePath)) {
+                throw new IllegalArgumentException("--input '@' requires a file path");
+            }
+            return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
+        }
+        return input;
+    }
+
 }

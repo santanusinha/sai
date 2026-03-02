@@ -15,6 +15,8 @@
  */
 package io.appform.sai.commands;
 
+import com.google.common.base.Strings;
+
 import io.appform.sai.SaiCommand;
 import io.appform.sai.Settings;
 
@@ -32,6 +34,7 @@ import picocli.CommandLine.ParentCommand;
 
 @Slf4j
 @Command(name = "delete", description = "Delete a session")
+@SuppressWarnings("java:S106")
 public class DeleteCommand implements Callable<Integer> {
 
     @ParentCommand
@@ -43,9 +46,12 @@ public class DeleteCommand implements Callable<Integer> {
     @Override
     @SneakyThrows
     public Integer call() {
-        final var settings = Settings.builder()
-                .dataDir(parent.getDataDir() != null ? parent.getDataDir() : Settings.DEFAULT_DATA_DIR)
-                .build();
+        final var settingsBuilder = Settings.builder();
+        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
+            settingsBuilder.dataDir(parent.getDataDir());
+        }
+
+        final var settings = settingsBuilder.build();
 
         final var sessionDirPath = Paths.get(settings.getDataDir(), "sessions", sessionId);
         if (!Files.exists(sessionDirPath)) {

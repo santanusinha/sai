@@ -6,8 +6,10 @@ SAI (Sentinel AI) is a CLI-based AI agent built in Java on the Sentinel AI frame
 - Prerequisites
 - Configuration
 - Building the Project
+- Code Formatting
 - Running the Agent
 - Basic Architecture
+- Security and privacy
 - Documentation Maintenance
 
 ## Prerequisites
@@ -56,6 +58,46 @@ mvn clean package
 
 The artifact will be generated at `target/sai-1.0-SNAPSHOT.jar`.
 
+## Code Formatting
+
+This project uses [Spotless](https://github.com/diffplug/spotless) for code formatting. Spotless is configured via the `spotless-maven-plugin` and enforces consistent code style across the codebase.
+
+### Configuration Files
+
+- `java-format.xml`: Eclipse-based Java formatting rules
+- `license.header`: Apache 2.0 license header template applied to all Java files
+
+### Spotless Rules
+
+The following formatting rules are enforced:
+
+- **License Header**: Apache 2.0 license header is automatically added to all Java files
+- **Eclipse Formatter**: Uses `java-format.xml` for code style
+- **Member Sorting**: Members are sorted by type (SF,T,SI,F,I,C,SM,M) and visibility (B,R,D,V)
+- **Import Organization**: Imports ordered as `com, io, org, java, javax, #` (static imports last)
+- **Remove Unused Imports**: Automatically removes unused imports
+- **Forbid Wildcard Imports**: Wildcard imports (`import foo.*`) are not allowed
+- **Trim Trailing Whitespace**: Removes trailing whitespace from lines
+- **End With Newline**: Ensures files end with a newline
+
+### Commands
+
+- **Check formatting** (runs automatically during compile phase):
+  ```bash
+  mvn spotless:check
+  ```
+
+- **Apply formatting** (auto-fix formatting issues):
+  ```bash
+  mvn spotless:apply
+  ```
+
+### Workflow
+
+Before committing code changes:
+1. Run `mvn spotless:apply` to auto-format your code
+2. Run `mvn compile` to verify formatting (spotless:check runs during compile phase)
+
 ## Running the Agent
 
 Use the `java -jar` command to launch the agent.
@@ -64,7 +106,7 @@ Use the `java -jar` command to launch the agent.
 
 ```text
 Usage: sai [-dhV] [--headless] [--data-dir=<dataDir>] [-i=<input>]
-           [-s=<sessionId>] [COMMAND]
+           [-p=<persona>] [-s=<sessionId>] [COMMAND]
 Sai AI Agent
   -d, --debug                Enable debug mode
       --data-dir=<dataDir>   Override data directory
@@ -73,6 +115,7 @@ Sai AI Agent
   -i, --input=<input>        Execute a single input and exit. If the value
                                starts with '@', read input from the specified
                                file.
+  -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
@@ -88,13 +131,24 @@ Commands:
   java -jar target/sai-1.0-SNAPSHOT.jar
   ```
 
-- Execute a single input and exit:
+- Start with a persona file (YAML/JSON):
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar --input "Summarize this project in three bullet points"
+  java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
   ```
-  Or read input from a file using @-syntax:
+
+- Execute a single input and exit (stateless run, no session persisted):
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar --input "What can you do?"
+  ```
+
+- Read input from a file using @-syntax:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar --input @prompt.txt
+  ```
+
+- Use a persona with a one-off input:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar -p examples/personas/basic.yaml -i "What can you do?"
   ```
 
 - Resume a specific session:
@@ -125,8 +179,14 @@ SAI leverages Sentinel AI components and follows a modular design.
   - BashCommandRunner: Executes shell commands
 - Session Management:
   - Uses a file-system backed store to persist conversations and usage statistics.
+  - One-off runs via `--input` are stateless and do not persist session history.
 - Printers:
   - MessagePrinter / EventPrinter: Stream and render agent/LLM responses and events.
+
+## Security and privacy
+
+- Persona HTTP tools can perform network requests. Use trusted personas and endpoints to avoid SSRF or data exfiltration.
+- Prompt context: The agent includes the current working directory name in the system prompt.
 
 ## Documentation Maintenance
 
@@ -135,6 +195,7 @@ Keep README.md and AGENTS.md accurate and in sync with the codebase. When you ch
 - CLI surface (flags, options, subcommands), default values, or behavior
 - Environment variables and provider configuration (Azure/OpenAI/Copilot Proxy)
 - Session management behavior, data directories, or examples
+- Code formatting rules or spotless configuration
 
 Recommended workflow:
 
@@ -147,5 +208,6 @@ Recommended workflow:
    java -jar target/sai-1.0-SNAPSHOT.jar --help
    ```
 3. Verify provider/env var docs reflect the actual names used in SaiCommand and ConfigurableDefaultChatCompletionFactory.
-4. Ensure examples use fenced code blocks with language hints and keep the tone professional. Do not use emojis.
-5. In your PR description, include a note such as: "docs: synced with current CLI and configuration".
+4. Run `mvn spotless:apply` before committing to ensure code is properly formatted.
+5. Ensure examples use fenced code blocks with language hints and keep the tone professional. Do not use emojis.
+6. In your PR description, include a note such as: "docs: synced with current CLI and configuration".

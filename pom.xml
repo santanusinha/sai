@@ -19,6 +19,7 @@
         <signals.version>1.4</signals.version>
         <failsafe.version>3.3.2</failsafe.version>
         <spotless.version>3.2.1</spotless.version>
+        <jackson.version>2.18.3</jackson.version>
     </properties>
 
     <dependencyManagement>
@@ -27,6 +28,13 @@
                 <groupId>org.junit</groupId>
                 <artifactId>junit-bom</artifactId>
                 <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -44,6 +52,10 @@
         <dependency>
             <groupId>com.phonepe.sentinel-ai</groupId>
             <artifactId>sentinel-ai-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
         <dependency>
             <groupId>com.phonepe.sentinel-ai</groupId>
@@ -205,7 +217,7 @@
                         </eclipse>
                         <removeUnusedImports/>
                         <importOrder>
-                        <order>com,io,org,java,javax,\#</order>
+                        <order>com,io,org,java,javax,#</order>
                         <semanticSort>true</semanticSort>
                         </importOrder>
                         <trimTrailingWhitespace/>

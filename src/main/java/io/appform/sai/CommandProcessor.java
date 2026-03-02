@@ -15,6 +15,12 @@
  */
 package io.appform.sai;
 
+import static io.appform.sai.Utils.elapsedTimeInSeconds;
+
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.concurrent.Future;
+
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.AgentInput;
@@ -26,15 +32,6 @@ import com.phonepe.sentinelai.core.utils.AgentUtils;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
-
-import java.util.ArrayList;
-import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-
-import static io.appform.sai.Utils.elapsedTimeInSeconds;
-
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -61,31 +58,24 @@ public class CommandProcessor implements AutoCloseable {
 
     private final String sessionId;
     private final SaiAgent agent;
-    private final ExecutorService executorService;
+
     private final Printer printer;
-    private final LinkedBlockingQueue<Command> inputQueue = new LinkedBlockingQueue<>();
     private Future<?> runningTask;
-    private final String user = Objects.requireNonNullElse(System.getProperty("USER"), "User");
+    private final String user = Optional.ofNullable(System.getProperty("user.name"))
+            .orElseGet(() -> System.getenv().getOrDefault("USER", "User"));
 
     @Builder
     public CommandProcessor(
                             @NonNull final String sessionId,
                             @NonNull final SaiAgent agent,
-                            @NonNull final ExecutorService executorService,
-                            @NonNull final Printer printer
-    ) {
+                            @NonNull final Printer printer) {
         this.sessionId = sessionId;
         this.agent = agent;
-        this.executorService = executorService;
         this.printer = printer;
     }
 
     public CommandProcessor start() {
-        runningTask = executorService.submit(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                waitForInput();
-            }
-        });
+        //Nothing to do here right now. Kept for the future
         return this;
     }
 
@@ -98,35 +88,10 @@ public class CommandProcessor implements AutoCloseable {
     }
 
     public void handle(Command command) {
-        try {
-            inputQueue.put(command);
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.info("Queue put interrupted");
+        switch (command.command()) {
+            case INPUT -> handleInput(command.input);
         }
     }
-
-    private void waitForInput() {
-        try {
-            final var item = inputQueue.take();
-            if (item != null) {
-                try {
-                    switch (item.command) {
-                        case INPUT -> handleInput(item.input);
-                    }
-                }
-                finally {
-                    // status.update(List.of(new AttributedString("Idle")));
-                }
-            }
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.info("Agent runner interrupted. Exiting.");
-        }
-    }
-
 
     private void handleInput(final InputCommand input) {
         final var prompt = input.input();
@@ -166,6 +131,12 @@ public class CommandProcessor implements AutoCloseable {
                 errorMessage = "Sentinel error: [%s] %s".formatted(error
                         .getErrorType(), error.getMessage());
             }
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            errorMessage = "Command execution interrupted";
+            log.warn(errorMessage, e);
+            errorActor = Actor.SYSTEM;
         }
         catch (Exception e) {
             errorMessage = AgentUtils.rootCause(e).getMessage();

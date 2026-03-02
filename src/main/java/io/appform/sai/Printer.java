@@ -41,11 +41,13 @@ import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.With;
+import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class Printer implements AutoCloseable {
 
+    @UtilityClass
     public static final class Colours {
         public static final String WHITE = "\u001B[37m";
         public static final String RED = "\u001B[31m";
@@ -88,7 +90,7 @@ public class Printer implements AutoCloseable {
     @NonNull
     private final ExecutorService executorService;
 
-    private final Terminal terminal = createTerminal();
+    private final Terminal terminal;
 
     @Getter
     private final LineReader lineReader;
@@ -99,6 +101,7 @@ public class Printer implements AutoCloseable {
     private Future<?> printerTask = null;
 
     @Builder
+    @SneakyThrows
     public Printer(
                    @NonNull Settings settings,
                    @NonNull ExecutorService executorService,
@@ -107,6 +110,10 @@ public class Printer implements AutoCloseable {
     ) {
         this.settings = settings;
         this.executorService = executorService;
+        this.terminal = TerminalBuilder.builder()
+                .system(true)
+                .dumb(settings.isHeadless())
+                .build();
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
                                                         () -> LineReaderBuilder
                                                                 .builder()
@@ -125,54 +132,58 @@ public class Printer implements AutoCloseable {
             lineReader.getTerminal().flush();
         }
 
-        printerTask = executorService.submit(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    final var printables = printingQueue.take();
-                    if (null != printables) {
-                        printables.forEach(printable -> {
-                            if (!settings.isDebug() && printable.isDebug()) {
-                                return;
-                            }
-                            if (settings.isHeadless()) {
-                                if (printable.isStatusUpdate()) {
-                                    return;
-                                }
-                                if (settings.isDebug() || printable.getActor() == Actor.ASSISTANT || printable
-                                        .isImportant()) {
-                                    System.out.println(printable.getData());
-                                }
-                                return;
-                            }
-                            if (printable.isStatusUpdate()) {
-                                status.update(List.of(AttributedString.EMPTY));
-                                status.update(List.of(new AttributedString(printable.getData())));
-                            }
-                            else {
-                                if (printable.isRaw()) {
-                                    lineReader.printAbove("%s".formatted(printable.getData()));
-                                }
-                                else {
-                                    final var colour = Objects.requireNonNullElseGet(printable.getColour(),
-                                                                                     () -> defaultColour(printable
-                                                                                             .getSeverity()));
-                                    lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(),
-                                                                                colour,
-                                                                                printable.getData(),
-                                                                                Colours.RESET));
-                                }
-                            }
-                        });
-                    }
-                }
-                catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.info("Shutting down printer");
-                }
-            }
-        });
+        printerTask = executorService.submit(this::processPrintingQueue);
         this.print(markIdleStatus());
         return this;
+    }
+
+    @SuppressWarnings("java:S106")
+    private void processPrintingQueue() {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                final var printables = printingQueue.take();
+                if (null != printables) {
+                    printables.forEach(printable -> {
+                        if (!settings.isDebug() && printable.isDebug()) {
+                            return;
+                        }
+                        if (settings.isHeadless()) {
+                            if (printable.isStatusUpdate()) {
+                                return;
+                            }
+                            if (settings.isDebug()
+                                    || printable.getActor() == Actor.ASSISTANT
+                                    || printable.isImportant()) {
+                                System.out.println(printable.getData());
+                            }
+                            return;
+                        }
+                        if (printable.isStatusUpdate()) {
+                            status.update(List.of(AttributedString.EMPTY));
+                            status.update(List.of(new AttributedString(printable.getData())));
+                        }
+                        else {
+                            if (printable.isRaw()) {
+                                lineReader.printAbove("%s".formatted(printable.getData()));
+                            }
+                            else {
+                                final var colour = Objects.requireNonNullElseGet(printable.getColour(),
+                                                                                 () -> defaultColour(printable
+                                                                                         .getSeverity()));
+                                lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(),
+                                                                            colour,
+                                                                            printable.getData(),
+                                                                            Colours.RESET));
+                            }
+                        }
+                    });
+                }
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.info("Shutting down printer");
+            }
+        }
     }
 
     public static Update markIdleStatus() {

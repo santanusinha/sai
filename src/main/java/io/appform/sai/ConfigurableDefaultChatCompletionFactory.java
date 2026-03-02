@@ -78,8 +78,10 @@ public class ConfigurableDefaultChatCompletionFactory implements ChatCompletionS
 
     private ChatCompletionServices copilotProxyModel(String modelName) {
         log.debug("Creating Copilot Proxy ChatCompletionServices for model: {}", modelName);
-        final var endpoint = readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
-        final var apiKey = readEnv("COPILOT_GITHUB_PAT", "COPILOT_GITHUB_PAT environment variable must be set");
+        // final var endpoint = readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
+        final var endpoint = readEnv("COPILOT_PROXY_ENDPOINT",
+                                     "Set COPILOT_PROXY_ENDPOINT environment variable to the URL of your Copilot Proxy instance");
+        final var apiKey = readEnv("COPILOT_PAT", "COPILOT_PAT environment variable must be set");
         return GithubCopilot.builder()
                 .apiKey(apiKey)
                 .objectMapper(mapper)

@@ -30,10 +30,12 @@ import lombok.Builder.Default;
 import lombok.NonNull;
 import lombok.Value;
 import lombok.With;
+import lombok.extern.jackson.Jacksonized;
 
 @Value
 @With
 @Builder
+@Jacksonized
 public class AgentConfig {
 
     public static final ModelSettings DEFAULT_MODEL_SETTINGS = ModelSettings.builder()

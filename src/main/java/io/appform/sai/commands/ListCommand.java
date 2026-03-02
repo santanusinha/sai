@@ -38,6 +38,7 @@ import picocli.CommandLine.ParentCommand;
 
 @Slf4j
 @Command(name = "list", description = "List available sessions")
+@SuppressWarnings("java:S106")
 public class ListCommand implements Callable<Integer> {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -49,9 +50,11 @@ public class ListCommand implements Callable<Integer> {
     @Override
     @SneakyThrows
     public Integer call() {
-        final var settings = Settings.builder()
-                .dataDir(parent.getDataDir() != null ? parent.getDataDir() : Settings.DEFAULT_DATA_DIR)
-                .build();
+        final var settingsBuilder = Settings.builder();
+        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
+            settingsBuilder.dataDir(parent.getDataDir());
+        }
+        final var settings = settingsBuilder.build();
 
         final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
         if (!Files.exists(dataDirPath)) {
