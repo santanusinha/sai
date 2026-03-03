@@ -15,6 +15,7 @@
  */
 package io.appform.sai;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
@@ -41,6 +42,7 @@ import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.ToolIO;
+import io.appform.sai.tools.ToolIO.LineEditOperation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,6 +64,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String READ_TOOL = "core_tool_box_read";
         public static final String WRITE_TOOL = "core_tool_box_write";
         public static final String EDIT_TOOL = "core_tool_box_edit";
+        public static final String LINE_EDIT_TOOL = "core_tool_box_line_edit";
+        public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
     }
 
     private static final String BASH_TOOL = "core_tool_box_bash";
@@ -101,13 +105,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 switch (toolCallResponse.getToolName()) {
                     case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
                     case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.EDIT_TOOL -> printWriteToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.WRITE_TOOL -> printEditToolResponse(toolCallResponse, messages);
+                    case KnownToolNames.EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
+                    case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolResponse(toolCallResponse, messages);
+                    case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
+                                                                                              messages);
+                    case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
                     case Agent.OUTPUT_GENERATOR_ID -> {
-                        messages.add(Printer.debug(Actor.SYSTEM,
-                                                   "Output Generator Tool call completed."
-                                                           .formatted(toolCallResponse
-                                                                   .getResponse())));
+                        messages.add(Printer.debug(Actor.SYSTEM, "Output Generator Tool call completed."));
                     }
                     default -> {
                         if (toolCallResponse
@@ -169,6 +173,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                     case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
                     case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
+                    case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
+                    case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
                     case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
                     case Agent.OUTPUT_GENERATOR_ID -> {
                         messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
@@ -185,8 +191,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             }
 
             @SneakyThrows
-            private List<Update> handleResponse(
-                                                String content,
+            private List<Update> handleResponse(String content,
                                                 ModelUsageStats stats,
                                                 long elapsedTimeMs) {
                 final var messages = new ArrayList<Update>();
@@ -221,18 +226,19 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
     @SneakyThrows
     private void printBashRequest(ToolCall toolCall, ArrayList<Update> messages) {
-        final var node = mapper.readTree(toolCall.getArguments());
-        final var fieldName = node.fieldNames().next();
+        final var request = mapper.readTree(toolCall.getArguments());
         // there is only one paramter in this node which is the request.
-        final var request = mapper.treeToValue(node.get(fieldName), ToolIO.BashRequest.class);
         log.info("Received bash tool call with arguments: {}. Request: {}",
                  toolCall.getArguments(),
                  request);
-        messages.add(Printer.assistantMessage(request.getRequestReason()));
+        if (!ensureParamsExist(request, messages, "command", "timeoutSeconds", "requestReason")) {
+            return;
+        }
+        messages.add(Printer.assistantMessage(request.get("requestReason").asText()));
         messages.add(Printer.raw(Printer.Colours.YELLOW + "$ " + Printer.Colours.WHITE
-                + request
-                        .getCommand() + Printer.Colours.GRAY + " (Timeout: " + request
-                                .getTimeoutSeconds() + " seconds)" + Printer.Colours.RESET));
+                + request.get("command").asText() + Printer.Colours.GRAY
+                + " (Timeout: " + request.get("timeoutSeconds").asInt() + " seconds)"
+                + Printer.Colours.RESET));
     }
 
     @SneakyThrows
@@ -258,27 +264,23 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     @SneakyThrows
     private void printReadToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
         final var node = mapper.readTree(toolCall.getArguments());
-        final var fieldName = node.fieldNames().next();
-        // there is only one paramter in this node which is the request.
-        final var request = mapper.treeToValue(node.get(fieldName), ToolIO.ReadRequest.class);
-        log.info("Received read tool call with arguments: {}. Request: {}",
-                 toolCall.getArguments(),
-                 request);
-        messages.add(Printer.assistantMessage(request.getRequestReason()));
+        log.info("Received read tool call with arguments: {}", toolCall.getArguments());
+        if (!ensureParamsExist(node, messages, "requestReason", "filePath")) {
+            return;
+        }
+        messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
         messages.add(Printer.raw(Printer.Colours.YELLOW + "read: " + Printer.Colours.WHITE
-                + request.getPath() + Printer.Colours.RESET));
+                + node.get("filePath").asText() + Printer.Colours.RESET));
     }
 
 
     @SneakyThrows
     private void printReadToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
-        final var response = mapper.readValue(toolCallResponse.getResponse(),
-                                              ToolIO.ReadResponse.class);
+        final var response = mapper.readValue(toolCallResponse.getResponse(), ToolIO.ReadResponse.class);
         final var content = response.getContent();
         final var error = response.getError();
         if (!Strings.isNullOrEmpty(content)) {
-            messages.add(Printer.raw(Printer.Colours.GRAY
-                    + content + Printer.Colours.RESET));
+            messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
             messages.add(Printer.systemMessage("File read successfully."));
         }
         if (!Strings.isNullOrEmpty(error)) {
@@ -288,8 +290,50 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     }
 
     @SneakyThrows
+    private void printSearchReplaceToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
+        final var node = mapper.readTree(toolCall.getArguments());
+        log.info("Received search/replace tool call with arguments: {}", toolCall.getArguments());
+        if (!ensureParamsExist(node,
+                               messages,
+                               "requestReason",
+                               "filePath",
+                               "searchText",
+                               "replaceText",
+                               "occurrence")) {
+            return;
+        }
+        messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "find_replace: " + Printer.Colours.WHITE
+                + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.raw(Printer.Colours.GRAY
+                + "s/%s/%s/%d".formatted(node.get("searchText").asText(),
+                                         node.get("replaceText").asText(),
+                                         node.get("occurrence").asInt())));
+    }
+
+    @SneakyThrows
+    private void printSearchReplaceToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), ToolIO.SearchReplaceResponse.class);
+        final var error = response.getError();
+        if (response.isSuccess()) {
+            messages.add(Printer.systemMessage("%d replacements made successfully."
+                    .formatted(response.getReplacementCount())));
+        }
+        if (!Strings.isNullOrEmpty(error)) {
+            messages.add(Printer.systemMessage("Search/Replace failed with error: %s".formatted(error))
+                    .withSeverity(Severity.ERROR));
+        }
+    }
+
+    @SneakyThrows
     private void printEditToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
         final var node = mapper.readTree(toolCall.getArguments());
+        if (node.size() > 1) {
+            log.warn("Malformed request by LLM. Expected only one field in the arguments but found {}. Arguments: {}",
+                     node.size(),
+                     toolCall.getArguments());
+            return;
+        }
         final var fieldName = node.fieldNames().next();
         // there is only one paramter in this node which is the request.
         final var request = mapper.treeToValue(node.get(fieldName), ToolIO.EditRequest.class);
@@ -302,6 +346,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         messages.add(Printer.raw(Printer.Colours.GRAY
                 + request.getPatchContent() + Printer.Colours.RESET));
     }
+
 
     @SneakyThrows
     private void printEditToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
@@ -319,19 +364,61 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     }
 
     @SneakyThrows
+    private void printLineEditToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
+        final var node = mapper.readTree(toolCall.getArguments());
+        if (!ensureParamsExist(node,
+                               messages,
+                               "filePath",
+                               "operation",
+                               "startLine",
+                               "endLine",
+                               "content",
+                               "requestReason")) {
+            return;
+        }
+        log.info("Received line edit tool call with arguments: {}.", toolCall.getArguments());
+        messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
+        final var startLine = node.get("startLine").asInt();
+        final var endLine = node.get("endLine").asInt(-1);
+        final var content = node.get("content").asText();
+        final var symbol = switch (LineEditOperation.valueOf(node.get("operation").asText())) {
+            case INSERT_BEFORE -> "^<<< %d:  %s".formatted(startLine, content);
+            case INSERT_AFTER -> ">>>$ %d: %s".formatted(startLine, content);
+            case REPLACE -> "~ {%d, %d}: %s".formatted(startLine, endLine, content);
+            case DELETE -> "-- {%d to %d}".formatted(startLine, endLine);
+        };
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "edit: " + Printer.Colours.WHITE
+                + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.raw(Printer.Colours.GRAY + symbol + Printer.Colours.RESET));
+    }
+
+    @SneakyThrows
+    private void printLineEditToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(),
+                                              ToolIO.LineEditResponse.class);
+        final var success = response.isSuccess();
+        final var error = response.getError();
+        if (success) {
+            messages.add(Printer.systemMessage("File edited successfully."));
+        }
+        else {
+            messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
+                    .withSeverity(Severity.ERROR));
+        }
+    }
+
+    @SneakyThrows
     private void printWriteToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
         final var node = mapper.readTree(toolCall.getArguments());
-        final var fieldName = node.fieldNames().next();
-        // there is only one paramter in this node which is the request.
-        final var request = mapper.treeToValue(node.get(fieldName), ToolIO.WriteRequest.class);
-        log.info("Received write tool call with arguments: {}. Request: {}",
-                 toolCall.getArguments(),
-                 request);
-        messages.add(Printer.assistantMessage(request.getRequestReason()));
+        if (!ensureParamsExist(node, messages, "requestReason", "filePath", "content")) {
+            return;
+        }
+        log.info("Received write tool call with arguments: {}.", toolCall.getArguments());
+        messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
         messages.add(Printer.raw(Printer.Colours.YELLOW + "write: " + Printer.Colours.WHITE
-                + request.getPath() + Printer.Colours.RESET));
+                + node.get("filePath").asText() + Printer.Colours.RESET));
         messages.add(Printer.raw(Printer.Colours.GRAY
-                + request.getContent() + Printer.Colours.RESET));
+                + node.get("content").asText() + Printer.Colours.RESET));
     }
 
     @SneakyThrows
@@ -350,4 +437,20 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     .withSeverity(Severity.ERROR));
         }
     }
+
+    private boolean ensureParamsExist(JsonNode node, List<Printer.Update> messages, String... params) {
+        for (String param : params) {
+            if (!node.has(param)) {
+                log.warn("Malformed request by LLM. Missing parameter '{}' in arguments: {}",
+                         param,
+                         node.toString());
+                messages.add(Printer.systemMessage("Malformed request: missing parameter '%s'."
+                        .formatted(param))
+                        .withSeverity(Severity.ERROR));
+                return false;
+            }
+        }
+        return true;
+    }
+
 }
