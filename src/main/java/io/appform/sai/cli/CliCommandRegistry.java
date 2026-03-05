@@ -34,7 +34,7 @@ public class CliCommandRegistry {
      * thread-safe — a single shared instance is reused across all calls.
      */
     private static final List<CliCommandHandler> HANDLERS = List.of(new ShellCommandHandler());
-    
+
     // Future handlers: new HelpCommandHandler(), new ClearCommandHandler(), …
 
     /**

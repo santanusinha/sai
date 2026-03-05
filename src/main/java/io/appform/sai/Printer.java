@@ -110,10 +110,21 @@ public class Printer implements AutoCloseable {
     ) {
         this.settings = settings;
         this.executorService = executorService;
-        this.terminal = TerminalBuilder.builder()
-                .system(true)
-                .dumb(settings.isHeadless())
-                .build();
+        final var terminalBuilder = TerminalBuilder.builder()
+                .system(true);
+        if (settings.isHeadless()) {
+            terminalBuilder.jna(false)
+                    .jni(false)
+                    .ffm(false)
+                    .jansi(false)
+                    .type(Terminal.TYPE_DUMB)
+                    .dumb(true)
+                    .systemOutput(TerminalBuilder.SystemOutput.ForcedSysOut);
+            System.setProperty("jline.terminal.type", "dumb");
+            System.setProperty("org.jline.terminal.dumb.color", "false");
+            log.info("Running in headless mode with dumb terminal");
+        }
+        this.terminal = terminalBuilder.build();
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
                                                         () -> LineReaderBuilder
                                                                 .builder()
@@ -152,9 +163,9 @@ public class Printer implements AutoCloseable {
                                 return;
                             }
                             if (settings.isDebug()
-                                    || printable.getActor() == Actor.ASSISTANT
                                     || printable.isImportant()) {
-                                System.out.println(printable.getData());
+                                final var clearString = AttributedString.fromAnsi(printable.getData()).toString();
+                                lineReader.printAbove(clearString);
                             }
                             return;
                         }

@@ -15,6 +15,7 @@
  */
 package io.appform.sai.cli.handlers;
 
+
 import io.appform.sai.Printer;
 import io.appform.sai.cli.CliCommandHandler;
 import io.appform.sai.models.Severity;
@@ -22,8 +23,6 @@ import io.appform.sai.tools.BashCommandRunner;
 
 import java.time.Duration;
 import java.util.ArrayList;
-
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Handles the {@code !<command>} prefix: executes the remainder of the input as a shell command
@@ -46,8 +45,7 @@ public class ShellCommandHandler implements CliCommandHandler {
         this(SHELL_TIMEOUT);
     }
 
-    @VisibleForTesting
-    ShellCommandHandler(Duration timeout) {
+    public ShellCommandHandler(Duration timeout) {
         this.timeout = timeout;
     }
 
