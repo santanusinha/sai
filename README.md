@@ -166,6 +166,27 @@ Override the config directory:
 java -jar target/sai-1.0-SNAPSHOT.jar --config-dir /path/to/config
 ```
 
+## Interactive CLI Commands
+
+While in interactive mode, the following special commands are available directly in the prompt. They are processed by SAI itself and are **not** forwarded to the AI agent.
+
+| Command       | Description                                              |
+|---------------|----------------------------------------------------------|
+| `!<cmd>`      | Execute a shell command (e.g. `!ls -la`, `!git status`) |
+| `exit`        | Exit the application                                     |
+
+### Shell execution (`!`)
+
+Prefix any shell command with `!` to run it in your current environment without leaving SAI:
+
+```text
+> !ls -la
+> !git log --oneline -5
+> !cat /etc/os-release
+```
+
+Standard output is printed on success; the exit code and stderr are shown on failure.
+
 ## CLI Reference
 
 Help output:

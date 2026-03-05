@@ -31,6 +31,7 @@ import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
+import io.appform.sai.cli.CliCommandRegistry;
 import io.appform.sai.commands.DeleteCommand;
 import io.appform.sai.commands.ListCommand;
 import io.appform.sai.config.AgentConfigLoader;
@@ -231,11 +232,17 @@ public class SaiCommand implements Callable<Integer> {
                 }
 
                 var userInput = Strings.isNullOrEmpty(input) ? null : resolveInput(input);
+                final var cliCommandRegistry = new CliCommandRegistry();
                 while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
                     if (Strings.isNullOrEmpty(userInput)) {
                         userInput = readInput(printer).orElse("exit");
                     }
                     else {
+                        // Check for client-side CLI commands (e.g. ! for shell) before forwarding to agent
+                        if (cliCommandRegistry.tryHandle(userInput, printer)) {
+                            userInput = !Strings.isNullOrEmpty(input) ? "exit" : null;
+                            continue;
+                        }
                         final var command = CommandProcessor.Command.builder()
                                 .command(CommandType.INPUT)
                                 .input(new InputCommand("run-" + UUID.randomUUID()

@@ -17,6 +17,8 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     ├── main/
     │   ├── java/io/appform/sai/
     │   │   ├── agent/     # Agent instantiation and MCP configuration
+    │   │   ├── cli/       # Client-side CLI command handlers (e.g. ! for shell)
+    │   │   │   └── handlers/  # CliCommandHandler implementations
     │   │   ├── commands/  # CLI subcommands (list, delete sessions)
     │   │   ├── config/    # Persona/config file loaders
     │   │   ├── models/    # Data models (Session, Actor, Severity)

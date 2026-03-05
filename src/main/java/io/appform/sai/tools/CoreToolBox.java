@@ -58,7 +58,8 @@ public class CoreToolBox implements ToolBox {
         log.info("Executing bash command: {}", command);
         try {
             final var commandOutput = new BashCommandRunner(command,
-                                                            Duration.ofSeconds(timeoutSeconds))
+                                                            Duration.ofSeconds(timeoutSeconds),
+                                                            line -> line)
                     .call();
 
             final var statusCode = commandOutput.getStatusCode();
@@ -114,7 +115,7 @@ public class CoreToolBox implements ToolBox {
 
             try {
                 final var command = String.format("patch %s %s", path.toAbsolutePath(), patchFile.toAbsolutePath());
-                final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30)).call();
+                final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30), line -> line).call();
 
                 if (commandOutput.getStatusCode() != 0) {
                     return ToolIO.EditResponse.builder()
@@ -452,7 +453,7 @@ public class CoreToolBox implements ToolBox {
             return HexFormat.of().formatHex(encodedhash);
         }
         catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not found", e);
+            throw new IllegalStateException("SHA-256 algorithm not found", e);
         }
     }
 
