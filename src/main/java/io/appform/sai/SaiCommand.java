@@ -129,12 +129,27 @@ public class SaiCommand implements Callable<Integer> {
 
         // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
         // read all of System.in now and treat it as a single-shot input — identical to --input.
-        final var pipedInput = (System.console() == null && Strings.isNullOrEmpty(input))
-                ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
+        // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
+        // read all of System.in now and treat it as a single-shot input — identical to --input.
+        final String pipedInput;
+        if (!headless && System.console() == null && Strings.isNullOrEmpty(input)) {
+            try {
+                if (System.in.available() == 0) {
+                    throw new IllegalStateException("No TTY detected and no input provided. " +
+                            "Please run interactively with a TTY, pipe input via stdin, or use the --input flag.");
+                }
+                pipedInput = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
                         .lines()
                         .collect(Collectors.joining("\n"))
-                        .strip()
-                : null;
+                        .strip();
+            }
+            catch (java.io.IOException e) {
+                throw new RuntimeException("Failed to read from standard input", e);
+            }
+        }
+        else {
+            pipedInput = null;
+        }
         // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
         final var effectiveInput = !Strings.isNullOrEmpty(input) ? resolveInput(input)
                 : !Strings.isNullOrEmpty(pipedInput) ? pipedInput

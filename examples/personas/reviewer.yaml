@@ -1,7 +1,8 @@
 agentId: sai-agent-reviewer
 name: Sai Reviewer
 description:  Code review agent for java services
-model: claude-opus-4.5
+model: gemini-3.1-pro-preview
+# model: claude-opus-4.5
 modelSettings:
   temperature: 0.3
 prompt: |
