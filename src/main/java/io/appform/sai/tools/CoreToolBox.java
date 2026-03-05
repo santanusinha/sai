@@ -15,11 +15,14 @@
  */
 package io.appform.sai.tools;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.tools.Tool;
 import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.Printer;
+import io.appform.sai.tools.ToolIO.LineEditOperation;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,11 +51,14 @@ public class CoreToolBox implements ToolBox {
     private final Printer printer;
 
     @Tool("Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore")
-    public ToolIO.BashResponse bash(ToolIO.BashRequest request) {
-        log.info("Executing bash command: {}", request.getCommand());
+    public ToolIO.BashResponse bash(
+                                    @JsonPropertyDescription("Reason for requesting the tool. This is shown to the user for informational purposes.") String requestReason,
+                                    @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.") String command,
+                                    @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes.") int timeoutSeconds) {
+        log.info("Executing bash command: {}", command);
         try {
-            final var commandOutput = new BashCommandRunner(request.getCommand(),
-                                                            Duration.ofSeconds(request.getTimeoutSeconds()))
+            final var commandOutput = new BashCommandRunner(command,
+                                                            Duration.ofSeconds(timeoutSeconds))
                     .call();
 
             final var statusCode = commandOutput.getStatusCode();
@@ -145,35 +151,39 @@ public class CoreToolBox implements ToolBox {
 
     @Tool("Edit a file by line number. Use this to insert, replace, or delete lines at specific positions.")
     @SuppressWarnings("java:S3776")
-    public ToolIO.LineEditResponse lineEdit(ToolIO.LineEditRequest request) {
-        log.info("Line edit in file: {} operation: {}", request.getPath(), request.getOperation());
+    public ToolIO.LineEditResponse lineEdit(@JsonPropertyDescription("Reason for editing the file.") String requestReason,
+                                            @JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
+                                            @JsonPropertyDescription("The operation to perform: INSERT_BEFORE, INSERT_AFTER, REPLACE, or DELETE.") LineEditOperation operation,
+                                            @JsonPropertyDescription("The starting line number (1-indexed). For INSERT_BEFORE/INSERT_AFTER, this is the reference line.") int startLine,
+                                            @JsonPropertyDescription("The ending line number (1-indexed, inclusive). Only used for REPLACE and DELETE operations. If not specified, defaults to startLine.") Integer endLine,
+                                            @JsonPropertyDescription("The content to insert or replace with. Not used for DELETE operation.") String content,
+                                            @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.") String expectedChecksum) {
+        log.info("Line edit in file: {} operation: {}", filePath, operation);
         try {
-            final var path = Path.of(request.getPath());
+            final var path = Path.of(filePath);
             if (!Files.exists(path)) {
                 return ToolIO.LineEditResponse.builder()
                         .success(false)
-                        .error("File not found: " + request.getPath())
+                        .error("File not found: " + filePath)
                         .build();
             }
 
-            final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+            final var fileContent = Files.readString(path, StandardCharsets.UTF_8);
+            final var currentChecksum = calculateChecksum(fileContent.getBytes(StandardCharsets.UTF_8));
 
-            if (!currentChecksum.equals(request.getExpectedChecksum())) {
+            if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.LineEditResponse.builder()
                         .success(false)
-                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum() + ", Actual: "
+                        .error("Checksum mismatch. Expected: " + expectedChecksum + ", Actual: "
                                 + currentChecksum + ". Re-read the file to get the current checksum.")
                         .build();
             }
 
             // Split into lines, preserving trailing empty line if present
-            final var lines = new ArrayList<>(List.of(content.split("\n", -1)));
+            final var lines = new ArrayList<>(List.of(fileContent.split("\n", -1)));
             final var totalLines = lines.size();
 
-            final var startLine = request.getStartLine();
-            final var endLine = request.getEndLine() != null ? request.getEndLine() : startLine;
-            final var operation = request.getOperation();
+            final var opEndLine = endLine != null ? endLine : startLine;
 
             // Validate line numbers
             if (startLine < 1) {
@@ -183,10 +193,10 @@ public class CoreToolBox implements ToolBox {
                         .build();
             }
 
-            if (endLine < startLine) {
+            if (opEndLine < startLine) {
                 return ToolIO.LineEditResponse.builder()
                         .success(false)
-                        .error("End line (" + endLine + ") cannot be less than start line (" + startLine + ").")
+                        .error("End line (" + opEndLine + ") cannot be less than start line (" + startLine + ").")
                         .build();
             }
 
@@ -200,22 +210,19 @@ public class CoreToolBox implements ToolBox {
                 }
             }
 
-            if ((operation == ToolIO.LineEditOperation.REPLACE || operation == ToolIO.LineEditOperation.DELETE)
-                    && endLine > totalLines) {
+            if ((operation == ToolIO.LineEditOperation.REPLACE
+                    || operation == ToolIO.LineEditOperation.DELETE)
+                    && opEndLine > totalLines) {
                 return ToolIO.LineEditResponse.builder()
                         .success(false)
-                        .error("End line " + endLine + " is beyond file length (" + totalLines + " lines).")
+                        .error("End line " + opEndLine + " is beyond file length (" + totalLines + " lines).")
                         .build();
             }
 
             // Parse content to insert (split by newlines)
-            final List<String> contentLines;
-            if (request.getContent() != null && !request.getContent().isEmpty()) {
-                contentLines = List.of(request.getContent().split("\n", -1));
-            }
-            else {
-                contentLines = List.of();
-            }
+            final var contentLines = !Strings.isNullOrEmpty(content)
+                    ? List.of(content.split("\n", -1))
+                    : List.<String>of();
 
             switch (operation) {
                 case INSERT_BEFORE:
@@ -233,7 +240,7 @@ public class CoreToolBox implements ToolBox {
                 case REPLACE:
                     // Remove lines from startLine to endLine (inclusive), then insert new content
                     // startLine and endLine are 1-indexed
-                    for (int i = endLine; i >= startLine; i--) {
+                    for (int i = opEndLine; i >= startLine; i--) {
                         lines.remove(i - 1);
                     }
                     lines.addAll(startLine - 1, contentLines);
@@ -241,7 +248,7 @@ public class CoreToolBox implements ToolBox {
 
                 case DELETE:
                     // Remove lines from startLine to endLine (inclusive)
-                    for (int i = endLine; i >= startLine; i--) {
+                    for (int i = opEndLine; i >= startLine; i--) {
                         lines.remove(i - 1);
                     }
                     break;
@@ -257,7 +264,10 @@ public class CoreToolBox implements ToolBox {
             final var newContent = String.join("\n", lines);
 
             // Write the new content
-            Files.writeString(path, newContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            Files.writeString(path,
+                              newContent,
+                              StandardOpenOption.CREATE,
+                              StandardOpenOption.TRUNCATE_EXISTING);
             final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
 
             return ToolIO.LineEditResponse.builder()
@@ -281,13 +291,14 @@ public class CoreToolBox implements ToolBox {
     }
 
     @Tool("Read a file from the local filesystem. Returns content and a checksum for verification.")
-    public ToolIO.ReadResponse read(ToolIO.ReadRequest request) {
-        log.info("Reading file: {}", request.getPath());
+    public ToolIO.ReadResponse read(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
+                                    @JsonPropertyDescription("The absolute path to the file to read.") String filePath) {
+        log.info("Reading file: {}", filePath);
         try {
-            final var path = Path.of(request.getPath());
+            final var path = Path.of(filePath);
             if (!Files.exists(path)) {
                 return ToolIO.ReadResponse.builder()
-                        .error("File not found: " + request.getPath())
+                        .error("File not found: " + filePath)
                         .build();
             }
             final var content = Files.readString(path, StandardCharsets.UTF_8);
@@ -307,30 +318,34 @@ public class CoreToolBox implements ToolBox {
     }
 
     @Tool("Search and replace text in a file. Use this for precise text substitutions.")
-    public ToolIO.SearchReplaceResponse searchReplace(ToolIO.SearchReplaceRequest request) {
-        log.info("Search and replace in file: {}", request.getPath());
+    public ToolIO.SearchReplaceResponse searchReplace(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
+                                                      @JsonPropertyDescription("The exact text to search for in the file. Include enough context to make the match unique.") String searchText,
+                                                      @JsonPropertyDescription("The text to replace the search text with.") String replaceText,
+                                                      @JsonPropertyDescription("Which occurrence to replace: 1 for first, 2 for second, etc. Use 0 or negative to replace ALL occurrences.") int occurrence,
+                                                      @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.") String expectedChecksum,
+                                                      @JsonPropertyDescription("Reason for editing the file.") String requestReason) {
+        log.info("Search and replace in file: {}", filePath);
         try {
-            final var path = Path.of(request.getPath());
+            final var path = Path.of(filePath);
             if (!Files.exists(path)) {
                 return ToolIO.SearchReplaceResponse.builder()
                         .success(false)
-                        .error("File not found: " + request.getPath())
+                        .error("File not found: " + filePath)
                         .build();
             }
 
             final var content = Files.readString(path, StandardCharsets.UTF_8);
             final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
 
-            if (!currentChecksum.equals(request.getExpectedChecksum())) {
+            if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.SearchReplaceResponse.builder()
                         .success(false)
-                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum() + ", Actual: "
+                        .error("Checksum mismatch. Expected: " + expectedChecksum + ", Actual: "
                                 + currentChecksum + ". Re-read the file to get the current checksum.")
                         .build();
             }
 
-            final var searchText = request.getSearchText();
-            if (searchText == null || searchText.isEmpty()) {
+            if (Strings.isNullOrEmpty(searchText)) {
                 return ToolIO.SearchReplaceResponse.builder()
                         .success(false)
                         .error("Search text cannot be empty.")
@@ -344,14 +359,13 @@ public class CoreToolBox implements ToolBox {
                         .build();
             }
 
-            final var replaceText = request.getReplaceText() != null ? request.getReplaceText() : "";
-            final var occurrence = request.getOccurrence();
+            final var replacement = replaceText != null ? replaceText : "";
             String newContent;
             int replacementCount;
 
             if (occurrence <= 0) {
                 // Replace all occurrences
-                newContent = content.replace(searchText, replaceText);
+                newContent = content.replace(searchText, replacement);
                 // Count occurrences
                 int count = 0;
                 int index = 0;
@@ -373,7 +387,7 @@ public class CoreToolBox implements ToolBox {
                                 .build();
                     }
                 }
-                newContent = content.substring(0, index) + replaceText
+                newContent = content.substring(0, index) + replacement
                         + content.substring(index + searchText.length());
                 replacementCount = 1;
             }
@@ -399,22 +413,25 @@ public class CoreToolBox implements ToolBox {
     }
 
     @Tool("Write content to a file. This will create the file if it doesn't exist, or overwrite it if it does.")
-    public ToolIO.WriteResponse write(ToolIO.WriteRequest request) {
-        log.info("Writing file: {}", request.getPath());
+    public ToolIO.WriteResponse write(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
+                                      @JsonPropertyDescription("The content to write to the file.") String content,
+                                      @JsonPropertyDescription("Reason for writing the file.") String requestReason) {
+        log.info("Writing file: {}", filePath);
         try {
-            final var path = Path.of(request.getPath());
+            final var path = Path.of(filePath);
             if (path.getParent() != null && !Files.exists(path.getParent())) {
                 Files.createDirectories(path.getParent());
             }
 
             Files.writeString(path,
-                              request.getContent(),
+                              content,
                               StandardOpenOption.CREATE,
                               StandardOpenOption.TRUNCATE_EXISTING);
-            final var checksum = calculateChecksum(request.getContent().getBytes(StandardCharsets.UTF_8));
+            final var bytes = content.getBytes(StandardCharsets.UTF_8);
+            final var checksum = calculateChecksum(bytes);
             return ToolIO.WriteResponse.builder()
                     .success(true)
-                    .bytesWritten(request.getContent().getBytes(StandardCharsets.UTF_8).length)
+                    .bytesWritten(bytes.length)
                     .checksum(checksum)
                     .build();
         }

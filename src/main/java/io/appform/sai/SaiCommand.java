@@ -163,7 +163,7 @@ public class SaiCommand implements Callable<Integer> {
                         .build())
                 .build()
                 .addMessageSelector(new RemoveAllToolCallsSelector());
-        final var agentFactory = new AgentFactory(
+        final var agentFactory = new AgentFactory(settings,
                                                   sessionExtension,
                                                   executorService,
                                                   modelProviderFactory,

@@ -35,6 +35,7 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.SaiAgent;
+import io.appform.sai.Settings;
 
 import java.nio.file.Paths;
 import java.util.List;
@@ -49,17 +50,18 @@ import okhttp3.OkHttpClient;
 public class AgentFactory {
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
-            You are a helpful assistant that provides information and answers questions based on the user's input. You can use the tools at your disposal to gather information and provide accurate responses. Always strive to be clear, concise, and helpful in your answers.
-            You can use /tmp/sai/< session id>/scrath/ directory to store any temporary files you need during the conversation.No need to clean up the files, they will be automatically deleted after the session ends.
-            If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
+            You are a helpful assistant that provides information and answers questions based on the user's input.
+            You can use the tools at your disposal to gather information and provide accurate responses.
+            Always strive to be clear, concise, and helpful in your answers.
+            Do not make up information. If you don't know the answer, say you don't know.
             """;
-
-    AgentExtension<String, String, SaiAgent> sessionExtension;
-    ExecutorService executorService;
-    ChatCompletionServiceFactory modelProviderFactory;
-    ObjectMapper mapper;
-    EventBus eventBus;
-    OkHttpClient httpClient;
+    private final Settings settings;
+    private final AgentExtension<String, String, SaiAgent> sessionExtension;
+    private final ExecutorService executorService;
+    private final ChatCompletionServiceFactory modelProviderFactory;
+    private final ObjectMapper mapper;
+    private final EventBus eventBus;
+    private final OkHttpClient httpClient;
 
     public SaiAgent createAgent(AgentConfig config) {
         final var modelName = Objects.requireNonNullElseGet(config.getModel(),
@@ -85,6 +87,8 @@ public class AgentFactory {
         final var cwdName = Paths.get("").toAbsolutePath().getFileName();
         final var cwd = "\nCurrent working directory: " + (cwdName != null ? cwdName.toString() : "/tmp") + "\n";
         final var saiAgent = new SaiAgent(config.getName(),
+                                          config,
+                                          settings,
                                           agentSetup,
                                           systemPrompt + cwd,
                                           List.of(sessionExtension),

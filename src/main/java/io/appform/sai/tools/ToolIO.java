@@ -27,19 +27,6 @@ import lombok.extern.jackson.Jacksonized;
 public class ToolIO {
 
     @Value
-    @JsonClassDescription("Input for the bash tool.")
-    @Builder
-    @Jacksonized
-    public static class BashRequest {
-        @JsonPropertyDescription("Reason for requesting the tool. This is shown to the user for informational purposes.")
-        String requestReason;
-        @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.")
-        String command;
-        @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes.")
-        int timeoutSeconds;
-    }
-
-    @Value
     @Builder
     @Jacksonized
     public static class BashResponse {
@@ -92,27 +79,6 @@ public class ToolIO {
         REPLACE,
         /** Delete lines from startLine to endLine (inclusive) */
         DELETE
-    }
-
-    @Value
-    @JsonClassDescription("Input for the line-based edit tool. Use this to insert, replace, or delete lines in a file.")
-    @Builder
-    @Jacksonized
-    public static class LineEditRequest {
-        @JsonPropertyDescription("The absolute path to the file to edit.")
-        String path;
-        @JsonPropertyDescription("The operation to perform: INSERT_BEFORE, INSERT_AFTER, REPLACE, or DELETE.")
-        LineEditOperation operation;
-        @JsonPropertyDescription("The starting line number (1-indexed). For INSERT_BEFORE/INSERT_AFTER, this is the reference line.")
-        int startLine;
-        @JsonPropertyDescription("The ending line number (1-indexed, inclusive). Only used for REPLACE and DELETE operations. If not specified, defaults to startLine.")
-        Integer endLine;
-        @JsonPropertyDescription("The content to insert or replace with. Not used for DELETE operation.")
-        String content;
-        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.")
-        String expectedChecksum;
-        @JsonPropertyDescription("Reason for editing the file.")
-        String requestReason;
     }
 
     @Value
@@ -185,19 +151,6 @@ public class ToolIO {
         int replacementCount;
         @JsonPropertyDescription("Error message if any.")
         String error;
-    }
-
-    @Value
-    @JsonClassDescription("Input for the write tool.")
-    @Builder
-    @Jacksonized
-    public static class WriteRequest {
-        @JsonPropertyDescription("The absolute path to the file to write.")
-        String path;
-        @JsonPropertyDescription("The content to write to the file.")
-        String content;
-        @JsonPropertyDescription("Reason for writing the file.")
-        String requestReason;
     }
 
     @Value

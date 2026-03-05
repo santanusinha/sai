@@ -34,25 +34,46 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
 
     private final String name;
 
+    private final AgentConfig config;
+
+    private final Settings settings;
+
     public SaiAgent(
                     final String name,
-
+                    final AgentConfig config,
+                    final Settings settings,
                     @NonNull AgentSetup setup,
                     final String systemPrompt,
                     List<AgentExtension<String, String, SaiAgent>> extensions,
                     Map<String, ExecutableTool> knownTools) {
         super(
               String.class,
-              systemPrompt,
+              augmentPrompt(systemPrompt, config, settings),
               setup,
               extensions,
               knownTools
         );
+        this.settings = settings;
+        this.config = config;
         this.name = name;
+    }
+
+    private static String augmentPrompt(String systemPrompt, final AgentConfig config, final Settings settings) {
+        return systemPrompt
+                + """
+                        Extra instructions to get your work done:
+
+                        - Your name is %s.
+                        - You can use /tmp/sai/< session id>/scrath/ directory to store any temporary files you need during the conversation.No need to clean up the files, they will be automatically deleted after the session ends.
+                        - If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
+                        - The current working directory is: %s
+                        """
+                        .formatted(config.getName(), settings.getWorkDir());
     }
 
     @Override
     public String name() {
         return name;
     }
+
 }

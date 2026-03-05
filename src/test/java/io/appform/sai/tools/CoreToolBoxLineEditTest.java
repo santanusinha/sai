@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.appform.sai.Printer;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +39,7 @@ class CoreToolBoxLineEditTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        coreToolBox = new CoreToolBox(null);
+        coreToolBox = new CoreToolBox((Printer) null);
         testFile = Files.createTempFile("line-edit-test-", ".txt");
     }
 
@@ -51,15 +53,13 @@ class CoreToolBoxLineEditTest {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(1)
-                .expectedChecksum("wrong-checksum")
-                .requestReason("Test checksum mismatch")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test checksum mismatch",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            1,
+                                            null,
+                                            null,
+                                            "wrong-checksum");
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("Checksum mismatch"));
@@ -71,16 +71,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(2)
-                .endLine(4)
-                .expectedChecksum(checksum)
-                .requestReason("Test delete multiple lines")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test delete multiple lines",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            2,
+                                            4,
+                                            null,
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nline5", Files.readString(testFile));
@@ -92,15 +89,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(2)
-                .expectedChecksum(checksum)
-                .requestReason("Test delete single line")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test delete single line",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            2,
+                                            null,
+                                            null,
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nline3", Files.readString(testFile));
@@ -112,16 +107,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(3)
-                .endLine(1)
-                .expectedChecksum(checksum)
-                .requestReason("Test end < start")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test end < start",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            3,
+                                            1,
+                                            null,
+                                            checksum);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("less than"));
@@ -129,15 +121,13 @@ class CoreToolBoxLineEditTest {
 
     @Test
     void testFileNotFound() {
-        var request = ToolIO.LineEditRequest.builder()
-                .path("/nonexistent/file.txt")
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(1)
-                .expectedChecksum("any")
-                .requestReason("Test file not found")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test file not found",
+                                            "/nonexistent/file.txt",
+                                            ToolIO.LineEditOperation.DELETE,
+                                            1,
+                                            null,
+                                            null,
+                                            "any");
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("not found"));
@@ -149,16 +139,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.INSERT_AFTER)
-                .startLine(2)
-                .content("inserted line")
-                .expectedChecksum(checksum)
-                .requestReason("Test insert after")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test insert after",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.INSERT_AFTER,
+                                            2,
+                                            null,
+                                            "inserted line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nline2\ninserted line\nline3", Files.readString(testFile));
@@ -170,16 +157,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.INSERT_AFTER)
-                .startLine(2)
-                .content("new last line")
-                .expectedChecksum(checksum)
-                .requestReason("Test insert after last line")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test insert after last line",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.INSERT_AFTER,
+                                            2,
+                                            null,
+                                            "new last line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nline2\nnew last line", Files.readString(testFile));
@@ -191,16 +175,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.INSERT_BEFORE)
-                .startLine(2)
-                .content("inserted line")
-                .expectedChecksum(checksum)
-                .requestReason("Test insert before")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test insert before",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.INSERT_BEFORE,
+                                            2,
+                                            null,
+                                            "inserted line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\ninserted line\nline2\nline3", Files.readString(testFile));
@@ -212,16 +193,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.INSERT_BEFORE)
-                .startLine(1)
-                .content("new first line")
-                .expectedChecksum(checksum)
-                .requestReason("Test insert before first line")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test insert before first line",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.INSERT_BEFORE,
+                                            1,
+                                            null,
+                                            "new first line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("new first line\nline1\nline2", Files.readString(testFile));
@@ -233,16 +211,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.INSERT_AFTER)
-                .startLine(1)
-                .content("line2a\nline2b")
-                .expectedChecksum(checksum)
-                .requestReason("Test insert multiple lines")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test insert multiple lines",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.INSERT_AFTER,
+                                            1,
+                                            null,
+                                            "line2a\nline2b",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nline2a\nline2b\nline3", Files.readString(testFile));
@@ -254,15 +229,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(0)  // Invalid - should be >= 1
-                .expectedChecksum(checksum)
-                .requestReason("Test invalid line number")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test invalid line number",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            0,
+                                            null,
+                                            null,
+                                            checksum);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains(">= 1"));
@@ -274,15 +247,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.DELETE)
-                .startLine(10)
-                .expectedChecksum(checksum)
-                .requestReason("Test out of bounds")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test out of bounds",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.DELETE,
+                                            10,
+                                            null,
+                                            null,
+                                            checksum);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("beyond"));
@@ -294,17 +265,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.REPLACE)
-                .startLine(2)
-                .endLine(4)
-                .content("new line")
-                .expectedChecksum(checksum)
-                .requestReason("Test replace multiple lines with single")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test replace multiple lines with single",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.REPLACE,
+                                            2,
+                                            4,
+                                            "new line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nnew line\nline5", Files.readString(testFile));
@@ -316,16 +283,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.REPLACE)
-                .startLine(2)
-                .content("new line")
-                .expectedChecksum(checksum)
-                .requestReason("Test replace single line")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test replace single line",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.REPLACE,
+                                            2,
+                                            null,
+                                            "new line",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nnew line\nline3", Files.readString(testFile));
@@ -337,16 +301,13 @@ class CoreToolBoxLineEditTest {
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
 
-        var request = ToolIO.LineEditRequest.builder()
-                .path(testFile.toAbsolutePath().toString())
-                .operation(ToolIO.LineEditOperation.REPLACE)
-                .startLine(2)
-                .content("new1\nnew2\nnew3")
-                .expectedChecksum(checksum)
-                .requestReason("Test replace single line with multiple")
-                .build();
-
-        var response = coreToolBox.lineEdit(request);
+        var response = coreToolBox.lineEdit("Test replace single line with multiple",
+                                            testFile.toAbsolutePath().toString(),
+                                            ToolIO.LineEditOperation.REPLACE,
+                                            2,
+                                            null,
+                                            "new1\nnew2\nnew3",
+                                            checksum);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nnew1\nnew2\nnew3\nline3", Files.readString(testFile));
