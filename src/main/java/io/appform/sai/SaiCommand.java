@@ -42,6 +42,8 @@ import io.appform.sai.tools.CoreToolBox;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -52,6 +54,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -124,22 +127,36 @@ public class SaiCommand implements Callable<Integer> {
                 .orElseThrow(() -> new IllegalArgumentException("MODEL_PROVIDER environment variable is required to specify the model provider to use. Supported values are 'azure', 'openai' and 'copilot-proxy'"));
         final var modelProviderFactory = new ConfigurableDefaultChatCompletionFactory(provider, mapper, okHttpClient);
 
+        // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
+        // read all of System.in now and treat it as a single-shot input — identical to --input.
+        final var pipedInput = (System.console() == null && Strings.isNullOrEmpty(input))
+                ? new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
+                        .lines()
+                        .collect(Collectors.joining("\n"))
+                        .strip()
+                : null;
+        // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
+        final var effectiveInput = !Strings.isNullOrEmpty(input) ? resolveInput(input)
+                : !Strings.isNullOrEmpty(pipedInput) ? pipedInput
+                : null;
+
         final var settingsBuilder = Settings.builder()
                 .sessionId(effectiveSessionId)
                 .debug(debug)
-                .headless(headless || (!Strings.isNullOrEmpty(input)))
+                .headless(headless || !Strings.isNullOrEmpty(effectiveInput))
                 .noSession(!sessionIdProvided);
         if (!Strings.isNullOrEmpty(configDir)) {
             settingsBuilder.configDir(configDir);
         }
-        if (Strings.isNullOrEmpty(input)) {
+        if (Strings.isNullOrEmpty(effectiveInput)) {
             if (!Strings.isNullOrEmpty(dataDir)) {
                 settingsBuilder.dataDir(dataDir);
             }
         }
         else {
-            // If input is provided, we don't care about session persistence, so we can skip setting up data dir
-            // However we do care about compaction etc so we provide the session extension a temporary directory
+            // If input is provided (via --input or piped stdin), we don't care about session persistence,
+            // so we can skip setting up data dir. However we do care about compaction etc so we provide
+            // the session extension a temporary directory
             final var tempDataDir = Files.createTempDirectory("sai-data-")
                     .toAbsolutePath()
                     .normalize()
@@ -231,7 +248,7 @@ public class SaiCommand implements Callable<Integer> {
                     });
                 }
 
-                var userInput = Strings.isNullOrEmpty(input) ? null : resolveInput(input);
+                var userInput = effectiveInput;
                 final var cliCommandRegistry = new CliCommandRegistry();
                 while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
                     if (Strings.isNullOrEmpty(userInput)) {
@@ -240,7 +257,7 @@ public class SaiCommand implements Callable<Integer> {
                     else {
                         // Check for client-side CLI commands (e.g. ! for shell) before forwarding to agent
                         if (cliCommandRegistry.tryHandle(userInput, printer)) {
-                            userInput = !Strings.isNullOrEmpty(input) ? "exit" : null;
+                            userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                             continue;
                         }
                         final var command = CommandProcessor.Command.builder()
@@ -252,7 +269,7 @@ public class SaiCommand implements Callable<Integer> {
                             commandProcessor.handle(command);
                         }
                         finally {
-                            userInput = !Strings.isNullOrEmpty(input) ? "exit" : null;
+                            userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                         }
                     }
                 }

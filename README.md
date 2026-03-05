@@ -154,6 +154,12 @@ Headless mode reading from stdin (process each line until EOF or `exit`):
 echo "What can you do?" | java -jar target/sai-1.0-SNAPSHOT.jar --headless
 ```
 
+Pipe input directly without any flags (stdin is detected automatically):
+
+```bash
+echo "Summarize this repo" | java -jar target/sai-1.0-SNAPSHOT.jar
+```
+
 Override the data directory:
 
 ```bash
@@ -270,6 +276,11 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar --headless < prompts.txt
   ```
 
+- Single-shot via pipe (no flags needed — stdin piped automatically):
+  ```bash
+  echo "List the key modules in this repo" | java -jar target/sai-1.0-SNAPSHOT.jar
+  ```
+
 - List sessions:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar list
@@ -289,6 +300,7 @@ Subcommands:
 - You can override the data directory with `--data-dir`.
 - You can override the config directory with `--config-dir`.
 - When using `--input`, the agent runs a one-off request and exits; session persistence is not enabled for this mode.
+- When stdin is piped (e.g. `echo "..." | sai`), the piped content is automatically read and treated as a single-shot `--input`; no flags are required.
 - In `--headless` mode without `--input`, input is read line-by-line from stdin until EOF or `exit`.
 
 ## Security and privacy
