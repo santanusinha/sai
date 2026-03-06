@@ -290,6 +290,9 @@ public class SaiCommand implements Callable<Integer> {
                         }
                     }
                 }
+                if (!settings.isHeadless() && !Strings.isNullOrEmpty(userInput) && userInput.equalsIgnoreCase("exit")) {
+                    printer.print(Printer.systemMessage("Resume: -s %s".formatted(effectiveSessionId)));
+                }
             }
         }
         catch (Exception e) {
