@@ -21,6 +21,7 @@ import io.appform.sai.models.Severity;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedString;
@@ -126,14 +127,28 @@ public class Printer implements AutoCloseable {
         }
         this.terminal = terminalBuilder.build();
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
-                                                        () -> LineReaderBuilder
-                                                                .builder()
-                                                                .terminal(terminal)
-                                                                .appName(settings
-                                                                        .getAppName())
-                                                                .option(Option.ERASE_LINE_ON_FINISH,
-                                                                        true)
-                                                                .build());
+                                                        () -> {
+                                                            DefaultParser parser = new DefaultParser();
+                                                            parser.setQuoteChars(new char[]{
+                                                                    '\''
+                                                            });
+                                                            parser.setEscapeChars(new char[]{
+                                                                    '\\'
+                                                            });
+                                                            parser.setEofOnUnclosedBracket(DefaultParser.Bracket.CURLY,
+                                                                                           DefaultParser.Bracket.ROUND,
+                                                                                           DefaultParser.Bracket.SQUARE);
+                                                            parser.setEofOnEscapedNewLine(true);
+                                                            return LineReaderBuilder
+                                                                    .builder()
+                                                                    .terminal(terminal)
+                                                                    .appName(settings
+                                                                            .getAppName())
+                                                                    .parser(parser)
+                                                                    .option(Option.ERASE_LINE_ON_FINISH,
+                                                                            true)
+                                                                    .build();
+                                                        });
         this.status = Status.getStatus(terminal);
     }
 
