@@ -218,25 +218,12 @@ Sai AI Agent
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
-Commands:
-  list    List available sessions
-  delete  Delete a session
+Commands:\n  list           List available sessions\n  summary        Show detailed summary for a session\n  prune-sessions Prune older sessions based on duration (e.g., 1d)\n  delete         Delete a session
 ```
 
 Subcommands:
 
-- list
-  ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar list
-  ```
-  Lists sessions found under the configured data directory. Honors `--data-dir` when provided.
-
-- delete
-  ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar delete <session-id>
-  ```
-  Deletes a session directory by ID. Honors `--data-dir` when provided.
-
+- list-sessions\n  ```bash\n  java -jar target/sai-1.0-SNAPSHOT.jar list-sessions-sessions\n  ```\n  Lists sessions found under the configured data directory. Honors `--data-dir` when provided.\n\n- summary\n  ```bash\n  java -jar target/sai-1.0-SNAPSHOT.jar summary <session-id>\n  ```\n  Shows a detailed summary for a specific session. Honors `--data-dir` when provided.\n\n- prune-sessions\n  ```bash\n  java -jar target/sai-1.0-SNAPSHOT.jar prune-sessions 1d\n  ```\n  Prunes older sessions based on duration (e.g., 1d, 3h, 30m). Honors `--data-dir` when provided.\n\n- delete-sessions\n  ```bash\n  java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions <session-id>\n  ```\n  Deletes a session directory by ID. Honors `--data-dir` when provided.
 ## Examples
 
 - Start a new interactive session:
@@ -283,12 +270,12 @@ Subcommands:
 
 - List sessions:
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar list
+  java -jar target/sai-1.0-SNAPSHOT.jar list-sessions
   ```
 
 - Delete a session:
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar delete 2f1e4f7a-...-a1b2
+  java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions 2f1e4f7a-...-a1b2
   ```
 
 ## Data and Sessions

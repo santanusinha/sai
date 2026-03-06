@@ -1,6 +1,7 @@
 agentId: sai-agent
 name: Sai Agent
 description: Default helpful CLI assistant persona for SAI.
+model: gemini-3.1-pro-preview
 modelSettings:
   temperature: 1
 prompt: |

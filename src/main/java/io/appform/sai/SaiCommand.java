@@ -32,8 +32,9 @@ import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
-import io.appform.sai.commands.DeleteCommand;
-import io.appform.sai.commands.ListCommand;
+import io.appform.sai.commands.DeleteSessionsCommand;
+import io.appform.sai.commands.ListSessionsCommand;
+import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
@@ -66,11 +67,12 @@ import picocli.CommandLine.Option;
 @Slf4j
 @Getter
 @Command(name = "sai", mixinStandardHelpOptions = true, version = "1.0", description = "Sai AI Agent", subcommands = {
-        ListCommand.class,
-        DeleteCommand.class
+        ListSessionsCommand.class,
+        DeleteSessionsCommand.class,
+        PruneSessionsCommand.class,
+        io.appform.sai.commands.SummaryCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
-
     @Option(names = {
             "-s", "--session-id"
     }, description = "Resume a specific session")

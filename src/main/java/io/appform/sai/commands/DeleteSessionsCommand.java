@@ -33,9 +33,9 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
 @Slf4j
-@Command(name = "delete", description = "Delete a session")
+@Command(name = "delete-sessions", description = "Delete a session")
 @SuppressWarnings("java:S106")
-public class DeleteCommand implements Callable<Integer> {
+public class DeleteSessionsCommand implements Callable<Integer> {
 
     @ParentCommand
     private SaiCommand parent;

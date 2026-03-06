@@ -37,9 +37,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.ParentCommand;
 
 @Slf4j
-@Command(name = "list", description = "List available sessions")
+@Command(name = "list-sessions", description = "List available sessions")
 @SuppressWarnings("java:S106")
-public class ListCommand implements Callable<Integer> {
+public class ListSessionsCommand implements Callable<Integer> {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
