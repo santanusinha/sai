@@ -33,6 +33,7 @@ import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
 import io.appform.sai.commands.DeleteSessionsCommand;
+import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
@@ -70,6 +71,7 @@ import picocli.CommandLine.Option;
         ListSessionsCommand.class,
         DeleteSessionsCommand.class,
         PruneSessionsCommand.class,
+        ExportSessionCommand.class,
         io.appform.sai.commands.SummaryCommand.class
 })
 public class SaiCommand implements Callable<Integer> {

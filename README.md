@@ -219,10 +219,11 @@ Sai AI Agent
                              Resume a specific session
   -V, --version              Print version information and exit.
 Commands:
-  list-sessions  List available sessions
-  summary        Show detailed summary for a session
-  prune-sessions Prune older sessions based on duration (e.g., 1d)
-  delete-sessions Delete a session
+  list-sessions    List available sessions
+  summary          Show detailed summary for a session
+  prune-sessions   Prune older sessions based on duration (e.g., 1d)
+  delete-sessions  Delete a session
+  export-session   Export a session to a markdown file
 ```
 
 Subcommands:
@@ -250,6 +251,12 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions <session-id>
   ```
   Deletes a session directory by ID. Honors `--data-dir` when provided.
+
+- export-session
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session <session-id> [output-file]
+  ```
+  Exports a session to a markdown file. If no output file is specified, the markdown is printed to stdout. Honors `--data-dir` when provided.
 
 ## Examples
 
@@ -303,6 +310,15 @@ Subcommands:
 - Delete a session:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions 2f1e4f7a-...-a1b2
+  ```
+
+- Export a session to markdown:
+  ```bash
+  # Print to stdout
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session 2f1e4f7a-...-a1b2
+  
+  # Export to a file
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session 2f1e4f7a-...-a1b2 session.md
   ```
 
 ## Data and Sessions
