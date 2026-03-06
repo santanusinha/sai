@@ -18,6 +18,7 @@ package io.appform.sai;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 
+import org.jline.builtins.Completers.FileNameCompleter;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
@@ -144,6 +145,7 @@ public class Printer implements AutoCloseable {
                                                                     .terminal(terminal)
                                                                     .appName(settings.getAppName())
                                                                     .parser(parser)
+                                                                    .completer(new FileNameCompleter())
                                                                     .variable(LineReader.SECONDARY_PROMPT_PATTERN,
                                                                               Colours.GRAY + "- " + Colours.RESET)
                                                                     .option(Option.ERASE_LINE_ON_FINISH, true)

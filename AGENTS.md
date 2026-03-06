@@ -46,10 +46,10 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 
 ```bash
 # Build shaded JAR
-mvn clean package
+mvn -Dspotless.skip=true clean package
 
 # Run tests
-mvn test
+mvn -Dspotless.skip=true test
 
 # Format code (required before commits)
 mvn spotless:apply
