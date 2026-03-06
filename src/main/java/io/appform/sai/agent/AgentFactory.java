@@ -36,7 +36,12 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 import io.appform.sai.AgentConfig;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
+import io.appform.sai.skills.AgentSkillsExtension;
+import io.appform.sai.skills.SkillRegistry;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +49,10 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 
+@Slf4j
 @AllArgsConstructor
 public class AgentFactory {
 
@@ -96,6 +103,82 @@ public class AgentFactory {
         registerMCPTools(saiAgent, config);
         registerHttpTools(saiAgent, config);
         return saiAgent;
+    }
+
+    /**
+     * Register skills extension in multi-skill mode (from AgentConfig)
+     */
+    public void registerSkillsExtension(SaiAgent agent, AgentConfig config, Settings settings)
+            throws IOException {
+        final var skillDirs = config.getSkillDirectories();
+        if (skillDirs == null || skillDirs.isEmpty()) {
+            return;
+        }
+
+        registerSkillsExtension(agent, skillDirs, config.getSkillNames(), settings);
+    }
+
+    /**
+     * Register skills extension with specific directories and optional name filter
+     */
+    public void registerSkillsExtension(
+                                        SaiAgent agent,
+                                        List<String> skillDirectories,
+                                        List<String> skillNames,
+                                        Settings settings) throws IOException {
+
+        final var registry = new SkillRegistry(mapper);
+
+        // Discover skills from all configured directories
+        for (String dirPath : skillDirectories) {
+            Path skillsDir = Paths.get(dirPath);
+            if (!skillsDir.isAbsolute()) {
+                // Resolve relative paths from config directory
+                skillsDir = Paths.get(settings.getConfigDir(), dirPath);
+            }
+
+            if (Files.isDirectory(skillsDir)) {
+                registry.discoverSkills(skillsDir);
+            }
+            else {
+                log.warn("Skills directory does not exist: {}", skillsDir);
+            }
+        }
+
+        // If specific skill names are configured, pre-load them
+        if (skillNames != null && !skillNames.isEmpty()) {
+            for (String skillName : skillNames) {
+                registry.loadSkill(skillName)
+                        .ifPresent(skill -> log.info("Pre-loaded skill: {}", skillName));
+            }
+        }
+
+        final var extension = AgentSkillsExtension.builder()
+                .registry(registry)
+                .mapper(mapper)
+                .singleSkillMode(false)
+                .build();
+
+        agent.registerToolbox(extension);
+        log.info("Registered skills extension with {} skills", registry.getSkillNames().size());
+    }
+
+    /**
+     * Register skills extension in single-skill mode (for --skill CLI option)
+     */
+    public void registerSkillsExtension(SaiAgent agent, Path skillPath, boolean singleSkillMode)
+            throws IOException {
+        final var registry = new SkillRegistry(mapper);
+        registry.loadSkillFromPath(skillPath);
+
+        final var extension = AgentSkillsExtension.builder()
+                .registry(registry)
+                .mapper(mapper)
+                .singleSkillMode(true)
+                .build();
+
+        agent.registerToolbox(extension);
+        log.info("Registered single skill from: {}", skillPath);
     }
 
     private TemplatizedHttpTool createTool(ConfiguredHttpTool tool) {

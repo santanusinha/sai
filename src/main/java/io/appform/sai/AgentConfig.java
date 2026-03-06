@@ -21,6 +21,7 @@ import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.toolbox.mcp.config.MCPConfiguration;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders;
 
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -72,4 +73,16 @@ public class AgentConfig {
     MCPConfiguration mcp;
 
     Map<String, HttpToolReaders.ConfiguredUpstream> httpTools;
+
+    /**
+     * Skills configuration: directories to load skills from
+     */
+    @Nullable
+    List<String> skillDirectories;
+
+    /**
+     * Skills configuration: specific skill names to load (if null, load all)
+     */
+    @Nullable
+    List<String> skillNames;
 }

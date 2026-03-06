@@ -193,6 +193,90 @@ Prefix any shell command with `!` to run it in your current environment without 
 
 Standard output is printed on success; the exit code and stderr are shown on failure.
 
+## Agent Skills
+
+SAI supports Agent Skills, a standard format for extending AI agent capabilities with specialized knowledge and workflows. Skills are discovered and loaded on-demand following a progressive disclosure pattern.
+
+### What are Skills?
+
+Skills are folders containing a `SKILL.md` file with YAML frontmatter and Markdown instructions. Each skill teaches the agent how to perform a specific task.
+
+```
+my-skill/
+├── SKILL.md          # Required: instructions + metadata
+├── scripts/          # Optional: executable code
+├── references/       # Optional: documentation
+└── assets/           # Optional: templates, resources
+```
+
+### Using Skills
+
+**Default behavior**: SAI automatically discovers skills from `~/.config/sai/skills/`
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar
+```
+
+**Single skill mode**: Load a specific skill directly
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --skill /path/to/skill-directory
+```
+
+In single-skill mode, the skill's instructions are injected directly into the agent's context without requiring activation.
+
+### Configuring Skills in Personas
+
+You can configure skills in your persona YAML files:
+
+```yaml
+agentId: code-reviewer
+name: Code Reviewer
+description: Reviews code with specialized skills
+skillDirectories:
+  - skills
+  - /path/to/custom/skills
+skillNames:
+  - code-review
+  - security-audit
+```
+
+- `skillDirectories`: List of directories to scan for skills (relative to config dir or absolute)
+- `skillNames`: Optional list of specific skills to pre-load (if omitted, discovers all)
+
+### How Skills Work
+
+1. **Discovery** (Tier 1): At startup, SAI scans configured directories and loads skill metadata (name + description only)
+2. **Activation** (Tier 2): When relevant, use the `activate_skill` tool to load full instructions
+3. **Execution** (Tier 3): Follow skill instructions, optionally loading reference files with `read_skill_reference`
+
+### Available Tools
+
+When skills are enabled (not in single-skill mode), the following tools are available:
+
+- `list_skills`: Show all discovered skills
+- `activate_skill`: Load a skill's full instructions
+- `read_skill_reference`: Read a reference file from an activated skill
+
+### Creating Skills
+
+Create a directory with a `SKILL.md` file:
+
+```markdown
+---
+name: my-skill
+description: What this skill does and when to use it
+---
+
+# My Skill
+
+## Instructions
+
+Step-by-step instructions for the agent to follow...
+```
+
+See the [Agent Skills specification](https://agentskills.io/specification) for complete format details.
+
 ## CLI Reference
 
 Help output:

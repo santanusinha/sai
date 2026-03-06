@@ -67,8 +67,8 @@ public class ListSessionsCommand implements Callable<Integer> {
                                                             mapper,
                                                             1);
 
-        // Fetch sessions (adjust count as needed, or add a limit option)
-        final var sessionsScrollable = sessionStore.sessions(100, null, QueryDirection.NEWER);
+        // Fetch all sessions, oldest first
+        final var sessionsScrollable = sessionStore.sessions(Integer.MAX_VALUE, null, QueryDirection.NEWER);
         final var sessions = sessionsScrollable.getItems();
 
         if (sessions.isEmpty()) {

@@ -22,6 +22,7 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │   │   ├── commands/  # CLI subcommands (list, delete sessions)
     │   │   ├── config/    # Persona/config file loaders
     │   │   ├── models/    # Data models (Session, Actor, Severity)
+    │   │   ├── skills/    # Agent Skills extension
     │   │   └── tools/     # Tool implementations (Bash, CoreToolBox)
     │   └── resources/     # Logging config (logback.xml)
     └── test/
@@ -41,6 +42,30 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 - **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
 - **Session storage**: File-system backed in user's local state directory
 - **Personas**: YAML/JSON config files loaded by `AgentConfigLoader`
+
+## Agent Skills
+
+SAI supports the [Agent Skills specification](https://agentskills.io/specification) for extending agent capabilities.
+
+**Key files:**
+- `skills/AgentSkillsExtension.java` → Extension implementation
+- `skills/SkillRegistry.java` → Skill discovery and loading
+- `skills/SkillParser.java` → SKILL.md parser
+- `skills/AgentSkill.java`, `skills/SkillMetadata.java` → Data models
+
+**Integration points:**
+- `AgentFactory.registerSkillsExtension()` → Register with agent
+- `AgentConfig.skillDirectories`, `skillNames` → Configuration
+- `SaiCommand.--skill` → Single-skill CLI mode
+
+**Progressive disclosure:**
+1. Discovery: Load metadata only (name + description)
+2. Activation: Load full SKILL.md via `activate_skill` tool
+3. Execution: Load resources via `read_skill_reference` tool
+
+**Modes:**
+- **Multi-skill mode**: Skills discovered from directories, activated on-demand via tools
+- **Single-skill mode**: One skill loaded directly from `--skill` flag, injected into facts, no tools
 
 ## Build and Test
 

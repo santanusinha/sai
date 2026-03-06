@@ -49,6 +49,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -107,6 +108,11 @@ public class SaiCommand implements Callable<Integer> {
             "-p", "--persona"
     }, description = "Path to AgentConfig persona file (.yaml/.yml/.json)")
     private String persona;
+
+    @Option(names = {
+            "--skill"
+    }, description = "Path to a single skill directory to load. When specified, only this skill is loaded and skill discovery is disabled.")
+    private String skill;
 
     @Override
     @SuppressWarnings("java:S106")
@@ -215,6 +221,52 @@ public class SaiCommand implements Callable<Integer> {
             return 1;
         }
         final var agent = agentFactory.createAgent(agentConfig);
+
+        // Setup skills if configured
+        if (!Strings.isNullOrEmpty(skill)) {
+            // Single skill mode: load one skill directly
+            final var skillPath = Paths.get(skill);
+            if (!Files.isDirectory(skillPath)) {
+                log.error("Skill path is not a directory: {}", skill);
+                System.err.println("Error: --skill must point to a skill directory containing SKILL.md");
+                return 1;
+            }
+            try {
+                agentFactory.registerSkillsExtension(agent, skillPath, true);
+            }
+            catch (Exception e) {
+                log.error("Failed to load skill: {}", skill, e);
+                System.err.println("Error: Failed to load skill from " + skill + ": " + e.getMessage());
+                return 1;
+            }
+        }
+        else if (agentConfig.getSkillDirectories() != null && !agentConfig.getSkillDirectories().isEmpty()) {
+            // Multi-skill mode: discover skills from configured directories
+            try {
+                agentFactory.registerSkillsExtension(agent, agentConfig, settings);
+            }
+            catch (Exception e) {
+                log.error("Failed to setup skills", e);
+                // Don't fail the agent startup, just warn
+                System.err.println("Warning: Failed to setup skills: " + e.getMessage());
+            }
+        }
+        else {
+            // Default: try to discover skills from default location
+            final var defaultSkillsDir = Paths.get(settings.getConfigDir(), "skills");
+            if (Files.isDirectory(defaultSkillsDir)) {
+                try {
+                    agentFactory.registerSkillsExtension(
+                                                         agent,
+                                                         List.of(defaultSkillsDir.toString()),
+                                                         null,
+                                                         settings);
+                }
+                catch (Exception e) {
+                    log.warn("Failed to load skills from default directory: {}", e.getMessage());
+                }
+            }
+        }
 
         try (final var printer = Printer.builder()
                 .settings(settings)
