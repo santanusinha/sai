@@ -142,11 +142,11 @@ public class Printer implements AutoCloseable {
                                                             return LineReaderBuilder
                                                                     .builder()
                                                                     .terminal(terminal)
-                                                                    .appName(settings
-                                                                            .getAppName())
+                                                                    .appName(settings.getAppName())
                                                                     .parser(parser)
-                                                                    .option(Option.ERASE_LINE_ON_FINISH,
-                                                                            true)
+                                                                    .variable(LineReader.SECONDARY_PROMPT_PATTERN,
+                                                                              Colours.GRAY + "- " + Colours.RESET)
+                                                                    .option(Option.ERASE_LINE_ON_FINISH, true)
                                                                     .build();
                                                         });
         this.status = Status.getStatus(terminal);
