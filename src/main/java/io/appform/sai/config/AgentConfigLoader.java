@@ -18,6 +18,7 @@ package io.appform.sai.config;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.google.common.base.Strings;
 
 import io.appform.sai.AgentConfig;
 
@@ -82,7 +83,7 @@ public final class AgentConfigLoader {
      * @throws IllegalArgumentException if the persona file cannot be found
      */
     public static Path resolvePersonaPath(String persona, String configDir) {
-        if (persona == null || persona.isBlank()) {
+        if (Strings.isNullOrEmpty(persona)) {
             throw new IllegalArgumentException("Persona path is required");
         }
 
@@ -97,7 +98,7 @@ public final class AgentConfigLoader {
         }
 
         // 3. Simple name - look in {configDir}/persona/
-        Path personaDir = Paths.get(configDir, "persona");
+        final var personaDir = Paths.get(configDir, "persona");
         for (String ext : SUPPORTED_EXTENSIONS) {
             Path candidate = personaDir.resolve(persona + ext);
             if (Files.exists(candidate)) {
@@ -106,13 +107,12 @@ public final class AgentConfigLoader {
         }
 
         // If no extension matched, check if persona has an extension already
-        Path directPath = personaDir.resolve(persona);
+        final var directPath = personaDir.resolve(persona);
         if (Files.exists(directPath)) {
             return directPath;
         }
 
-        throw new IllegalArgumentException(
-                                           "Persona '" + persona + "' not found. Looked in: " + personaDir
-                                                   + " with extensions: " + SUPPORTED_EXTENSIONS);
+        throw new IllegalArgumentException("Persona '" + persona + "' not found. Looked in: " + personaDir
+                + " with extensions: " + SUPPORTED_EXTENSIONS);
     }
 }

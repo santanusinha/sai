@@ -34,10 +34,6 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
 
     private final String name;
 
-    private final AgentConfig config;
-
-    private final Settings settings;
-
     public SaiAgent(
                     final String name,
                     final AgentConfig config,
@@ -53,8 +49,6 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
               extensions,
               knownTools
         );
-        this.settings = settings;
-        this.config = config;
         this.name = name;
     }
 

@@ -34,7 +34,7 @@ import okhttp3.OkHttpClient;
 
 @Slf4j
 @AllArgsConstructor(access = AccessLevel.PUBLIC)
-public class ConfigurableDefaultChatCompletionFactory implements ChatCompletionServiceFactory {
+public class ConfigurableProviderFactory implements ChatCompletionServiceFactory {
     private static final RetryConfig RETRY_CONFIG = RetryConfig.builder()
             .maxAttempts(1) // disabling implicit retries by default for tests
             .build();
@@ -53,6 +53,7 @@ public class ConfigurableDefaultChatCompletionFactory implements ChatCompletionS
     @Override
     public ChatCompletionServices get(String modelName) {
         return switch (provider) {
+
             case Providers.AZURE -> azureModel(modelName);
             case Providers.OPENAI -> openAIModel(modelName);
             case Providers.COPILOT_PROXY -> copilotProxyModel(modelName);
@@ -78,18 +79,13 @@ public class ConfigurableDefaultChatCompletionFactory implements ChatCompletionS
 
     private ChatCompletionServices copilotProxyModel(String modelName) {
         log.debug("Creating Copilot Proxy ChatCompletionServices for model: {}", modelName);
-        // final var endpoint = readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
-        final var endpoint = readEnv("COPILOT_PROXY_ENDPOINT",
-                                     "Set COPILOT_PROXY_ENDPOINT environment variable to the URL of your Copilot Proxy instance");
-        final var apiKey = readEnv("COPILOT_PAT", "COPILOT_PAT environment variable must be set");
+        final var endpoint = EnvLoader.readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
         return GithubCopilot.builder()
-                .apiKey(apiKey)
                 .objectMapper(mapper)
                 .clientAdapter(new OkHttpClientAdapter(okHttpClient))
                 .baseUrl(endpoint)
                 .retryConfig(RETRY_CONFIG)
                 .build();
-
     }
 
     private ChatCompletionServices openAIModel(String modelName) {

@@ -22,7 +22,6 @@ import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
-import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
@@ -63,9 +62,7 @@ public class AgentFactory {
     private final EventBus eventBus;
     private final OkHttpClient httpClient;
 
-    public SaiAgent createAgent(AgentConfig config) {
-        final var modelName = Objects.requireNonNullElseGet(config.getModel(),
-                                                            () -> EnvLoader.readEnv("MODEL", "gemini-3-pro-preview"));
+    public SaiAgent createAgent(String modelName, AgentConfig config) {
         final var modelSettings = Objects.requireNonNullElseGet(config.getModelSettings(),
                                                                 this::defaultModelSettings)
                 .withParallelToolCalls(false); //To keep context usage and console output sane

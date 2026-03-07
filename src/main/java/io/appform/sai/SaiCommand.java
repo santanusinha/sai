@@ -16,14 +16,15 @@
 package io.appform.sai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.events.EventBus;
-import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
+import com.phonepe.sentinelai.session.SessionSummary;
 import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelector;
 
 import io.appform.sai.CommandProcessor.CommandType;
@@ -110,6 +111,11 @@ public class SaiCommand implements Callable<Integer> {
     }, description = "Path to AgentConfig persona file (.yaml/.yml/.json)")
     private String persona;
 
+    @Option(names = {
+            "-m", "--model"
+    }, description = "Model to use, in the format 'provider/model' (e.g. 'copilot-proxy/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
+    private String model;
+
     @Override
     @SuppressWarnings("java:S106")
     public Integer call() throws Exception {
@@ -126,11 +132,6 @@ public class SaiCommand implements Callable<Integer> {
                 .callTimeout(Duration.ofSeconds(300))
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
-
-        final var provider = EnvLoader.readEnv("MODEL_PROVIDER")
-                .orElseThrow(() -> new IllegalArgumentException("MODEL_PROVIDER environment variable is required to specify the model provider to use. Supported values are 'azure', 'openai' and 'copilot-proxy'"));
-        final var modelProviderFactory = new ConfigurableDefaultChatCompletionFactory(provider, mapper, okHttpClient);
-
         // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
         // read all of System.in now and treat it as a single-shot input — identical to --input.
         // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
@@ -148,7 +149,7 @@ public class SaiCommand implements Callable<Integer> {
                         .strip();
             }
             catch (java.io.IOException e) {
-                throw new RuntimeException("Failed to read from standard input", e);
+                throw new IllegalStateException("Failed to read from standard input", e);
             }
         }
         else {
@@ -191,7 +192,34 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
+        final AgentConfig agentConfig;
+        try {
+            agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
+        }
+        catch (Exception e) {
+            log.error("Error loading persona: {}", persona, e);
+            System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
+            return 1;
+        }
+        final var modelPointer = Strings.isNullOrEmpty(model)
+                ? agentConfig.getModel()
+                : model;
+        final var parts = modelPointer.split("/");
+        Preconditions.checkArgument(parts.length == 2,
+                                    "Model name must be in the format 'provider/model'. Provided: " + modelPointer);
+        final var provider = parts[0].toLowerCase();
+        final var modelName = parts[1];
+        log.info("Using model provider: {}, model name: {}", provider, modelName);
+        final var modelProviderFactory = new ConfigurableProviderFactory(provider, mapper, okHttpClient);
+
         final var sessionStore = new FileSystemSessionStore(sessionDataPath.toString(), mapper, 1);
+        if (settings.isNoSession()) {
+            sessionStore.saveSession(SessionSummary.builder()
+                    .sessionId(effectiveSessionId)
+                    .title("Temporary session for single input execution")
+                    .updatedAt(System.currentTimeMillis())
+                    .build());
+        }
         final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
                 .sessionStore(sessionStore)
                 .mapper(mapper)
@@ -207,16 +235,7 @@ public class SaiCommand implements Callable<Integer> {
                                                   mapper,
                                                   eventBus,
                                                   okHttpClient);
-        final AgentConfig agentConfig;
-        try {
-            agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
-        }
-        catch (Exception e) {
-            log.error("Error loading persona: {}", persona, e);
-            System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
-            return 1;
-        }
-        final var agent = agentFactory.createAgent(agentConfig);
+        final var agent = agentFactory.createAgent(modelName, agentConfig);
 
         try (final var printer = Printer.builder()
                 .settings(settings)
@@ -304,6 +323,9 @@ public class SaiCommand implements Callable<Integer> {
         finally {
             executorService.shutdown();
             executorService.awaitTermination(1, TimeUnit.SECONDS);
+            if (settings.isNoSession()) {
+                sessionStore.deleteSession(effectiveSessionId);
+            }
         }
         return 0;
     }
@@ -324,6 +346,7 @@ public class SaiCommand implements Callable<Integer> {
                     .agentId("sai-agent")
                     .name("Sai Agent")
                     .description("An AI agent that can execute tasks and answer questions.")
+                    .model("copilot-proxy/claude-haiku-4.5")
                     .build();
         }
         final var resolvedPath = AgentConfigLoader.resolvePersonaPath(persona, configDir);

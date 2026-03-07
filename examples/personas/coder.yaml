@@ -5,8 +5,8 @@
 agentId: sai-coder
 name: Sai Coder
 description: Expert coding agent with codebase knowledge graph capabilities for intelligent code exploration and development.
-model: gemini-3.1-pro-preview
-# model: claude-sonnet-4.6
+# model: gemini-3.1-pro-preview
+model: copilot-proxy/claude-sonnet-4.6
 
 modelSettings:
   temperature: 0.7
