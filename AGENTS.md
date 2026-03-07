@@ -143,5 +143,6 @@ When modifying CLI flags, environment variables, or behavior:
 | **Sentinel-AI** | Agent orchestration framework |
 | **Failsafe** | Retry and resilience patterns |
 | **JLine** | Terminal input handling |
+| **Commonmark** | Markdown parsing and rendering |
 
 For full configuration details, CLI reference, and examples, see [README.md](README.md).

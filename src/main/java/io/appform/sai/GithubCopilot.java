@@ -57,8 +57,6 @@ class GithubCopilot extends OpenAIProvider implements
                                        APPLICATION_VND_GITHUB_JSON,
                                        HttpHeaders.CONTENT_TYPE,
                                        MediaType.JSON_UTF_8.toString(),
-                                       HttpHeaders.AUTHORIZATION,
-                                       apiKey,
                                        API_VERSION_HEADER,
                                        Objects.<String>requireNonNullElse(apiVersion, API_VERSION)
             );
@@ -74,14 +72,12 @@ class GithubCopilot extends OpenAIProvider implements
     }
 
     @Builder
-    public GithubCopilot(@NonNull String apiKey,
-                         String apiVersion,
-                         String baseUrl,
+    public GithubCopilot(String apiVersion,
+                         @NonNull String baseUrl,
                          HttpClientAdapter clientAdapter,
                          RetryConfig retryConfig,
                          ObjectMapper objectMapper) {
         super(GithubCopilotConfigurator.builder()
-                .apiKey(apiKey)
                 .apiVersion(apiVersion)
                 .baseUrl(baseUrl)
                 .clientAdapter(clientAdapter)

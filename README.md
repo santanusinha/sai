@@ -50,39 +50,46 @@ target/sai-1.0-SNAPSHOT.jar
    java -jar target/sai-1.0-SNAPSHOT.jar
    ```
 
-## Configuration
+## Model Configuration
 
-The agent is configured via environment variables. One variable is always required to choose the provider:
+Models are chosen with the model parameter present in the persona file provided and can be overriden using the `--model` command line option.
 
-- MODEL_PROVIDER: one of `openai`, `azure`, `copilot-proxy`
+Format: `<provider>/<model name>`
 
-Common variables:
+For example:
+- `--model=openai/gpt-5.4` - Command line
+- `-m copilot-proxy/claude-sonnet4.6` - Command line
+- `model: azure/gpt-4.1` - In the Persona YAML file
 
-- MODEL: model name to use. Defaults to `gemini-3-pro-preview` if not set.
+If no model is passed anywhere, it defaults to `copilot-proxy/claude-haiku-4.5`.
+
+### Providers
+SAI supports the following provider types:
+- **openai** - For all openai compliant endpoints including openai, cerebras, openrouter and so on
+- **azure** - For azure hosted models
+- **copilot-proxy** - If you are ruting your requests through copilot using something like [copilot-api](https://github.com/ericc-ch/copilot-api).
 
 Provider-specific variables:
 
-OpenAI
+**OpenAI**
 - OPENAI_API_KEY: required
 - OPENAI_ENDPOINT: optional, default `https://api.openai.com/v1`
 - OPENAI_ORGANIZATION: optional
 - OPENAI_PROJECT_ID: optional
 - OPENAI_EXTRA_HEADERS: optional, comma-separated `Key:Value` pairs to add to requests
 
-Azure OpenAI
+**Azure OpenAI**
 - AZURE_ENDPOINT: required (base URL)
 - AZURE_API_KEY: required
 - AZURE_API_VERSION: optional, default `2024-10-21`
 
-GitHub Copilot Proxy
+**GitHub Copilot Proxy**
 - COPILOT_GITHUB_PAT: required (GitHub token)
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
 
 Example .env file:
 
 ```env
-MODEL_PROVIDER=openai
-MODEL=gpt-4o-mini
 OPENAI_API_KEY=your_key_here
 # OPENAI_ENDPOINT=https://api.openai.com/v1
 # OPENAI_ORGANIZATION=org_...
@@ -93,8 +100,6 @@ OPENAI_API_KEY=your_key_here
 Switching to Azure:
 
 ```env
-MODEL_PROVIDER=azure
-MODEL=gpt-4o-mini
 AZURE_ENDPOINT=https://your-azure-openai-endpoint
 AZURE_API_KEY=your_azure_key
 # AZURE_API_VERSION=2024-10-21
@@ -103,9 +108,7 @@ AZURE_API_KEY=your_azure_key
 Using a Copilot proxy:
 
 ```env
-MODEL_PROVIDER=copilot-proxy
-MODEL=claude-3.5-sonnet
-COPILOT_GITHUB_PAT=ghp_...
+# Set the below endpoint only if you are running the proxy at a different endpoint
 # COPILOT_PROXY_ENDPOINT=http://localhost:4141
 ```
 
@@ -282,31 +285,33 @@ See the [Agent Skills specification](https://agentskills.io/specification) for c
 Help output:
 
 ```text
-Usage: sai [-dhV] [--headless] [--config-dir=<configDir>] [--data-dir=<dataDir>]
-           [-i=<input>] [-p=<persona>] [-s=<sessionId>] [COMMAND]
+Usage: sai [-dhV] [--headless] [-m[=<model>]] [--config-dir=<configDir>]
+           [--data-dir=<dataDir>] [-i=<input>] [-p=<persona>] [-s=<sessionId>]
+           [COMMAND]
 Sai AI Agent
-  -d, --debug                Enable debug mode
       --config-dir=<configDir>
                              Override config directory
+  -d, --debug                Enable debug mode
       --data-dir=<dataDir>   Override data directory
   -h, --help                 Show this help message and exit.
       --headless             Run in headless mode
   -i, --input=<input>        Execute a single input and exit. If the value
                                starts with '@', read input from the specified
                                file.
-  -p, --persona=<persona>    Persona name or path to AgentConfig file (.yaml/.yml/.json).
-                               If a simple name (e.g., 'reviewer'), looks in
-                               {configDir}/persona/ with auto-extension.
-                               Relative paths resolve from current directory.
-                               Absolute paths are used directly.
+  -m, --model[=<model>]      Model to use, in the format 'provider/model' (e.g.
+                               'copilot-proxy/claude-haiku-4.5'). Overrides
+                               model specified in persona file.
+  -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>
                              Resume a specific session
   -V, --version              Print version information and exit.
 Commands:
-  list-sessions  List available sessions
-  summary        Show detailed summary for a session
-  prune-sessions Prune older sessions based on duration (e.g., 1d)
-  delete-sessions Delete a session
+  list-sessions    List available sessions
+  delete-sessions  Delete a session
+  prune-sessions   Prune older sessions. Provide a duration string like '1d',
+                     '3h', '30m'
+  export-session   Export a session to a markdown file
+  summary          Show detailed summary of a specific session
 ```
 
 Subcommands:
@@ -334,6 +339,12 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions <session-id>
   ```
   Deletes a session directory by ID. Honors `--data-dir` when provided.
+
+- export-session
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session <session-id> [output-file]
+  ```
+  Exports a session to a markdown file. If no output file is specified, the markdown is printed to stdout. Honors `--data-dir` when provided.
 
 ## Examples
 
@@ -389,11 +400,20 @@ Subcommands:
   java -jar target/sai-1.0-SNAPSHOT.jar delete-sessions 2f1e4f7a-...-a1b2
   ```
 
+- Export a session to markdown:
+  ```bash
+  # Print to stdout
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session 2f1e4f7a-...-a1b2
+  
+  # Export to a file
+  java -jar target/sai-1.0-SNAPSHOT.jar export-session 2f1e4f7a-...-a1b2 session.md
+  ```
+
 ## Data and Sessions
 
 - Default data directory: `~/.local/state/sai`
 - Default config directory: `~/.config/sai`
-- **Persona files directory**: `~/.config/sai/persona/` (for `-p <name>` lookup)
+- Persona files directory: `~/.config/sai/persona/` (for `-p <name>` lookup)
 - Sessions are stored under: `<dataDir>/sessions/<sessionId>`
 - You can override the data directory with `--data-dir`.
 - You can override the config directory with `--config-dir`.
