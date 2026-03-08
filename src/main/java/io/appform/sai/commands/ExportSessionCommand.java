@@ -110,7 +110,7 @@ public class ExportSessionCommand implements Callable<Integer> {
         text(messageNode,
              " " + DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss.SSS")
                      .withZone(ZoneId.systemDefault())
-                     .format(new Date(message.getTimestamp() / 1000)
+                     .format(new Date(message.getTimestamp() / 1000000)
                              .toInstant()));
         lineBreak(messageNode);
         code(messageNode, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(message));
@@ -196,7 +196,7 @@ public class ExportSessionCommand implements Callable<Integer> {
         text(summaryText,
              " " + DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
                      .withZone(ZoneId.systemDefault())
-                     .format(new Date(summary.getUpdatedAt() / 1000).toInstant()));
+                     .format(new Date(summary.getUpdatedAt() / 1000000).toInstant()));
         lineBreak(summaryText);
         bold(summaryText, "Summary:");
         text(summaryText, " " + summary.getSummary());
