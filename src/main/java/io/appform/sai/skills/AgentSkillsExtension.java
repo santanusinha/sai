@@ -63,14 +63,14 @@ public class AgentSkillsExtension implements AgentExtension<String, String, SaiA
 
         log.info("Activating skill: {}", skillName);
 
-        Optional<AgentSkill> skillOpt = registry.loadSkill(skillName);
+        final var skillOpt = registry.loadSkill(skillName);
         if (skillOpt.isEmpty()) {
             return "Error: Skill '" + skillName + "' not found or failed to load.";
         }
 
-        AgentSkill skill = skillOpt.get();
+        final var skill = skillOpt.get();
 
-        StringBuilder response = new StringBuilder();
+        final var response = new StringBuilder();
         response.append("# Skill Activated: ").append(skill.getName()).append("\n\n");
         response.append(skill.getInstructions());
 
@@ -101,7 +101,7 @@ public class AgentSkillsExtension implements AgentExtension<String, String, SaiA
                                                          SaiAgent agent,
                                                          ProcessingMode processingMode) {
 
-        List<SystemPrompt.Task> tasks = new ArrayList<>();
+        final var tasks = new ArrayList<SystemPrompt.Task>();
 
         // In single-skill mode, don't add skill discovery - just inject the skill directly
         if (!singleSkillMode && registry.hasSkills()) {
@@ -124,7 +124,7 @@ public class AgentSkillsExtension implements AgentExtension<String, String, SaiA
                     .build());
         }
 
-        List<Object> hints = new ArrayList<>();
+        final var hints = new ArrayList<>();
 
         // Add skills catalog as a hint
         if (!singleSkillMode && registry.hasSkills()) {
@@ -137,7 +137,7 @@ public class AgentSkillsExtension implements AgentExtension<String, String, SaiA
     @Override
     public List<FactList> facts(String request, AgentRunContext<String> context, SaiAgent agent) {
 
-        List<FactList> facts = new ArrayList<>();
+        final var facts = new ArrayList<FactList>();
 
         // In single-skill mode, inject the loaded skill directly as facts
         if (singleSkillMode) {
@@ -178,12 +178,12 @@ public class AgentSkillsExtension implements AgentExtension<String, String, SaiA
                                      @JsonPropertyDescription("Name of the skill") String skillName,
                                      @JsonPropertyDescription("Path to the reference file within the skill's references/ directory") String referenceFile) {
 
-        Optional<AgentSkill> skillOpt = registry.getLoadedSkill(skillName);
+        final var skillOpt = registry.getLoadedSkill(skillName);
         if (skillOpt.isEmpty()) {
             return "Error: Skill '" + skillName + "' is not loaded. Activate it first.";
         }
 
-        AgentSkill skill = skillOpt.get();
+        final var skill = skillOpt.get();
         if (skill.getReferenceFiles() == null) {
             return "Error: Skill '" + skillName + "' has no reference files.";
         }

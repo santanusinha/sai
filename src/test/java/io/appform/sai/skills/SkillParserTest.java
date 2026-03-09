@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,7 +39,7 @@ class SkillParserTest {
     @BeforeEach
     void setUp() throws IOException {
         tempDir = Files.createTempDirectory("skill-parser-test-");
-        ObjectMapper mapper = JsonUtils.createMapper();
+        final var mapper = JsonUtils.createMapper();
         parser = new SkillParser(mapper);
     }
 
@@ -58,10 +57,10 @@ class SkillParserTest {
 
     @Test
     void testParseMetadataOnly() throws IOException {
-        Path skillDir = tempDir.resolve("test-skill");
+        final var skillDir = tempDir.resolve("test-skill");
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: test-skill
                 description: A test skill
@@ -72,7 +71,7 @@ class SkillParserTest {
 
         Files.writeString(skillDir.resolve("SKILL.md"), skillContent);
 
-        SkillMetadata metadata = parser.parseMetadata(skillDir);
+        final var metadata = parser.parseMetadata(skillDir);
 
         assertNotNull(metadata);
         assertEquals("test-skill", metadata.getName());
@@ -81,10 +80,10 @@ class SkillParserTest {
 
     @Test
     void testParseMissingFrontmatter() throws IOException {
-        Path skillDir = tempDir.resolve("test-skill");
+        final var skillDir = tempDir.resolve("test-skill");
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 # No frontmatter here
 
                 Just instructions.
@@ -97,10 +96,10 @@ class SkillParserTest {
 
     @Test
     void testParseNameMismatch() throws IOException {
-        Path skillDir = tempDir.resolve("test-skill");
+        final var skillDir = tempDir.resolve("test-skill");
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: wrong-name
                 description: Name doesn't match directory
@@ -117,10 +116,10 @@ class SkillParserTest {
     @Test
     void testParseValidSkill() throws IOException {
         // Create a skill directory with SKILL.md
-        Path skillDir = tempDir.resolve("test-skill");
+        final var skillDir = tempDir.resolve("test-skill");
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: test-skill
                 description: A test skill for unit testing
@@ -134,7 +133,7 @@ class SkillParserTest {
 
         Files.writeString(skillDir.resolve("SKILL.md"), skillContent);
 
-        AgentSkill skill = parser.parse(skillDir);
+        final var skill = parser.parse(skillDir);
 
         assertNotNull(skill);
         assertEquals("test-skill", skill.getName());
@@ -144,11 +143,11 @@ class SkillParserTest {
 
     @Test
     void testParseWithSubdirectories() throws IOException {
-        Path skillDir = tempDir.resolve("test-skill");
+        final var skillDir = tempDir.resolve("test-skill");
         Files.createDirectories(skillDir.resolve("references"));
         Files.createDirectories(skillDir.resolve("scripts"));
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: test-skill
                 description: Skill with resources
@@ -161,7 +160,7 @@ class SkillParserTest {
         Files.writeString(skillDir.resolve("references/doc.md"), "# Documentation");
         Files.writeString(skillDir.resolve("scripts/run.sh"), "#!/bin/bash");
 
-        AgentSkill skill = parser.parse(skillDir);
+        final var skill = parser.parse(skillDir);
 
         assertNotNull(skill.getReferenceFiles());
         assertNotNull(skill.getScriptFiles());

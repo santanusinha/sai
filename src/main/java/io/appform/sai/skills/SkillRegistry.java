@@ -64,7 +64,7 @@ public class SkillRegistry {
             paths.filter(Files::isDirectory)
                     .forEach(skillDir -> {
                         try {
-                            SkillMetadata metadata = parser.parseMetadata(skillDir);
+                            final var metadata = parser.parseMetadata(skillDir);
                             skillCatalog.put(metadata.getName(), metadata);
                             log.info("Discovered skill: {} - {}", metadata.getName(), metadata.getDescription());
                         }
@@ -83,7 +83,7 @@ public class SkillRegistry {
             return "No skills available.";
         }
 
-        StringBuilder sb = new StringBuilder();
+        final var sb = new StringBuilder();
         sb.append("Available Skills:\n\n");
 
         skillCatalog.values().forEach(metadata -> {
@@ -141,10 +141,10 @@ public class SkillRegistry {
 
         // Find the skill directory
         for (Path skillsDir : skillDirectories) {
-            Path skillDir = skillsDir.resolve(skillName);
+            final var skillDir = skillsDir.resolve(skillName);
             if (Files.isDirectory(skillDir)) {
                 try {
-                    AgentSkill skill = parser.parse(skillDir);
+                    final var skill = parser.parse(skillDir);
                     loadedSkills.put(skillName, skill);
                     log.info("Loaded skill: {}", skillName);
                     return Optional.of(skill);
@@ -168,8 +168,8 @@ public class SkillRegistry {
             throw new IllegalArgumentException("Not a directory: " + skillPath);
         }
 
-        AgentSkill skill = parser.parse(skillPath);
-        String skillName = skill.getName();
+        final var skill = parser.parse(skillPath);
+        final var skillName = skill.getName();
 
         skillCatalog.put(skillName, skill.getMetadata());
         loadedSkills.put(skillName, skill);

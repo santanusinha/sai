@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -53,26 +52,26 @@ public class SkillParser {
             throw new IllegalArgumentException("Not a directory: " + skillDirectory);
         }
 
-        Path skillFile = skillDirectory.resolve("SKILL.md");
+        final var skillFile = skillDirectory.resolve("SKILL.md");
         if (!Files.exists(skillFile)) {
             throw new IllegalArgumentException("SKILL.md not found in: " + skillDirectory);
         }
 
-        String content = Files.readString(skillFile);
-        Matcher matcher = FRONTMATTER_PATTERN.matcher(content);
+        final var content = Files.readString(skillFile);
+        final var matcher = FRONTMATTER_PATTERN.matcher(content);
 
         if (!matcher.matches()) {
             throw new IllegalArgumentException(
                                                "Invalid SKILL.md format: YAML frontmatter not found in " + skillFile);
         }
 
-        String yamlContent = matcher.group(1);
-        String markdownBody = matcher.group(2).trim();
+        final var yamlContent = matcher.group(1);
+        final var markdownBody = matcher.group(2).trim();
 
-        SkillMetadata metadata = yamlMapper.readValue(yamlContent, SkillMetadata.class);
+        final var metadata = yamlMapper.readValue(yamlContent, SkillMetadata.class);
 
         // Validate name matches directory
-        String directoryName = skillDirectory.getFileName().toString();
+        final var directoryName = skillDirectory.getFileName().toString();
         metadata.validateName(directoryName);
 
         return AgentSkill.builder()
@@ -89,23 +88,23 @@ public class SkillParser {
      * Parse only the metadata (for discovery phase)
      */
     public SkillMetadata parseMetadata(Path skillDirectory) throws IOException {
-        Path skillFile = skillDirectory.resolve("SKILL.md");
+        final var skillFile = skillDirectory.resolve("SKILL.md");
         if (!Files.exists(skillFile)) {
             throw new IllegalArgumentException("SKILL.md not found in: " + skillDirectory);
         }
 
-        String content = Files.readString(skillFile);
-        Matcher matcher = FRONTMATTER_PATTERN.matcher(content);
+        final var content = Files.readString(skillFile);
+        final var matcher = FRONTMATTER_PATTERN.matcher(content);
 
         if (!matcher.matches()) {
             throw new IllegalArgumentException("Invalid SKILL.md format in " + skillFile);
         }
 
-        String yamlContent = matcher.group(1);
-        SkillMetadata metadata = yamlMapper.readValue(yamlContent, SkillMetadata.class);
+        final var yamlContent = matcher.group(1);
+        final var metadata = yamlMapper.readValue(yamlContent, SkillMetadata.class);
 
         // Validate name
-        String directoryName = skillDirectory.getFileName().toString();
+        final var directoryName = skillDirectory.getFileName().toString();
         metadata.validateName(directoryName);
 
         return metadata;
@@ -115,12 +114,12 @@ public class SkillParser {
      * Scan a subdirectory for files and return a map of filename -> path
      */
     private Map<String, Path> scanSubdirectory(Path skillDirectory, String subdirName) throws IOException {
-        Path subdir = skillDirectory.resolve(subdirName);
+        final var subdir = skillDirectory.resolve(subdirName);
         if (!Files.isDirectory(subdir)) {
             return null;
         }
 
-        Map<String, Path> files = new HashMap<>();
+        final var files = new HashMap<String, Path>();
         try (Stream<Path> paths = Files.walk(subdir)) {
             paths.filter(Files::isRegularFile)
                     .forEach(path -> {

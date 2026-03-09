@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -30,7 +29,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.Optional;
 
 class SkillRegistryTest {
 
@@ -40,7 +38,7 @@ class SkillRegistryTest {
     @BeforeEach
     void setUp() throws IOException {
         tempDir = Files.createTempDirectory("skill-registry-test-");
-        ObjectMapper mapper = JsonUtils.createMapper();
+        final var mapper = JsonUtils.createMapper();
         registry = new SkillRegistry(mapper);
     }
 
@@ -72,7 +70,7 @@ class SkillRegistryTest {
     @Test
     void testEmptyCatalog() {
         assertFalse(registry.hasSkills());
-        String catalog = registry.formatCatalog();
+        final var catalog = registry.formatCatalog();
         assertTrue(catalog.contains("No skills available"));
     }
 
@@ -82,7 +80,7 @@ class SkillRegistryTest {
         createTestSkill("skill-two", "Second skill");
         registry.discoverSkills(tempDir);
 
-        String catalog = registry.formatCatalog();
+        final var catalog = registry.formatCatalog();
 
         assertTrue(catalog.contains("skill-one"));
         assertTrue(catalog.contains("skill-two"));
@@ -95,7 +93,7 @@ class SkillRegistryTest {
         createTestSkill("test-skill", "A test skill");
         registry.discoverSkills(tempDir);
 
-        Optional<AgentSkill> skillOpt = registry.loadSkill("nonexistent");
+        final var skillOpt = registry.loadSkill("nonexistent");
 
         assertFalse(skillOpt.isPresent());
     }
@@ -105,7 +103,7 @@ class SkillRegistryTest {
         createTestSkill("test-skill", "A test skill");
         registry.discoverSkills(tempDir);
 
-        Optional<AgentSkill> skillOpt = registry.loadSkill("test-skill");
+        final var skillOpt = registry.loadSkill("test-skill");
 
         assertTrue(skillOpt.isPresent());
         assertEquals("test-skill", skillOpt.get().getName());
@@ -113,10 +111,10 @@ class SkillRegistryTest {
 
     @Test
     void testLoadSkillFromPath() throws IOException {
-        Path skillDir = tempDir.resolve("direct-skill");
+        final var skillDir = tempDir.resolve("direct-skill");
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: direct-skill
                 description: Directly loaded skill
@@ -127,7 +125,7 @@ class SkillRegistryTest {
 
         Files.writeString(skillDir.resolve("SKILL.md"), skillContent);
 
-        Optional<AgentSkill> skillOpt = registry.loadSkillFromPath(skillDir);
+        final var skillOpt = registry.loadSkillFromPath(skillDir);
 
         assertTrue(skillOpt.isPresent());
         assertEquals("direct-skill", skillOpt.get().getName());
@@ -135,10 +133,10 @@ class SkillRegistryTest {
     }
 
     private void createTestSkill(String name, String description) throws IOException {
-        Path skillDir = tempDir.resolve(name);
+        final var skillDir = tempDir.resolve(name);
         Files.createDirectory(skillDir);
 
-        String skillContent = """
+        final var skillContent = """
                 ---
                 name: %s
                 description: %s
