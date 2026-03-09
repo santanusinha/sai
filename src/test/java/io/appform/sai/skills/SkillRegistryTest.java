@@ -19,8 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.phonepe.sentinelai.core.utils.JsonUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +27,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 
 class SkillRegistryTest {
 
@@ -38,8 +38,7 @@ class SkillRegistryTest {
     @BeforeEach
     void setUp() throws IOException {
         tempDir = Files.createTempDirectory("skill-registry-test-");
-        final var mapper = JsonUtils.createMapper();
-        registry = new SkillRegistry(mapper);
+        registry = new SkillRegistry();
     }
 
     @AfterEach
@@ -59,7 +58,7 @@ class SkillRegistryTest {
         createTestSkill("skill-one", "First test skill");
         createTestSkill("skill-two", "Second test skill");
 
-        registry.discoverSkills(tempDir);
+        registry.discoverSkills(tempDir, Set.of());
 
         assertEquals(2, registry.getSkillNames().size());
         assertTrue(registry.getSkillNames().contains("skill-one"));
@@ -78,7 +77,7 @@ class SkillRegistryTest {
     void testFormatCatalog() throws IOException {
         createTestSkill("skill-one", "First skill");
         createTestSkill("skill-two", "Second skill");
-        registry.discoverSkills(tempDir);
+        registry.discoverSkills(tempDir, Set.of());
 
         final var catalog = registry.formatCatalog();
 
@@ -91,7 +90,7 @@ class SkillRegistryTest {
     @Test
     void testLoadNonexistentSkill() throws IOException {
         createTestSkill("test-skill", "A test skill");
-        registry.discoverSkills(tempDir);
+        registry.discoverSkills(tempDir, Set.of());
 
         final var skillOpt = registry.loadSkill("nonexistent");
 
@@ -101,7 +100,7 @@ class SkillRegistryTest {
     @Test
     void testLoadSkill() throws IOException {
         createTestSkill("test-skill", "A test skill");
-        registry.discoverSkills(tempDir);
+        registry.discoverSkills(tempDir, Set.of());
 
         final var skillOpt = registry.loadSkill("test-skill");
 

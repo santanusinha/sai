@@ -15,8 +15,6 @@
  */
 package io.appform.sai.skills;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,19 +35,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SkillRegistry {
 
-    private final SkillParser parser;
+    private final SkillParser parser = new SkillParser();
     private final Map<String, SkillMetadata> skillCatalog = new LinkedHashMap<>();
     private final Map<String, AgentSkill> loadedSkills = new LinkedHashMap<>();
     private final Set<Path> skillDirectories = new HashSet<>();
 
-    public SkillRegistry(ObjectMapper mapper) {
-        this.parser = new SkillParser(mapper);
-    }
-
     /**
      * Discover skills in a directory (Tier 1: load metadata only)
      */
-    public void discoverSkills(Path skillsDirectory) throws IOException {
+    public void discoverSkills(Path skillsDirectory, Set<String> skillsToLoad) throws IOException {
         if (!Files.isDirectory(skillsDirectory)) {
             log.warn("Skills directory does not exist: {}", skillsDirectory);
             return;
@@ -59,6 +53,15 @@ public class SkillRegistry {
 
         try (Stream<Path> paths = Files.list(skillsDirectory)) {
             paths.filter(Files::isDirectory)
+                    .filter(dir -> {
+                        //Get last component of path and check if it's in skillsToLoad (if specified)
+                        final var skillName = dir.getFileName().toString();
+                        if (!skillsToLoad.isEmpty() && !skillsToLoad.contains(skillName)) {
+                            log.info("Skipping skill {} as it's not in the specified skills to load", skillName);
+                            return false;
+                        }
+                        return true;
+                    })
                     .forEach(skillDir -> {
                         try {
                             final var metadata = parser.parseMetadata(skillDir);
@@ -83,10 +86,9 @@ public class SkillRegistry {
         final var sb = new StringBuilder();
         sb.append("Available Skills:\n\n");
 
-        skillCatalog.values().forEach(metadata -> {
-            sb.append(String.format("- **%s**: %s\n", metadata.getName(), metadata.getDescription()));
-        });
-
+        skillCatalog.values().forEach(metadata -> sb.append(String.format("- **%s**: %s%n",
+                                                                          metadata.getName(),
+                                                                          metadata.getDescription())));
         return sb.toString();
     }
 

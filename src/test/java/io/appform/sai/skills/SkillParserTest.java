@@ -20,8 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.phonepe.sentinelai.core.utils.JsonUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,8 +37,7 @@ class SkillParserTest {
     @BeforeEach
     void setUp() throws IOException {
         tempDir = Files.createTempDirectory("skill-parser-test-");
-        final var mapper = JsonUtils.createMapper();
-        parser = new SkillParser(mapper);
+        parser = new SkillParser();
     }
 
     @AfterEach

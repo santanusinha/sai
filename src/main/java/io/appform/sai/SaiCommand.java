@@ -40,6 +40,7 @@ import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.skills.AgentSkillsExtension;
 import io.appform.sai.tools.CoreToolBox;
 
 import org.jline.reader.EndOfFileException;
@@ -198,7 +199,7 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
-        final AgentConfig agentConfig;
+        AgentConfig agentConfig;
         try {
             agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
         }
@@ -234,60 +235,16 @@ public class SaiCommand implements Callable<Integer> {
                         .build())
                 .build()
                 .addMessageSelector(new RemoveAllToolCallsSelector());
+        final var agentSkillsExtension = buildAgentSkillsExtension(settings, agentConfig);
         final var agentFactory = new AgentFactory(settings,
-                                                  sessionExtension,
+                                                  List.of(sessionExtension, agentSkillsExtension),
                                                   executorService,
                                                   modelProviderFactory,
                                                   mapper,
                                                   eventBus,
                                                   okHttpClient);
-        final var agent = agentFactory.createAgent(modelName, agentConfig);
 
-        // Setup skills if configured
-        if (!Strings.isNullOrEmpty(skill)) {
-            // Single skill mode: load one skill directly
-            final var skillPath = Paths.get(skill);
-            if (!Files.isDirectory(skillPath)) {
-                log.error("Skill path is not a directory: {}", skill);
-                System.err.println("Error: --skill must point to a skill directory containing SKILL.md");
-                return 1;
-            }
-            try {
-                agentFactory.registerSkillsExtension(agent, skillPath, true);
-            }
-            catch (Exception e) {
-                log.error("Failed to load skill: {}", skill, e);
-                System.err.println("Error: Failed to load skill from " + skill + ": " + e.getMessage());
-                return 1;
-            }
-        }
-        else if (agentConfig.getSkillDirectories() != null && !agentConfig.getSkillDirectories().isEmpty()) {
-            // Multi-skill mode: discover skills from configured directories
-            try {
-                agentFactory.registerSkillsExtension(agent, agentConfig, settings);
-            }
-            catch (Exception e) {
-                log.error("Failed to setup skills", e);
-                // Don't fail the agent startup, just warn
-                System.err.println("Warning: Failed to setup skills: " + e.getMessage());
-            }
-        }
-        else {
-            // Default: try to discover skills from default location
-            final var defaultSkillsDir = Paths.get(settings.getConfigDir(), "skills");
-            if (Files.isDirectory(defaultSkillsDir)) {
-                try {
-                    agentFactory.registerSkillsExtension(
-                                                         agent,
-                                                         List.of(defaultSkillsDir.toString()),
-                                                         null,
-                                                         settings);
-                }
-                catch (Exception e) {
-                    log.warn("Failed to load skills from default directory: {}", e.getMessage());
-                }
-            }
-        }
+        final var agent = agentFactory.createAgent(modelName, agentConfig);
 
         try (final var printer = Printer.builder()
                 .settings(settings)
@@ -417,4 +374,27 @@ public class SaiCommand implements Callable<Integer> {
         return input;
     }
 
+    private AgentSkillsExtension buildAgentSkillsExtension(final Settings settings, AgentConfig agentConfig) {
+        if (!Strings.isNullOrEmpty(skill)) {
+            //Single skill specified. pass ojnly this ane remove other stuff
+            return AgentSkillsExtension.withSingleSkill()
+                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
+                    .singleSkill(skill)
+                    .build();
+        }
+        else {
+            var skillDirs = agentConfig.getSkillDirectories();
+            if (Strings.isNullOrEmpty(skill)) {
+                skillDirs = List.of(Paths.get(settings.getConfigDir(), "skills").toString());
+            }
+            var skillNames = Objects.requireNonNullElseGet(agentConfig.getSkillNames(), List::<String>of);
+            return AgentSkillsExtension.withMultipleSkills()
+                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
+                    .skillsDirectories(skillDirs)
+                    .skillsToLoad(skillNames)
+                    .build();
+        }
+
+
+    }
 }

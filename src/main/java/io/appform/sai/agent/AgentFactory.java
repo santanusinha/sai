@@ -62,7 +62,7 @@ public class AgentFactory {
             Do not make up information. If you don't know the answer, say you don't know.
             """;
     private final Settings settings;
-    private final AgentExtension<String, String, SaiAgent> sessionExtension;
+    private final List<AgentExtension<String, String, SaiAgent>> sessionExtensions;
     private final ExecutorService executorService;
     private final ChatCompletionServiceFactory modelProviderFactory;
     private final ObjectMapper mapper;
@@ -95,87 +95,11 @@ public class AgentFactory {
                                           settings,
                                           agentSetup,
                                           systemPrompt + cwd,
-                                          List.of(sessionExtension),
+                                          sessionExtensions,
                                           Map.of());
         registerMCPTools(saiAgent, config);
         registerHttpTools(saiAgent, config);
         return saiAgent;
-    }
-
-    /**
-     * Register skills extension in multi-skill mode (from AgentConfig)
-     */
-    public void registerSkillsExtension(SaiAgent agent, AgentConfig config, Settings settings)
-            throws IOException {
-        final var skillDirs = config.getSkillDirectories();
-        if (skillDirs == null || skillDirs.isEmpty()) {
-            return;
-        }
-
-        registerSkillsExtension(agent, skillDirs, config.getSkillNames(), settings);
-    }
-
-    /**
-     * Register skills extension with specific directories and optional name filter
-     */
-    public void registerSkillsExtension(
-                                        SaiAgent agent,
-                                        List<String> skillDirectories,
-                                        List<String> skillNames,
-                                        Settings settings) throws IOException {
-
-        final var registry = new SkillRegistry(mapper);
-
-        // Discover skills from all configured directories
-        for (String dirPath : skillDirectories) {
-            Path skillsDir = Paths.get(dirPath);
-            if (!skillsDir.isAbsolute()) {
-                // Resolve relative paths from config directory
-                skillsDir = Paths.get(settings.getConfigDir(), dirPath);
-            }
-
-            if (Files.isDirectory(skillsDir)) {
-                registry.discoverSkills(skillsDir);
-            }
-            else {
-                log.warn("Skills directory does not exist: {}", skillsDir);
-            }
-        }
-
-        // If specific skill names are configured, pre-load them
-        if (skillNames != null && !skillNames.isEmpty()) {
-            for (String skillName : skillNames) {
-                registry.loadSkill(skillName)
-                        .ifPresent(skill -> log.info("Pre-loaded skill: {}", skillName));
-            }
-        }
-
-        final var extension = AgentSkillsExtension.builder()
-                .registry(registry)
-                .mapper(mapper)
-                .singleSkillMode(false)
-                .build();
-
-        agent.registerToolbox(extension);
-        log.info("Registered skills extension with {} skills", registry.getSkillNames().size());
-    }
-
-    /**
-     * Register skills extension in single-skill mode (for --skill CLI option)
-     */
-    public void registerSkillsExtension(SaiAgent agent, Path skillPath, boolean singleSkillMode)
-            throws IOException {
-        final var registry = new SkillRegistry(mapper);
-        registry.loadSkillFromPath(skillPath);
-
-        final var extension = AgentSkillsExtension.builder()
-                .registry(registry)
-                .mapper(mapper)
-                .singleSkillMode(true)
-                .build();
-
-        agent.registerToolbox(extension);
-        log.info("Registered single skill from: {}", skillPath);
     }
 
     private TemplatizedHttpTool createTool(ConfiguredHttpTool tool) {

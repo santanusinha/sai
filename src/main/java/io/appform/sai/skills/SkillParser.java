@@ -40,9 +40,6 @@ public class SkillParser {
 
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
-    public SkillParser(ObjectMapper jsonMapper) {
-    }
-
     /**
      * Parse a SKILL.md file and associated resources
      */
@@ -115,7 +112,7 @@ public class SkillParser {
     private Map<String, Path> scanSubdirectory(Path skillDirectory, String subdirName) throws IOException {
         final var subdir = skillDirectory.resolve(subdirName);
         if (!Files.isDirectory(subdir)) {
-            return null;
+            return Map.of();
         }
 
         final var files = new HashMap<String, Path>();
@@ -127,6 +124,6 @@ public class SkillParser {
                     });
         }
 
-        return files.isEmpty() ? null : files;
+        return files;
     }
 }

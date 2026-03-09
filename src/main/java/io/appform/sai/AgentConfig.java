@@ -74,15 +74,11 @@ public class AgentConfig {
 
     Map<String, HttpToolReaders.ConfiguredUpstream> httpTools;
 
-    /**
-     * Skills configuration: directories to load skills from
-     */
+    String singleSkill;
+
     @Nullable
     List<String> skillDirectories;
 
-    /**
-     * Skills configuration: specific skill names to load (if null, load all)
-     */
     @Nullable
     List<String> skillNames;
 }
