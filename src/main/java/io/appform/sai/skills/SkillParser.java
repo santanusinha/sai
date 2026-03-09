@@ -34,14 +34,13 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class SkillParser {
 
-    // Pattern to match YAML frontmatter: ---\n...yaml...\n---
+    // Pattern to match YAML frontmatter: ---\n..yaml..\n---
     private static final Pattern FRONTMATTER_PATTERN = Pattern.compile("^---\\s*\\n(.*?)\\n---\\s*\\n(.*)$",
                                                                        Pattern.DOTALL);
 
-    private final ObjectMapper yamlMapper;
+    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     public SkillParser(ObjectMapper jsonMapper) {
-        this.yamlMapper = new ObjectMapper(new YAMLFactory());
     }
 
     /**

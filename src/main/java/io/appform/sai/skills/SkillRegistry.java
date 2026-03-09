@@ -38,15 +38,12 @@ import lombok.extern.slf4j.Slf4j;
 public class SkillRegistry {
 
     private final SkillParser parser;
-    private final Map<String, SkillMetadata> skillCatalog;
-    private final Map<String, AgentSkill> loadedSkills;
-    private final Set<Path> skillDirectories;
+    private final Map<String, SkillMetadata> skillCatalog = new LinkedHashMap<>();
+    private final Map<String, AgentSkill> loadedSkills = new LinkedHashMap<>();
+    private final Set<Path> skillDirectories = new HashSet<>();
 
     public SkillRegistry(ObjectMapper mapper) {
         this.parser = new SkillParser(mapper);
-        this.skillCatalog = new LinkedHashMap<>();
-        this.loadedSkills = new LinkedHashMap<>();
-        this.skillDirectories = new HashSet<>();
     }
 
     /**
