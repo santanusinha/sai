@@ -21,11 +21,11 @@ import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
+import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
-import com.phonepe.sentinelai.session.history.selectors.RemoveAllToolCallsSelector;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
@@ -40,7 +40,6 @@ import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
-import io.appform.sai.skills.AgentSkillsExtension;
 import io.appform.sai.tools.CoreToolBox;
 
 import org.jline.reader.EndOfFileException;
@@ -338,6 +337,31 @@ public class SaiCommand implements Callable<Integer> {
         return 0;
     }
 
+    private AgentSkillsExtension<String, String, SaiAgent> buildAgentSkillsExtension(final Settings settings,
+                                                                                     AgentConfig agentConfig) {
+        if (!Strings.isNullOrEmpty(skill)) {
+            //Single skill specified. pass ojnly this ane remove other stuff
+            return AgentSkillsExtension.<String, String, SaiAgent>withSingleSkill()
+                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
+                    .singleSkill(skill)
+                    .build();
+        }
+        else {
+            var skillDirs = agentConfig.getSkillDirectories();
+            if (Strings.isNullOrEmpty(skill)) {
+                skillDirs = List.of(Paths.get(settings.getConfigDir(), "skills").toString());
+            }
+            var skillNames = Objects.requireNonNullElseGet(agentConfig.getSkillNames(), List::<String>of);
+            return AgentSkillsExtension.<String, String, SaiAgent>withMultipleSkills()
+                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
+                    .skillsDirectories(skillDirs)
+                    .skillsToLoad(skillNames)
+                    .build();
+        }
+
+
+    }
+
     private Optional<String> readInput(final Printer printer) {
         var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
         try {
@@ -371,29 +395,5 @@ public class SaiCommand implements Callable<Integer> {
             return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
         }
         return input;
-    }
-
-    private AgentSkillsExtension buildAgentSkillsExtension(final Settings settings, AgentConfig agentConfig) {
-        if (!Strings.isNullOrEmpty(skill)) {
-            //Single skill specified. pass ojnly this ane remove other stuff
-            return AgentSkillsExtension.withSingleSkill()
-                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
-                    .singleSkill(skill)
-                    .build();
-        }
-        else {
-            var skillDirs = agentConfig.getSkillDirectories();
-            if (Strings.isNullOrEmpty(skill)) {
-                skillDirs = List.of(Paths.get(settings.getConfigDir(), "skills").toString());
-            }
-            var skillNames = Objects.requireNonNullElseGet(agentConfig.getSkillNames(), List::<String>of);
-            return AgentSkillsExtension.withMultipleSkills()
-                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
-                    .skillsDirectories(skillDirs)
-                    .skillsToLoad(skillNames)
-                    .build();
-        }
-
-
     }
 }

@@ -35,12 +35,7 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 import io.appform.sai.AgentConfig;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
-import io.appform.sai.skills.AgentSkillsExtension;
-import io.appform.sai.skills.SkillRegistry;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
