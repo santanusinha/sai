@@ -233,8 +233,7 @@ public class SaiCommand implements Callable<Integer> {
                 .setup(AgentSessionExtensionSetup.builder()
                         .autoSummarizationThresholdPercentage(50)
                         .build())
-                .build()
-                .addMessageSelector(new RemoveAllToolCallsSelector());
+                .build();
         final var agentSkillsExtension = buildAgentSkillsExtension(settings, agentConfig);
         final var agentFactory = new AgentFactory(settings,
                                                   List.of(sessionExtension, agentSkillsExtension),
