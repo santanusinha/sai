@@ -92,10 +92,20 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
             @Override
             public List<Update> visit(SystemPrompt systemPrompt) {
-                return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
-                               Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent())
-                                       + Printer.Colours.RESET).withDebug(true),
-                               Printer.empty());
+                try {
+                    return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
+                                   Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent())
+                                           + Printer.Colours.RESET).withDebug(true),
+                                   Printer.empty());
+                }
+                catch (Exception e) {
+                    log.error("Failed to pretty print system prompt XML. Printing raw content. Error: {}",
+                              e.getMessage());
+                    return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
+                                   Printer.raw(Printer.Colours.GRAY + systemPrompt.getContent()
+                                           + Printer.Colours.RESET).withDebug(true),
+                                   Printer.empty());
+                }
             }
 
             @Override

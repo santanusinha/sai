@@ -170,7 +170,7 @@ public class SaiCommand implements Callable<Integer> {
                 .sessionId(effectiveSessionId)
                 .debug(debug)
                 .headless(headless || !Strings.isNullOrEmpty(effectiveInput))
-                .noSession(!sessionIdProvided);
+                .noSession(!Strings.isNullOrEmpty(effectiveInput));
         if (!Strings.isNullOrEmpty(configDir)) {
             settingsBuilder.configDir(configDir);
         }
