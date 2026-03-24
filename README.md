@@ -84,7 +84,6 @@ Provider-specific variables:
 - AZURE_API_VERSION: optional, default `2024-10-21`
 
 **GitHub Copilot Proxy**
-- COPILOT_GITHUB_PAT: required (GitHub token)
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
 
 Example .env file:
