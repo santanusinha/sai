@@ -246,7 +246,7 @@
                 <configuration>
                     <images>
                         <image>
-                            <name>appform/sai:${project.version}</name>
+                            <name>santanusinha/sai:${project.version}</name>
                             <alias>sai</alias>
                             <build>
                                 <from>eclipse-temurin:17-jre-alpine</from>
