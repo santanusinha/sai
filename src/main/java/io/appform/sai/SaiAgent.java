@@ -61,6 +61,7 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                         - You can use /tmp/sai/${session id}/scrath/ directory to store any temporary files like todo lists, modified files list and whatever other files you may need during the conversation. No need to clean up the files, they will be automatically deleted after the session ends.
                         - If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
                         - The current working directory is: %s
+                        - IMPORTANT: use 'core_tool_box_print' tool to provide updates, information and visibility into your thought process and actions on the terminal as you go.
                         """
                         .formatted(config.getName(), settings.getWorkDir());
     }
