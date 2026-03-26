@@ -291,6 +291,12 @@ public class CoreToolBox implements ToolBox {
         return "core";
     }
 
+    @Tool("Print a message to the agent's console output. Use this for logging important information, debugging, or communicating with the user. The message will be visible in the agent's logs and console output. Use this tool to provide feedback on actions taken, display variable values, or log any relevant information that may assist in understanding the agent's behavior.")
+    public String print(@JsonPropertyDescription("The message to print. This can include variable values, status updates, or any information you want to log. Use this tool to communicate important information to the user or for debugging purposes.") String message) {
+        printer.print(List.of(Printer.assistantMessage(message)));
+        return "OK";
+    }
+
     @Tool("Read a file from the local filesystem. Returns content and a checksum for verification.")
     public ToolIO.ReadResponse read(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
                                     @JsonPropertyDescription("The absolute path to the file to read.") String filePath) {

@@ -60,6 +60,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
 
     @UtilityClass
     public class KnownToolNames {
+        public static final String PRINT_TOOL = "core_tool_box_print";
         public static final String BASH_TOOL = "core_tool_box_bash";
         public static final String READ_TOOL = "core_tool_box_read";
         public static final String WRITE_TOOL = "core_tool_box_write";
@@ -68,7 +69,6 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
     }
 
-    private static final String BASH_TOOL = "core_tool_box_bash";
     private static final XmlMapper xmlMapper = new XmlMapper();
 
     private final Printer printer;
@@ -113,6 +113,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             public List<Update> visit(ToolCallResponse toolCallResponse) {
                 final var messages = new ArrayList<Update>();
                 switch (toolCallResponse.getToolName()) {
+                    case KnownToolNames.PRINT_TOOL -> {
+                        // Do nothing
+                    }
                     case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
                     case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
                     case KnownToolNames.EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
@@ -180,6 +183,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             public List<Update> visit(ToolCall toolCall) {
                 final var messages = new ArrayList<Update>();
                 switch (toolCall.getToolName()) {
+                    case KnownToolNames.PRINT_TOOL -> {
+                        // Do nothing
+                    }
                     case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                     case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
                     case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
