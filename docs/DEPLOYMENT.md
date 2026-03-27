@@ -1,6 +1,6 @@
 # GitHub Pages Deployment Setup
 
-This document describes the automated deployment workflow for SAI documentation.
+This document describes the automated deployment workflow for SAI documentation using Zensical.
 
 ## Workflow Overview
 
@@ -22,13 +22,13 @@ The workflow runs when:
 
 ## Workflow Steps
 
-1. **Checkout** - Fetches repository with full history
-2. **Setup Python 3.12** - With pip caching for faster builds
-3. **Install uv** - Fast Python package manager
-4. **Cache uv packages** - Speeds up subsequent runs
-5. **Install Zensical** - Documentation tool
-6. **Configure Git** - Sets up bot identity for commits
-7. **Build & Deploy** - Builds site and pushes to `gh-pages` branch
+1. **Configure GitHub Pages** - Sets up Pages deployment environment
+2. **Checkout** - Fetches repository code
+3. **Setup Python 3.x** - Installs latest Python 3
+4. **Install Zensical** - Documentation build tool
+5. **Build Documentation** - Runs `zensical build --clean`
+6. **Upload Artifact** - Packages the `site/` directory
+7. **Deploy to Pages** - Publishes to GitHub Pages
 
 ## GitHub Pages Configuration
 
@@ -36,143 +36,130 @@ The workflow runs when:
 
 1. Go to repository **Settings** → **Pages**
 2. Under "Build and deployment":
-   - **Source**: Deploy from a branch
-   - **Branch**: `gh-pages`
-   - **Folder**: `/ (root)`
-3. Click **Save**
+   - **Source**: GitHub Actions
+3. That's it! The workflow handles the rest.
 
 ### First Deployment
 
-The `gh-pages` branch will be created automatically on the first workflow run. After the first successful deployment:
+After pushing the workflow file:
 
-1. Go to **Settings** → **Pages**
-2. Verify the site URL: `https://santanusinha.github.io/sai/`
-3. Site should be live within 1-2 minutes
+1. Go to **Actions** tab
+2. Watch the "Documentation" workflow run
+3. Once complete, check **Settings** → **Pages**
+4. Site URL: `https://santanusinha.github.io/sai/`
+5. Site should be live within 1-2 minutes
 
 ## Local Testing
 
-Test the deployment process locally:
+Test the build locally:
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
+# Install Zensical
+pip install zensical
 
-# Test build
-zensical build
+# Build documentation
+zensical build --clean
 
-# Test deployment (dry run)
-zensical gh-deploy --help
-
-# Actually deploy (if you have push access)
-zensical gh-deploy --force
+# Serve locally (if available)
+zensical serve
 ```
 
-## Workflow Features
+Or using standard MkDocs commands:
 
-### Performance Optimizations
-- **Python caching**: Pip packages cached between runs
-- **uv caching**: Fast dependency installation
-- **Selective triggers**: Only runs on documentation changes
+```bash
+# Install dependencies
+pip install mkdocs-material mkdocs-minify-plugin
 
-### Git Configuration
-- **Bot identity**: Uses `github-actions[bot]` for commits
-- **Commit message**: Includes commit SHA and `[ci skip]` flag
-- **Force push**: `--force` flag handles gh-pages branch updates
+# Build site
+mkdocs build --clean
 
-### Security
-- **Permissions**: `contents: write` (required for gh-pages push)
-- **Authentication**: Uses `GITHUB_TOKEN` (automatic, no setup needed)
+# Serve locally
+mkdocs serve
+```
 
 ## Monitoring Deployments
 
-### View Workflow Runs
-1. Go to **Actions** tab in repository
-2. Select "Deploy Documentation" workflow
-3. View run history and logs
+### Check Workflow Status
 
-### Check Deployment Status
-- ✅ Green checkmark = Successful deployment
-- ❌ Red X = Failed deployment (check logs)
-- 🟡 Yellow dot = Running
+1. Go to **Actions** tab
+2. Click on latest "Documentation" workflow run
+3. View detailed logs for each step
 
-### Troubleshooting
+### Verify Deployment
 
-**Workflow not triggering?**
-- Check if changes are in monitored paths
-- Verify you pushed to `master` branch
-- Check workflow file syntax
+```bash
+# Check if site is accessible
+curl -I https://santanusinha.github.io/sai/
 
-**Deployment failed?**
-- Check GitHub Actions logs
-- Verify GitHub Pages is enabled
-- Ensure `gh-pages` branch has proper permissions
+# Should return: HTTP/2 200
+```
 
-**Site not updating?**
-- GitHub Pages can take 1-2 minutes to refresh
-- Check if workflow completed successfully
-- Hard refresh browser (Ctrl+Shift+R)
+## Troubleshooting
 
-**Build errors?**
-- Verify local build works: `zensical build`
-- Check for broken links or invalid markdown
-- Review workflow logs for specific errors
+### Workflow Fails
+
+**Build Step Fails:**
+```bash
+# Test locally first
+zensical build --clean
+
+# Check for syntax errors in mkdocs.yml
+python -c "import yaml; yaml.safe_load(open('mkdocs.yml'))"
+```
+
+**Permission Errors:**
+- Ensure workflow has correct permissions:
+  - `contents: read`
+  - `pages: write`
+  - `id-token: write`
+
+**Pages Not Enabled:**
+1. Go to Settings → Pages
+2. Ensure "Source" is set to "GitHub Actions"
+
+### Site Not Updating
+
+1. Check Actions tab for failed deployments
+2. Clear browser cache (Ctrl+Shift+R)
+3. Wait 2-3 minutes for CDN propagation
+4. Check deployment URL in workflow output
+
+### 404 Errors
+
+1. Verify `site_url` in `mkdocs.yml`: `https://santanusinha.github.io/sai/`
+2. Check navigation links in `mkdocs.yml`
+3. Ensure all referenced files exist in `docs/`
 
 ## Manual Deployment
 
-If needed, you can manually deploy:
+If needed, trigger deployment manually:
 
-```bash
-# Trigger via GitHub UI
-# Go to Actions → Deploy Documentation → Run workflow
+1. Go to **Actions** tab
+2. Select "Documentation" workflow
+3. Click **Run workflow**
+4. Select `master` branch
+5. Click **Run workflow**
 
-# Or deploy locally (requires push access)
-source .venv/bin/activate
-zensical gh-deploy --force --message "Manual deployment"
-```
+## Performance Notes
 
-## Site URLs
+- Build time: ~30-60 seconds
+- Deployment time: ~1-2 minutes after build
+- No caching recommended (per Zensical docs)
 
-- **Production**: https://santanusinha.github.io/sai/
-- **Repository**: https://github.com/santanusinha/sai
-- **Workflow**: https://github.com/santanusinha/sai/actions
+## Security
 
-## Maintenance
+- Workflow runs with read-only repository access
+- Uses GitHub's official Pages deployment actions
+- No secrets required
+- Bot commits signed with `github-actions[bot]`
 
-### Updating Dependencies
+## Site URL
 
-Edit `pyproject.toml`:
+Production: `https://santanusinha.github.io/sai/`
 
-```toml
-[project.optional-dependencies]
-docs = [
-    "zensical>=0.1.0",  # Update version as needed
-]
-```
+## Related Files
 
-The workflow will use the updated version on next run.
-
-### Modifying Workflow
-
-Edit `.github/workflows/deploy-docs.yml` and push to `master`. The workflow updates itself.
-
-### Changing Trigger Conditions
-
-Modify the `paths` section to add/remove watched files:
-
-```yaml
-on:
-  push:
-    branches: [master]
-    paths:
-      - 'docs/**'           # Documentation content
-      - 'mkdocs.yml'        # Site configuration
-      - 'pyproject.toml'    # Dependencies
-      - 'examples/**'       # Add example files
-```
-
-## Additional Resources
-
-- [Zensical Documentation](https://zensical.org/docs/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [GitHub Pages Documentation](https://docs.github.com/en/pages)
-- [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
+- `.github/workflows/deploy-docs.yml` - Deployment workflow
+- `mkdocs.yml` - Site configuration
+- `docs/` - Documentation content
+- `pyproject.toml` - Dependencies (includes `zensical>=0.1.0`)
