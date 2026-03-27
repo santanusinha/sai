@@ -50,7 +50,7 @@ public class CoreToolBox implements ToolBox {
 
     private final Printer printer;
 
-    @Tool("Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore")
+    @Tool(value = "Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore", timeoutSeconds = Integer.MAX_VALUE)
     public ToolIO.BashResponse bash(
                                     @JsonPropertyDescription("Reason for requesting the tool. This is shown to the user for informational purposes.") String requestReason,
                                     @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.") String command,
