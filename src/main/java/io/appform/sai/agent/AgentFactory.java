@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.knuddels.jtokkit.api.EncodingType;
 import com.phonepe.sentinelai.core.agent.AgentExtension;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
+import com.phonepe.sentinelai.core.agent.AutoCompactionSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
@@ -81,6 +82,9 @@ public class AgentFactory {
                                                        .tokenCountingConfig(TokenCountingConfig.DEFAULT)
                                                        .build()))
                 .outputGenerationMode(config.getOutputGenerationMode())
+                .autoCompactionSetup(AutoCompactionSetup.builder()
+                        .compactionTriggerThresholdPercentage(50)
+                        .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);
         final var cwdName = Paths.get("").toAbsolutePath().getFileName();

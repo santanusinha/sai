@@ -15,6 +15,7 @@
  */
 package io.appform.sai;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -229,9 +230,15 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         });
     }
 
-    @SneakyThrows
     private static String prompt(String xml) {
-        return xmlMapper.readTree(xml).get("data").asText();
+        try {
+            return xmlMapper.readTree(xml).get("data").asText();
+        }
+        catch (JsonProcessingException e) {
+            log.error("Failed to extract prompt from XML. Printing raw content. Error: {}",
+                      e.getMessage());
+            return xml;
+        }
     }
 
     @SneakyThrows

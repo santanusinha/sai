@@ -23,7 +23,6 @@ import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
-import com.phonepe.sentinelai.session.AgentSessionExtensionSetup;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
 
@@ -229,9 +228,6 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionExtension = AgentSessionExtension.<String, String, SaiAgent>builder()
                 .sessionStore(sessionStore)
                 .mapper(mapper)
-                .setup(AgentSessionExtensionSetup.builder()
-                        .autoSummarizationThresholdPercentage(50)
-                        .build())
                 .build();
         final var agentSkillsExtension = buildAgentSkillsExtension(settings, agentConfig);
         final var agentFactory = new AgentFactory(settings,

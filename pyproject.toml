@@ -1,0 +1,14 @@
+[project]
+name = "sai-docs"
+version = "1.0.0"
+description = "Documentation for SAI - Sentinel AI CLI Agent"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+docs = [
+    "zensical>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

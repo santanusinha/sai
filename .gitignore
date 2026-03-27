@@ -47,3 +47,9 @@ deps
 .opencode
 output.txt
 *.orig
+
+### Documentation ###
+site/
+.venv/
+__pycache__/
+*.py[cod]
