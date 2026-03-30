@@ -16,7 +16,10 @@
 package io.appform.sai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.events.AgentEventVisitor;
+import com.phonepe.sentinelai.core.events.CompactionCompletedEvent;
+import com.phonepe.sentinelai.core.events.CompactionStartedEvent;
 import com.phonepe.sentinelai.core.events.InputReceivedAgentEvent;
 import com.phonepe.sentinelai.core.events.MessageReceivedAgentEvent;
 import com.phonepe.sentinelai.core.events.MessageSentAgentEvent;
@@ -41,6 +44,29 @@ public class EventPrinter implements AgentEventVisitor<Void> {
     public EventPrinter(Printer printer, ObjectMapper mapper) {
         this.printer = printer;
         this.messagePrinter = new MessagePrinter(printer, mapper, false);
+    }
+
+    @Override
+    public Void visit(CompactionCompletedEvent compactionCompleted) {
+        if (compactionCompleted.getErrorType().equals(ErrorType.SUCCESS)) {
+            printer.print(Printer.systemMessage("Compaction completed successfully... Took %d ms"
+                    .formatted(compactionCompleted.getElapsedTimeMs())));
+            printer.print(Printer.userMessage(compactionCompleted.getExtractedSummary().getSummary()));
+        }
+        else {
+            printer.print(Printer.systemMessage("Compaction completed with errors... Took %d ms. Error: %s - %s"
+                    .formatted(compactionCompleted.getElapsedTimeMs(),
+                               compactionCompleted.getErrorType(),
+                               compactionCompleted.getErrorMessage()))
+                    .withSeverity(Severity.ERROR));
+        }
+        return null;
+    }
+
+    @Override
+    public Void visit(CompactionStartedEvent compactionStarted) {
+        printer.print(Printer.systemMessage("Compaction started..."));
+        return null;
     }
 
     @Override
