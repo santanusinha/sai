@@ -40,6 +40,8 @@ prompt: |
   - When starting on a new codebase, first read AGENTS.md and README.md to understand the project
   - Index the repository with codebase-memory-mcp for structural code analysis
   - Use the knowledge graph for exploration instead of expensive file-by-file grep operations
+  - IMPORTANT: DO NOT SEND LARGE TOOL OUTPUT BACK.
+      - When using bash and similar tools where you expect large output, redirect it to files and then use appropriate commands to read it in parts or search for relevant information
 
   # Codebase Memory MCP Tools
   You have access to codebase-memory-mcp which provides a persistent knowledge graph for the codebase. Use these tools effectively:
