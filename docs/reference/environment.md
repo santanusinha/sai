@@ -251,9 +251,6 @@ export COPILOT_PROXY_ENDPOINT=http://localhost:8080
 
 # Remote proxy server
 export COPILOT_PROXY_ENDPOINT=https://copilot-proxy.internal.company.com
-
-# Docker container on custom network
-export COPILOT_PROXY_ENDPOINT=http://copilot-proxy:4141
 ```
 
 **Models available via Copilot Proxy**:
@@ -448,7 +445,6 @@ For production or shared environments:
 
 - **Azure**: Use Azure Key Vault with managed identities
 - **AWS**: Use AWS Secrets Manager or Parameter Store
-- **Docker**: Use Docker secrets or environment injection
 - **Kubernetes**: Use Kubernetes secrets and ConfigMaps
 
 ### Rotate Keys Regularly

@@ -239,46 +239,7 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>io.fabric8</groupId>
-                <artifactId>docker-maven-plugin</artifactId>
-                <version>0.45.1</version>
-                <configuration>
-                    <images>
-                        <image>
-                            <name>santanusinha/sai:${project.version}</name>
-                            <alias>sai</alias>
-                            <build>
-                                <from>eclipse-temurin:17-jre-alpine</from>
-                                <assembly>
-                                    <descriptorRef>artifact</descriptorRef>
-                                </assembly>
-                                <entryPoint>
-                                    <exec>
-                                        <arg>java</arg>
-                                        <arg>-jar</arg>
-                                        <arg>/maven/${project.artifactId}-${project.version}.jar</arg>
-                                    </exec>
-                                </entryPoint>
-                                <workdir>/app</workdir>
-                                <runCmds>
-                                    <run>apk add --no-cache bash curl</run>
-                                </runCmds>
-                            </build>
-                        </image>
-                    </images>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>build-docker-image</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>build</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
- 
+
         </plugins>
     </build>
 
