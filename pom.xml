@@ -243,7 +243,8 @@
                 <groupId>io.fabric8</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
                 <version>0.45.1</version>
-                <configuration>
+                  <configuration>
+                    <skip>true</skip>
                     <images>
                         <image>
                             <name>santanusinha/sai:${project.version}</name>
