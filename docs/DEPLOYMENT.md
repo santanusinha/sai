@@ -14,7 +14,7 @@ The workflow runs when:
 
 1. **Push to master** with changes in:
    - `docs/**` - Any documentation content
-   - `mkdocs.yml` - Site configuration
+   - `zensical.toml` - Site configuration
    - `pyproject.toml` - Dependencies
    - `.github/workflows/deploy-docs.yml` - Workflow itself
 
@@ -68,13 +68,13 @@ Or using standard MkDocs commands:
 
 ```bash
 # Install dependencies
-pip install mkdocs-material mkdocs-minify-plugin
+pip install zensical
 
 # Build site
-mkdocs build --clean
+zensical build --clean
 
 # Serve locally
-mkdocs serve
+zensical serve
 ```
 
 ## Monitoring Deployments
@@ -103,8 +103,8 @@ curl -I https://santanusinha.github.io/sai/
 # Test locally first
 zensical build --clean
 
-# Check for syntax errors in mkdocs.yml
-python -c "import yaml; yaml.safe_load(open('mkdocs.yml'))"
+# Check for syntax errors in zensical.toml
+python3 -c "import tomli; tomli.load(open('zensical.toml', 'rb')); print('OK')"
 ```
 
 **Permission Errors:**
@@ -126,8 +126,8 @@ python -c "import yaml; yaml.safe_load(open('mkdocs.yml'))"
 
 ### 404 Errors
 
-1. Verify `site_url` in `mkdocs.yml`: `https://santanusinha.github.io/sai/`
-2. Check navigation links in `mkdocs.yml`
+1. Verify `site_url` in `zensical.toml`: `https://santanusinha.github.io/sai/`
+2. Check navigation links in `zensical.toml`
 3. Ensure all referenced files exist in `docs/`
 
 ## Manual Deployment
@@ -160,6 +160,6 @@ Production: `https://santanusinha.github.io/sai/`
 ## Related Files
 
 - `.github/workflows/deploy-docs.yml` - Deployment workflow
-- `mkdocs.yml` - Site configuration
+- `zensical.toml` - Site configuration
 - `docs/` - Documentation content
 - `pyproject.toml` - Dependencies (includes `zensical>=0.1.0`)
