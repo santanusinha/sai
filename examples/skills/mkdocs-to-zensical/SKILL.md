@@ -220,9 +220,47 @@ Similarly map `extra_javascript` if present. These are supported natively in Zen
 After writing `zensical.toml`, scan for and update these references:
 
 **GitHub Actions workflows** (`.github/workflows/*.yml`):
-- Path triggers: `paths: [mkdocs.yml, ...]` → include `zensical.toml`
-- Build steps that run `mkdocs build` or `mkdocs gh-deploy` → change to `zensical build` / `zensical gh-deploy`
+- Path triggers: `paths: [mkdocs.yml, ...]` → replace `mkdocs.yml` with `zensical.toml` (mind the correct path — e.g. `docs/zensical.toml` if the config lives in a subdirectory)
 - Pip install steps with `mkdocs-material` → change to `zensical`
+- **`mkdocs gh-deploy` does NOT have a Zensical equivalent** — `zensical gh-deploy` does not exist. Instead, replace the entire deploy step with the GitHub Pages Actions API approach (see template below)
+- Permissions must change from `contents: write` to `pages: write` + `id-token: write`
+
+Use this canonical GitHub Actions workflow template for Zensical deployments:
+
+```yaml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Install zensical and plugins
+        run: pip install zensical  # add any extra plugins here
+      - name: Build Site
+        run: zensical build --clean
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site  # adjust if docs_dir is a subdirectory
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+> **Important**: In the GitHub repo settings, **Settings → Pages → Source** must be set to **"GitHub Actions"** (not "Deploy from a branch") for this workflow to work.
 
 **Documentation files** (READMEs, deployment guides, etc.):
 - Any prose that says "Edit `mkdocs.yml`" → update to "Edit `zensical.toml`"
@@ -250,6 +288,7 @@ Run this as a quick sanity check before telling the user the migration is done.
 
 ## Common Pitfalls
 
+- **`zensical gh-deploy` does not exist**: Unlike MkDocs, Zensical has no `gh-deploy` subcommand. Always use `zensical build --clean` and deploy via the GitHub Pages Actions API (`upload-pages-artifact` + `deploy-pages`). Attempting `zensical gh-deploy` will fail with a command-not-found error.
 - **`[[double brackets]]` for arrays**: `theme.palette` and `extra.social` use TOML Array of Tables syntax — each entry needs `[[project.theme.palette]]` or `[[project.extra.social]]`, not `[project.theme.palette]`.
 - **Inline table quoting**: In TOML inline tables `{"Key with spaces" = "val"}`, keys containing spaces must be quoted.
 - **No trailing commas**: TOML does not allow trailing commas in inline arrays.
