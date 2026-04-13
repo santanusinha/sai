@@ -333,6 +333,7 @@ public class SaiCommand implements Callable<Integer> {
         return 0;
     }
 
+    @SneakyThrows
     private AgentSkillsExtension<String, String, SaiAgent> buildAgentSkillsExtension(final Settings settings,
                                                                                      AgentConfig agentConfig) {
         if (!Strings.isNullOrEmpty(skill)) {
@@ -345,7 +346,9 @@ public class SaiCommand implements Callable<Integer> {
         else {
             var skillDirs = agentConfig.getSkillDirectories();
             if (Strings.isNullOrEmpty(skill)) {
-                skillDirs = List.of(Paths.get(settings.getConfigDir(), "skills").toString());
+                final var path = Paths.get(settings.getConfigDir(), "skills");
+                Files.createDirectories(path);
+                skillDirs = List.of(path.toString());
             }
             var skillNames = Objects.requireNonNullElseGet(agentConfig.getSkillNames(), List::<String>of);
             return AgentSkillsExtension.<String, String, SaiAgent>withMultipleSkills()
