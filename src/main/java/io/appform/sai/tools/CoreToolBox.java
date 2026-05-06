@@ -60,7 +60,7 @@ public class CoreToolBox implements ToolBox {
             final var commandOutput = new BashCommandRunner(command,
                                                             Duration.ofSeconds(timeoutSeconds),
                                                             line -> line)
-                                                                    .call();
+                    .call();
 
             final var statusCode = commandOutput.getStatusCode();
             log.info("Bash command execution completed with status code: {}", statusCode);
