@@ -100,7 +100,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
                                    Printer.raw(Printer.Colours.GRAY + prettyPrintXML(systemPrompt.getContent())
                                            + Printer.Colours.RESET).withDebug(true),
-                                   Printer.empty());
+                                   Printer.empty().withDebug(true));
                 }
                 catch (Exception e) {
                     log.error("Failed to pretty print system prompt XML. Printing raw content. Error: {}",
@@ -108,7 +108,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     return List.of(Printer.debug(Actor.SYSTEM, "System Prompt"),
                                    Printer.raw(Printer.Colours.GRAY + systemPrompt.getContent()
                                            + Printer.Colours.RESET).withDebug(true),
-                                   Printer.empty());
+                                   Printer.empty().withDebug(true));
                 }
             }
 
@@ -135,6 +135,11 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                                 .getErrorType() != null && toolCallResponse
                                         .getErrorType()
                                         .equals(ErrorType.SUCCESS)) {
+                            messages.add(Printer.systemMessage("Tool call '%s' completed successfully."
+                                    .formatted(toolCallResponse.getToolName())));
+                            final var node = mapper.readTree(toolCallResponse.getResponse());
+                            final var prettyResponse = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+                            messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse + Printer.Colours.RESET));
                             messages.add(Printer.systemMessage(toolCallResponse
                                     .getResponse()));
                         }
@@ -162,7 +167,6 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 }
                 return messages;
             }
-
         });
     }
 
@@ -200,10 +204,16 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
                     }
                     default -> {
-                        messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "("
-                                + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
-                                        .formatted(toolCall.getToolName(), toolCall.getArguments())));
-
+                        final var toolMessage = Printer.Colours.YELLOW + "Tool call:"
+                                + Printer.Colours.WHITE + " %s" + Printer.Colours.RESET
+                                        .formatted(toolCall.getToolName());
+                        messages.add(Printer.systemMessage(toolMessage));
+                        messages.add(Printer.empty());
+                        final var node = mapper.readTree(toolCall.getArguments());
+                        final var content = mapper.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(node);
+                        messages.add(Printer.raw(Printer.Colours.GRAY
+                                + content + Printer.Colours.RESET));
                     }
                 }
                 messages.add(Printer.empty());
@@ -225,6 +235,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
                             .formatted(Utils.toMillis(elapsedTimeMs),
                                        stats.getTotalTokens());
+                    messages.add(Printer.empty());
                     messages.add(Printer.assistantMessage(infoMessage));
                 }
                 return messages;
@@ -261,6 +272,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             return;
         }
         messages.add(Printer.assistantMessage(request.get("requestReason").asText()));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.YELLOW + "$ " + Printer.Colours.WHITE
                 + request.get("command").asText() + Printer.Colours.GRAY
                 + " (Timeout: " + request.get("timeoutSeconds").asInt() + " seconds)"
@@ -275,13 +287,23 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var statusCode = response.getStatusCode();
         final var stdout = response.getStdout();
         final var stderr = response.getStderr();
+        if (statusCode != 0 || !Strings.isNullOrEmpty(stderr)) {
+            var errorMessage = !Strings.isNullOrEmpty(stderr) ? stderr : "";
+            if (!Strings.isNullOrEmpty(stdout)) {
+                errorMessage += !errorMessage.isEmpty() ? System.lineSeparator() : "";
+                errorMessage += stdout;
+            }
+            errorMessage = Strings.isNullOrEmpty(errorMessage)
+                    ? errorMessage
+                    : "Unknown error";
+            messages.add(Printer.raw(Colours.RED
+                    + "Status: %s -> %s".formatted(statusCode, errorMessage)
+                    + Colours.RESET));
+            return;
+        }
         if (!Strings.isNullOrEmpty(stdout)) {
             messages.add(Printer.raw(Colours.GRAY + stdout + Colours.RESET));
-        }
-        if (!Strings.isNullOrEmpty(stderr)) {
-            messages.add(Printer.raw(Colours.RED
-                    + "Status: %s -> %s".formatted(statusCode, stderr)
-                    + Colours.RESET));
+            messages.add(Printer.empty());
         }
         messages.add(Printer.systemMessage("Status: %s -> Command executed successfully"
                 .formatted(statusCode)));
@@ -294,14 +316,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (!ensureParamsExist(node, messages, "requestReason", "filePath")) {
             return;
         }
-        final var checksum = Objects.requireNonNullElseGet(node.get("knownChecksum"), () -> NullNode.instance).asText();
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.YELLOW
-                + "read: " + Printer.Colours.WHITE
+                + "Read: " + Printer.Colours.WHITE
                 + node.get("filePath").asText()
-                + "checksum: " + checksum + Printer.Colours.RESET));
+                + Printer.Colours.RESET));
     }
-
 
     @SneakyThrows
     private void printReadToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
@@ -316,7 +337,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (response.isChanged()) {
             if (!Strings.isNullOrEmpty(content)) {
                 //messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
-                messages.add(Printer.systemMessage("File read successfully."));
+                messages.add(Printer.systemMessage("Read %d bytes...".formatted(content.length())));
             }
             else {
                 messages.add(Printer.systemMessage("File is empty."));
@@ -341,17 +362,19 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             return;
         }
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.YELLOW + "Find/Replace: " + Printer.Colours.WHITE
                 + node.get("filePath").asText()
                 + Printer.Colours.GRAY + " (Occurrence: " + node.get("occurrence").asText() + ")"
                 + Printer.Colours.RESET));
+        messages.add(Printer.empty());
         Arrays.stream(node.get("searchText").asText().split(System.lineSeparator()))
                 .forEach(line -> messages.add(Printer.raw(Printer.Colours.RED + "- "
-                        + Printer.Colours.WHITE + line + Printer.Colours.RESET)));
-        messages.add(Printer.raw(Printer.Colours.GRAY + "─".repeat(80) + Printer.Colours.RESET));
+                        + Printer.Colours.GRAY + line + Printer.Colours.RESET)));
+        messages.add(Printer.empty());
         Arrays.stream(node.get("replaceText").asText().split(System.lineSeparator()))
                 .forEach(line -> messages.add(Printer.raw(Printer.Colours.GREEN + "+ "
-                        + Printer.Colours.WHITE + line + Printer.Colours.RESET)));
+                        + Printer.Colours.GRAY + line + Printer.Colours.RESET)));
     }
 
     @SneakyThrows
@@ -384,12 +407,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                  toolCall.getArguments(),
                  request);
         messages.add(Printer.assistantMessage(request.getRequestReason()));
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "edit: " + Printer.Colours.WHITE
+        messages.add(Printer.empty());
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "Edit: " + Printer.Colours.WHITE
                 + request.getPath() + Printer.Colours.RESET));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.GRAY
                 + request.getPatchContent() + Printer.Colours.RESET));
     }
-
 
     @SneakyThrows
     private void printEditToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
@@ -430,8 +454,10 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             case REPLACE -> "~ {%d, %d}: %s".formatted(startLine, endLine, content);
             case DELETE -> "-- {%d to %d}".formatted(startLine, endLine);
         };
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "edit: " + Printer.Colours.WHITE
+        messages.add(Printer.empty());
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "Line Edit: " + Printer.Colours.WHITE
                 + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.GRAY + symbol + Printer.Colours.RESET));
     }
 
@@ -458,8 +484,10 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         }
         log.info("Received write tool call with arguments: {}.", toolCall.getArguments());
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "write: " + Printer.Colours.WHITE
+        messages.add(Printer.empty());
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "Write: " + Printer.Colours.WHITE
                 + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.GRAY
                 + node.get("content").asText() + Printer.Colours.RESET));
     }
