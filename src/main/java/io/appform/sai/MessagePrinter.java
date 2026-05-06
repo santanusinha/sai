@@ -19,6 +19,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator;
 import com.google.common.base.Strings;
@@ -46,7 +47,9 @@ import io.appform.sai.tools.ToolIO;
 import io.appform.sai.tools.ToolIO.LineEditOperation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -199,7 +202,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     default -> {
                         messages.add(Printer.systemMessage((Printer.Colours.YELLOW + "%s" + Printer.Colours.RESET + "("
                                 + Printer.Colours.CYAN + "%s" + Printer.Colours.RESET + ")")
-                                .formatted(toolCall.getToolName(), toolCall.getArguments())));
+                                        .formatted(toolCall.getToolName(), toolCall.getArguments())));
 
                     }
                 }
@@ -291,9 +294,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (!ensureParamsExist(node, messages, "requestReason", "filePath")) {
             return;
         }
+        final var checksum = Objects.requireNonNullElseGet(node.get("knownChecksum"), () -> NullNode.instance).asText();
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "read: " + Printer.Colours.WHITE
-                + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.raw(Printer.Colours.YELLOW
+                + "read: " + Printer.Colours.WHITE
+                + node.get("filePath").asText()
+                + "checksum: " + checksum + Printer.Colours.RESET));
     }
 
 
@@ -335,12 +341,17 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             return;
         }
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "find_replace: " + Printer.Colours.WHITE
-                + node.get("filePath").asText() + Printer.Colours.RESET));
-        messages.add(Printer.raw(Printer.Colours.GRAY
-                + "s/%s/%s/%d".formatted(node.get("searchText").asText(),
-                                         node.get("replaceText").asText(),
-                                         node.get("occurrence").asInt())));
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "Find/Replace: " + Printer.Colours.WHITE
+                + node.get("filePath").asText()
+                + Printer.Colours.GRAY + " (Occurrence: " + node.get("occurrence").asText() + ")"
+                + Printer.Colours.RESET));
+        Arrays.stream(node.get("searchText").asText().split(System.lineSeparator()))
+                .forEach(line -> messages.add(Printer.raw(Printer.Colours.RED + "- "
+                        + Printer.Colours.WHITE + line + Printer.Colours.RESET)));
+        messages.add(Printer.raw(Printer.Colours.GRAY + "─".repeat(80) + Printer.Colours.RESET));
+        Arrays.stream(node.get("replaceText").asText().split(System.lineSeparator()))
+                .forEach(line -> messages.add(Printer.raw(Printer.Colours.GREEN + "+ "
+                        + Printer.Colours.WHITE + line + Printer.Colours.RESET)));
     }
 
     @SneakyThrows

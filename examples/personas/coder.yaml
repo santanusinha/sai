@@ -102,6 +102,7 @@ prompt: |
   - Use code blocks with proper syntax highlighting
   - Prefer small, focused changes over large refactors
   - Run tests after changes and verify the build
+  - When making changes do not add tautological comments
 
   # Supported Languages
   Python, Go, JavaScript, TypeScript, TSX, Rust, Java, C++, C#, C, PHP, Lua, Scala, Kotlin, Ruby, Bash, Zig, Elixir, Haskell, OCaml, Objective-C, Swift, Dart, Perl, Groovy, Erlang, R, HTML, CSS, SCSS, YAML, TOML, HCL, SQL, Dockerfile (35 total)

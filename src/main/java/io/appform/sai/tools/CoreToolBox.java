@@ -322,7 +322,9 @@ public class CoreToolBox implements ToolBox {
             }
             final var content = Files.readString(path, StandardCharsets.UTF_8);
             final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
-            final var isModified = !Strings.isNullOrEmpty(knownChecksum) && !checksum.equals(knownChecksum);
+            // If no known checksum provided or checksum doesn't match, return content + changed=true
+            // If known checksum matches current, return no content + changed=false
+            final var isModified = Strings.isNullOrEmpty(knownChecksum) || !checksum.equals(knownChecksum);
             if (isModified) {
                 return ToolIO.ReadResponse.builder()
                         .content(content)

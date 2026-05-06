@@ -2,6 +2,20 @@
 
 SAI is a command-line AI agent built on the Sentinel AI framework. It connects to model providers like OpenAI, Azure OpenAI, or a GitHub Copilot proxy, supports interactive and headless modes, and persists local sessions so you can resume where you left off.
 
+## Key Features
+
+- **Multiple Model Providers**: OpenAI, Azure OpenAI, GitHub Copilot proxy
+- **Interactive & Headless Modes**: Conversational sessions or batch processing
+- **Session Persistence**: Resume previous conversations
+- **Interrupt Handling**: Press Ctrl-C to cancel running agent tasks and return to prompt
+- **Optimized File Operations**: 
+  - Checksum-based read optimization to avoid re-sending unchanged file content
+  - Write safety checks to prevent accidental overwrites
+- **Agent Skills**: Extensible skill system following the [Agent Skills specification](https://agentskills.io/specification)
+- **Clean Terminal UX**: Streaming output with real-time event updates
+
+## Technical Details
+
 - Java 17+
 - Maven build producing a single shaded JAR
 - Model providers: openai, azure, copilot-proxy
@@ -181,7 +195,17 @@ While in interactive mode, the following special commands are available directly
 | Command       | Description                                              |
 |---------------|----------------------------------------------------------|
 | `!<cmd>`      | Execute a shell command (e.g. `!ls -la`, `!git status`) |
+| `Ctrl-C`      | Interrupt running agent task and return to prompt        |
 | `exit`        | Exit the application                                     |
+
+### Interrupt handling
+
+Press **Ctrl-C** at any time during agent execution to cancel the current task and return to the input prompt. This allows you to:
+- Stop long-running operations
+- Cancel tasks that are taking too long
+- Quickly return to the prompt to start a new query
+
+The agent will gracefully cancel the running task and display a message confirming the interruption.
 
 ### Shell execution (`!`)
 

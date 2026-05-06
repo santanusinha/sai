@@ -92,6 +92,7 @@ public class Printer implements AutoCloseable {
     @NonNull
     private final ExecutorService executorService;
 
+    @Getter
     private final Terminal terminal;
 
     @Getter

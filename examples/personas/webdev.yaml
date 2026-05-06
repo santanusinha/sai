@@ -15,9 +15,9 @@ modelSettings:
 # MCP Server Configuration
 mcp:
   mcpServers:
-    codebase-memory-mcp:
-      type: stdio
-      command: codebase-memory-mcp
+ #    codebase-memory-mcp:
+ #      type: stdio
+ #      command: codebase-memory-mcp
       # Alternative: specify full path if not on PATH
       # command: /usr/local/bin/codebase-memory-mcp
       # exposedTools:  # Optional: whitelist specific tools (if omitted, all tools are available)

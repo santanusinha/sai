@@ -15,6 +15,22 @@ java -jar target/sai-1.0-SNAPSHOT.jar
 
 Start a conversational session with the AI agent.
 
+#### Interactive Features
+
+- **Ctrl-C to Interrupt**: Press Ctrl-C at any time to cancel a running agent task
+  - Gracefully stops the current operation
+  - Returns immediately to the input prompt
+  - Allows you to start a new query without waiting
+  - No need to kill the process
+
+- **Shell Commands**: Execute shell commands with `!` prefix
+  ```bash
+  > !ls -la
+  > !git status
+  ```
+
+- **Exit**: Type `exit` to quit the application
+
 ### Single-Input Mode
 
 ```bash
