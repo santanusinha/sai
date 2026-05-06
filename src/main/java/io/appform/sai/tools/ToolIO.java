@@ -102,18 +102,21 @@ public class ToolIO {
         String path;
         @JsonPropertyDescription("Reason for reading the file.")
         String requestReason;
+        @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty")
+        String knownChecksum;
     }
-
-    // ==================== Search & Replace Tool ====================
 
     @Value
     @Builder
     @Jacksonized
+    @JsonClassDescription("Output of the read tool")
     public static class ReadResponse {
         @JsonPropertyDescription("The content of the file.")
         String content;
         @JsonPropertyDescription("The SHA-256 checksum of the file content.")
         String checksum;
+        @JsonPropertyDescription("Whether the file has changed since the last known checksum. True if the file has changed, false if it is unchanged and you can safely use the previously known content.")
+        boolean changed;
         @JsonPropertyDescription("Error message if any.")
         String error;
     }

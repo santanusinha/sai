@@ -302,13 +302,22 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var response = mapper.readValue(toolCallResponse.getResponse(), ToolIO.ReadResponse.class);
         final var content = response.getContent();
         final var error = response.getError();
-        if (!Strings.isNullOrEmpty(content)) {
-            messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
-            messages.add(Printer.systemMessage("File read successfully."));
-        }
         if (!Strings.isNullOrEmpty(error)) {
             messages.add(Printer.systemMessage("Error reading file: %s".formatted(error))
                     .withSeverity(Severity.ERROR));
+            return;
+        }
+        if (response.isChanged()) {
+            if (!Strings.isNullOrEmpty(content)) {
+                //messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                messages.add(Printer.systemMessage("File read successfully."));
+            }
+            else {
+                messages.add(Printer.systemMessage("File is empty."));
+            }
+        }
+        else {
+            messages.add(Printer.systemMessage("File has not changed since last read. Skipping read."));
         }
     }
 

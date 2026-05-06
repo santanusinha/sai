@@ -267,6 +267,7 @@ public class SaiCommand implements Callable<Integer> {
                     .printer(printer)
                     .build()
                     .start()) {
+
                 if (!settings.isHeadless()) {
                     printer.print(Update.builder()
                             .actor(Actor.SYSTEM)
@@ -345,7 +346,7 @@ public class SaiCommand implements Callable<Integer> {
         }
         else {
             var skillDirs = agentConfig.getSkillDirectories();
-            if (Strings.isNullOrEmpty(skill)) {
+            if (skillDirs == null || skillDirs.isEmpty()) {
                 final var path = Paths.get(settings.getConfigDir(), "skills");
                 Files.createDirectories(path);
                 skillDirs = List.of(path.toString());

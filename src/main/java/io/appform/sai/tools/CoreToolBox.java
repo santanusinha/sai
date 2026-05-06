@@ -291,15 +291,27 @@ public class CoreToolBox implements ToolBox {
         return "core";
     }
 
-    @Tool("Print a message to the agent's console output. Use this for logging important information, debugging, or communicating with the user. The message will be visible in the agent's logs and console output. Use this tool to provide feedback on actions taken, display variable values, or log any relevant information that may assist in understanding the agent's behavior.")
+    @Tool("""
+            Print a message to the agent's console output.
+            Use this for logging important information, debugging, or communicating with the user.
+            The message will be visible in the agent's logs and console output.
+            Use this tool to provide feedback on actions taken, display variable values, or log
+            any relevant information that may assist in understanding the agent's behavior.
+            """)
     public String print(@JsonPropertyDescription("The message to print. This can include variable values, status updates, or any information you want to log. Use this tool to communicate important information to the user or for debugging purposes.") String message) {
         printer.print(List.of(Printer.assistantMessage(message)));
         return "OK";
     }
 
-    @Tool("Read a file from the local filesystem. Returns content and a checksum for verification.")
+    @Tool("""
+            Read a file from the local filesystem. Returns content, changed indicator and a checksum or an error.
+            Use the changed flag to determine if the file has been modified since the last read.
+            If it is false, use the previously known content as current content would be empty.
+            If it is true, use the returned content as the current content and the returned checksum as the current checksum.
+            """)
     public ToolIO.ReadResponse read(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
-                                    @JsonPropertyDescription("The absolute path to the file to read.") String filePath) {
+                                    @JsonPropertyDescription("The absolute path to the file to read.") String filePath,
+                                    @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty if not known.") String knownChecksum) {
         log.info("Reading file: {}", filePath);
         try {
             final var path = Path.of(filePath);
@@ -310,9 +322,17 @@ public class CoreToolBox implements ToolBox {
             }
             final var content = Files.readString(path, StandardCharsets.UTF_8);
             final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+            final var isModified = !Strings.isNullOrEmpty(knownChecksum) && !checksum.equals(knownChecksum);
+            if (isModified) {
+                return ToolIO.ReadResponse.builder()
+                        .content(content)
+                        .checksum(checksum)
+                        .changed(true)
+                        .build();
+            }
             return ToolIO.ReadResponse.builder()
-                    .content(content)
                     .checksum(checksum)
+                    .changed(false)
                     .build();
         }
         catch (Exception e) {
@@ -422,7 +442,8 @@ public class CoreToolBox implements ToolBox {
     @Tool("Write content to a file. This will create the file if it doesn't exist, or overwrite it if it does.")
     public ToolIO.WriteResponse write(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                       @JsonPropertyDescription("The content to write to the file.") String content,
-                                      @JsonPropertyDescription("Reason for writing the file.") String requestReason) {
+                                      @JsonPropertyDescription("Reason for writing the file.") String requestReason,
+                                      @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
         log.info("Writing file: {}", filePath);
         try {
             final var path = Path.of(filePath);
@@ -430,6 +451,25 @@ public class CoreToolBox implements ToolBox {
                 Files.createDirectories(path.getParent());
             }
 
+            //Check if file exists and verify checksum if expectedChecksum is provided
+            if (Files.exists(path)) {
+                if (Strings.isNullOrEmpty(expectedChecksum)) {
+                    return ToolIO.WriteResponse.builder()
+                            .success(false)
+                            .error("File already exists at " + filePath
+                                    + ". Re-read the file to get the correct content and checksum, then provide the checksum in the write request to overwrite.")
+                            .build();
+                }
+                final var currContent = Files.readString(path, StandardCharsets.UTF_8);
+                final var currentChecksum = calculateChecksum(currContent.getBytes(StandardCharsets.UTF_8));
+                if (!currentChecksum.equals(expectedChecksum)) {
+                    return ToolIO.WriteResponse.builder()
+                            .success(false)
+                            .error("Checksum mismatch. Expected: " + expectedChecksum + ", Actual: "
+                                    + currentChecksum + ". Re-read the file to get the current checksum.")
+                            .build();
+                }
+            }
             Files.writeString(path,
                               content,
                               StandardOpenOption.CREATE,

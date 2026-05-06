@@ -61,7 +61,7 @@ public class CommandProcessor implements AutoCloseable {
     private final SaiAgent agent;
 
     private final Printer printer;
-    private Future<?> runningTask;
+    private volatile Future<?> runningTask;
     private final String user = Optional.ofNullable(System.getProperty("user.name"))
             .orElseGet(() -> System.getenv().getOrDefault("USER", "User"));
 
@@ -82,10 +82,15 @@ public class CommandProcessor implements AutoCloseable {
 
     @Override
     public void close() {
-        if (runningTask != null) {
+        cancelRunningTask();
+        log.info("Command processor shut down");
+    }
+
+    public void cancelRunningTask() {
+        if (runningTask != null && !runningTask.isDone()) {
+            log.info("Cancelling running task");
             runningTask.cancel(true);
         }
-        log.info("Command processor shut down");
     }
 
     public void handle(Command command) {
@@ -111,6 +116,7 @@ public class CommandProcessor implements AutoCloseable {
                             .build())
                     .request(prompt)
                     .build());
+            runningTask = responseF;
             final var response = responseF.get();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
@@ -135,8 +141,8 @@ public class CommandProcessor implements AutoCloseable {
         }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            errorMessage = "Command execution interrupted";
-            log.warn(errorMessage, e);
+            errorMessage = "Agent execution interrupted by user";
+            log.info(errorMessage);
             errorActor = Actor.SYSTEM;
         }
         catch (Exception e) {
