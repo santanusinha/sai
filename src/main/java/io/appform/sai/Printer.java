@@ -24,6 +24,9 @@ import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
+import org.jline.terminal.Terminal.Signal;
+import org.jline.terminal.Terminal.SignalHandler;
+import org.jline.terminal.impl.NativeSignalHandler;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedString;
 import org.jline.utils.InfoCmp.Capability;
@@ -32,10 +35,13 @@ import org.jline.utils.Status;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Consumer;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -101,6 +107,7 @@ public class Printer implements AutoCloseable {
     private final Status status;
 
     private final LinkedBlockingQueue<List<Update>> printingQueue = new LinkedBlockingQueue<>();
+    private final Map<Signal, Consumer<Signal>> signalHandlers = new ConcurrentHashMap<>();
     private Future<?> printerTask = null;
 
     @Builder
@@ -126,6 +133,18 @@ public class Printer implements AutoCloseable {
             System.setProperty("jline.terminal.type", "dumb");
             System.setProperty("org.jline.terminal.dumb.color", "false");
             log.info("Running in headless mode with dumb terminal");
+        }
+        else {
+            terminalBuilder.signalHandler(signal -> {
+                final var handler = signalHandlers.get(signal);
+                if (null != handler) {
+                    handler.accept(signal);
+                }
+                else {
+                    log.warn("No handler registered for signal: {}", signal);
+                    NativeSignalHandler.SIG_IGN.handle(signal);
+                }
+            });
         }
         this.terminal = terminalBuilder.build();
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
@@ -163,6 +182,16 @@ public class Printer implements AutoCloseable {
 
         printerTask = executorService.submit(this::processPrintingQueue);
         this.print(markIdleStatus());
+        return this;
+    }
+
+    public Printer registerSignalHandler(Signal signal, Consumer<Signal> handler) {
+        signalHandlers.put(signal, handler);
+        return this;
+    }
+
+    public Printer unregisterSignalHandler(Signal signal) {
+        signalHandlers.remove(signal);
         return this;
     }
 
@@ -316,6 +345,11 @@ public class Printer implements AutoCloseable {
             case WARNING -> Colours.YELLOW;
             case NORMAL -> Colours.WHITE;
         };
+    }
+
+    public Printer registerSignalHandler(jnr.constants.platform.Signal sigint, Object handler) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'registerSignalHandler'");
     }
 
 

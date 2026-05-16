@@ -268,8 +268,7 @@ public class SaiCommand implements Callable<Integer> {
                     .build()
                     .start();
                  final var interruptMonitor = new InterruptMonitor(commandProcessor,
-                                                                   printer,
-                                                                   printer.getLineReader().getTerminal())) {
+                                                                   printer)) {
 
                 if (!settings.isHeadless()) {
                     printer.print(Update.builder()
@@ -311,11 +310,9 @@ public class SaiCommand implements Callable<Integer> {
                                         .toString(), userInput))
                                 .build();
                         try {
-                            interruptMonitor.startMonitoring();
                             commandProcessor.handle(command);
                         }
                         finally {
-                            interruptMonitor.stopMonitoring();
                             userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                         }
                     }

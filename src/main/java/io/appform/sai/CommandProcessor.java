@@ -31,6 +31,7 @@ import io.appform.sai.models.Severity;
 
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
 
 import lombok.Builder;
@@ -89,7 +90,12 @@ public class CommandProcessor implements AutoCloseable {
     public void cancelRunningTask() {
         if (runningTask != null && !runningTask.isDone()) {
             log.info("Cancelling running task");
-            runningTask.cancel(true);
+            try {
+                runningTask.cancel(true);
+            }
+            catch (CancellationException e) {
+                log.info("Running task cancelled successfully");
+            }
         }
     }
 

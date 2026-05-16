@@ -135,11 +135,18 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                                         .equals(ErrorType.SUCCESS)) {
                             messages.add(Printer.systemMessage("Tool call '%s' completed successfully."
                                     .formatted(toolCallResponse.getToolName())));
-                            final var node = mapper.readTree(toolCallResponse.getResponse());
-                            final var prettyResponse = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
-                            messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse + Printer.Colours.RESET));
-                            messages.add(Printer.systemMessage(toolCallResponse
-                                    .getResponse()));
+
+                            try {
+                                final var node = mapper.readTree(toolCallResponse.getResponse());
+                                final var prettyResponse = mapper.writerWithDefaultPrettyPrinter()
+                                        .writeValueAsString(node);
+                                messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse
+                                        + Printer.Colours.RESET));
+                            }
+                            catch (JsonProcessingException e) {
+                                messages.add(Printer.raw(Printer.Colours.GRAY + toolCallResponse.getResponse()
+                                        + Printer.Colours.RESET));
+                            }
                         }
                         else {
                             messages.add(Printer.systemMessage("Error: %s - %s"
@@ -202,16 +209,20 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
                     }
                     default -> {
-                        final var toolMessage = Printer.Colours.YELLOW + "Tool call:"
-                                + Printer.Colours.WHITE + " %s" + Printer.Colours.RESET
-                                        .formatted(toolCall.getToolName());
+                        final var toolMessage = Printer.Colours.YELLOW + "Tool call:" + Printer.Colours.WHITE
+                                + " %s".formatted(toolCall.getToolName()) + Printer.Colours.RESET;
                         messages.add(Printer.systemMessage(toolMessage));
                         messages.add(Printer.empty());
-                        final var node = mapper.readTree(toolCall.getArguments());
-                        final var content = mapper.writerWithDefaultPrettyPrinter()
-                                .writeValueAsString(node);
-                        messages.add(Printer.raw(Printer.Colours.GRAY
-                                + content + Printer.Colours.RESET));
+                        try {
+                            final var node = mapper.readTree(toolCall.getArguments());
+                            final var content = mapper.writerWithDefaultPrettyPrinter()
+                                    .writeValueAsString(node);
+                            messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                        }
+                        catch (JsonProcessingException e) {
+                            messages.add(Printer.raw(Printer.Colours.GRAY + toolCall.getArguments()
+                                    + Printer.Colours.RESET));
+                        }
                     }
                 }
                 messages.add(Printer.empty());

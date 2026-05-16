@@ -35,6 +35,32 @@ Agent Skills follow the [Agent Skills specification](https://agentskills.io/spec
     --task "Implement user authentication feature"
 ```
 
+### sonar-cli
+**Purpose**: Run SonarQube / SonarCloud static-analysis on the current Git branch and report issues (bugs, vulnerabilities, code smells).
+
+**When to use**:
+- Scan code for quality issues using SonarQube or SonarCloud
+- Report code smells, bugs, and security vulnerabilities on the current branch
+- Set up `sonar-project.properties` for a project
+- Check Quality Gate status after a CI run
+
+**Prerequisites**:
+- `sonar-scanner` CLI installed (or Maven/Gradle SonarQube plugin)
+- Reachable SonarQube server or SonarCloud account
+- `SONAR_TOKEN` environment variable set
+
+**Example**:
+```bash
+# From within Sai, activate the skill
+> activate_skill("sonar-cli")
+
+# Run a scan and report issues on the current branch
+export SONAR_TOKEN="sqp_xxxx"
+bash examples/skills/sonar-cli/scripts/report-issues.sh \
+  --host http://localhost:9000 \
+  --project-key my-project
+```
+
 ## Using Skills
 
 ### Method 1: Multi-skill Mode (Default)

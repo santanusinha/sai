@@ -85,6 +85,38 @@ mvn spotless:check
 
 Output JAR: `target/sai-1.0-SNAPSHOT.jar`
 
+## Definition of Done — Code Changes
+
+Before declaring any code change complete, **all of the following must pass**:
+
+1. **Formatting** — `mvn spotless:apply` applied and `mvn spotless:check` clean
+2. **Compilation** — `mvn -Dspotless.skip=true compile` succeeds with no errors
+3. **Tests** — `mvn -Dspotless.skip=true test` passes
+4. **Sonar scan** — run SonarCloud analysis on the current branch and confirm:
+   - Quality Gate status is **OK**
+   - No new **BLOCKER** or **CRITICAL** issues introduced
+
+### Running the Sonar check
+
+```bash
+# Compile first (sonar needs .class files)
+mvn -Dspotless.skip=true compile test-compile
+
+# Run the scan (SONAR_TOKEN must be set)
+SONAR_BIN="/tmp/sonar-scanner-install/sonar-scanner-7.1.0.4889-linux-x64/bin/sonar-scanner"
+"$SONAR_BIN" \
+  -Dsonar.token="${SONAR_TOKEN}" \
+  -Dsonar.branch.name="$(git rev-parse --abbrev-ref HEAD)"
+
+# Or use the skill's report script for a full Markdown summary:
+bash examples/skills/sonar-cli/scripts/report-issues.sh \
+  --host https://sonarcloud.io \
+  --project-key santanusinha_sai
+```
+
+> `sonar-project.properties` is already configured in the repo root.
+> SonarCloud project: https://sonarcloud.io/dashboard?id=santanusinha_sai
+
 ## Code Formatting
 
 This project uses Spotless for code formatting. Before committing:

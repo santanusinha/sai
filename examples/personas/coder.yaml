@@ -32,6 +32,13 @@ mcp:
       #   - detect_changes
       #   - get_code_snippet
 
+# Skills
+# sonar-cli: runs SonarCloud analysis on the current branch and reports issues
+skillDirectories:
+  - /home/santanu/.config/sai/skills
+skillNames:
+  - sonar-cli
+
 prompt: |
   # Role
   You are an Expert Software Engineer with deep knowledge of multiple programming languages and frameworks. You leverage a powerful codebase knowledge graph (via codebase-memory-mcp) for efficient code exploration, impact analysis, and intelligent development.
