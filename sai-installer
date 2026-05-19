@@ -1,0 +1,894 @@
+#!/usr/bin/env bash
+# sai-installer — SAI installer / upgrader / uninstaller
+#
+# Usage:
+#   bash sai-installer [--base-dir <path>] install                  # install SAI
+#   bash sai-installer [--base-dir <path>] upgrade                  # upgrade to latest commit
+#   bash sai-installer [--base-dir <path>] reinstall                # remove and re-install SAI (keeps config)
+#   bash sai-installer [--base-dir <path>] uninstall                # remove SAI
+#   bash sai-installer skill-install <source>                       # install a skill
+#   bash sai-installer skill-remove  <name>                         # remove a skill
+#   bash sai-installer persona-install <source>                     # install a persona
+#   bash sai-installer persona-remove  <name>                       # remove a persona
+#
+# <source> for skill-install can be:
+#   /path/to/skill-dir           local directory containing SKILL.md
+#   owner/repo                   GitHub repo (cloned; root must contain SKILL.md)
+#   owner/repo/sub/path          GitHub repo sub-directory containing SKILL.md
+#   https://github.com/...       full GitHub (or any git) URL; optionally append #sub/path
+#   https://example.com/sk.zip  direct zip/tar.gz download
+#
+# <source> for persona-install can be:
+#   /path/to/persona.yaml        local .yaml/.yml/.json file
+#   owner/repo/path/to/file.yaml GitHub file (fetched from raw.githubusercontent.com)
+#   https://raw.github.../f.yaml direct URL to a raw persona file
+#   https://github.com/.../blob/branch/f.yaml  GitHub blob URL (auto-rewritten to raw)
+#
+# --base-dir may appear before or after the subcommand.
+# Useful for testing: bash sai-installer --base-dir /tmp/sai-test install
+
+set -euo pipefail
+
+# ─── parse arguments ──────────────────────────────────────────────────────────
+MODE=""
+BASE_HOME="${HOME}"
+SUBCMD_ARGS=()
+
+usage() {
+    echo "Usage: sai-installer [--base-dir <path>] <subcommand> [args]" >&2
+    echo "" >&2
+    echo "Subcommands:" >&2
+    echo "  install                    Install SAI" >&2
+    echo "  upgrade                    Upgrade SAI to the latest commit" >&2
+    echo "  reinstall                  Remove and re-install SAI (preserves config)" >&2
+    echo "  uninstall                  Remove SAI" >&2
+    echo "  skill-install <source>     Install a skill from a local path, GitHub, or URL" >&2
+    echo "  skill-remove  <name>       Remove an installed skill by name" >&2
+    echo "  persona-install <source>   Install a persona from a local file, GitHub, or URL" >&2
+    echo "  persona-remove  <name>     Remove an installed persona by name" >&2
+    echo "" >&2
+    echo "skill-install sources:" >&2
+    echo "  /path/to/dir              Local directory containing SKILL.md" >&2
+    echo "  owner/repo                GitHub repo root" >&2
+    echo "  owner/repo/sub/path       GitHub repo sub-directory" >&2
+    echo "  https://github.com/...    Full git URL (append #sub/path for a subdir)" >&2
+    echo "  https://example.com/f.zip Direct zip or tar.gz download" >&2
+    echo "" >&2
+    echo "persona-install sources:" >&2
+    echo "  /path/to/persona.yaml     Local .yaml/.yml/.json file" >&2
+    echo "  owner/repo/path/file.yaml GitHub file path (fetched from raw.githubusercontent.com)" >&2
+    echo "  https://.../file.yaml     Direct URL to a raw persona file" >&2
+    echo "  https://github.com/.../blob/branch/file.yaml  GitHub blob URL (auto-rewritten)" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --base-dir <path>  Override the root for all install paths" >&2
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --base-dir)
+            [[ -z "${2:-}" ]] && { echo "Error: --base-dir requires a path" >&2; exit 1; }
+            BASE_HOME="${2}"
+            shift 2
+            ;;
+        --base-dir=*)
+            BASE_HOME="${1#--base-dir=}"
+            shift
+            ;;
+        install|upgrade|reinstall|uninstall|skill-install|skill-remove|persona-install|persona-remove)
+            [[ -n "${MODE}" ]] && { echo "Error: multiple subcommands given: '${MODE}' and '${1}'" >&2; exit 1; }
+            MODE="${1}"
+            shift
+            # Collect any remaining args as subcommand arguments
+            SUBCMD_ARGS=("$@")
+            break
+            ;;
+        *)
+            echo "Error: unknown argument: $1" >&2
+            usage
+            ;;
+    esac
+done
+
+[[ -z "${MODE}" ]] && usage
+
+# ─── path constants (all rooted under BASE_HOME) ──────────────────────────────
+REPO_URL="https://github.com/santanusinha/sai.git"
+INSTALL_DIR="${BASE_HOME}/.local/share/sai"
+REPO_DIR="${INSTALL_DIR}/repo"
+JAR_PATH="${INSTALL_DIR}/sai.jar"
+COMMIT_STAMP="${INSTALL_DIR}/.last_commit"
+BIN_DIR="${BASE_HOME}/.local/bin"
+WRAPPER="${BIN_DIR}/sai"
+CONFIG_DIR="${BASE_HOME}/.config/sai"
+ENV_FILE="${CONFIG_DIR}/.env"
+STATE_DIR="${BASE_HOME}/.local/state/sai"
+INSTALL_LOG="${STATE_DIR}/install.log"
+INSTALLER_NAME="sai-installer"
+INSTALLER_PATH="${BIN_DIR}/${INSTALLER_NAME}"
+BUILT_JAR_NAME="sai-1.0-SNAPSHOT.jar"
+
+# ─── colours ──────────────────────────────────────────────────────────────────
+bold=$'\e[1m'
+green=$'\e[32m'
+yellow=$'\e[33m'
+red=$'\e[31m'
+cyan=$'\e[36m'
+reset=$'\e[0m'
+
+info()    { echo "${cyan}${bold}==>${reset} $*"; }
+success() { echo "${green}${bold}✔${reset}  $*"; }
+warn()    { echo "${yellow}${bold}!${reset}  $*"; }
+die()     { echo "${red}${bold}✘${reset}  $*" >&2; exit 1; }
+ask()     { echo -n "${bold}$*${reset} "; }
+
+# ─── logging ──────────────────────────────────────────────────────────────────
+# Append a JSON-lines record to the install log.
+# Usage: log_event <action> [key value ...]
+# Example: log_event "install" "java_version" "21" "commit" "abc1234"
+log_event() {
+    local action="${1}"; shift
+    mkdir -p "${STATE_DIR}"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local json="{\"timestamp\":\"${ts}\",\"action\":\"${action}\""
+    while [[ $# -ge 2 ]]; do
+        local key="${1}" val="${2}"; shift 2
+        # Escape backslashes and double-quotes in value
+        val="${val//\\/\\\\}"
+        val="${val//\"/\\\"}"
+        json+=",\"${key}\":\"${val}\""
+    done
+    json+="}"
+    echo "${json}" >> "${INSTALL_LOG}"
+}
+
+# ─── helpers ──────────────────────────────────────────────────────────────────
+
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)  OS="linux" ;;
+        Darwin*) OS="macos" ;;
+        *)       die "Unsupported OS: $(uname -s)" ;;
+    esac
+}
+
+# Returns the integer major Java version, or 0 if java is not found / not parseable.
+java_major_version() {
+    local raw
+    raw=$(java -version 2>&1 | head -1) || { echo 0; return; }
+    # Handles both legacy '1.8.x_NNN' and modern '17.x.x' version strings.
+    # Extract the leading integer from inside the first quoted token (e.g. "21.0.2",
+    # "1.8.0_292", "21.0.2+13"), then apply the 1.x → x remapping for Java 8.
+    local ver
+    ver=$(echo "${raw}" | grep -oE '"[0-9.]+[^"]*"' | tr -d '"' | grep -oE '^[0-9]+')
+    if [[ "${ver}" == "1" ]]; then
+        ver=$(echo "${raw}" | grep -oE '"1\.[0-9]+' | tr -d '"' | cut -d. -f2)
+    fi
+    echo "${ver:-0}"
+}
+
+# Returns the integer major Maven version, or 0 if mvn is not found.
+mvn_major_version() {
+    local raw
+    raw=$(mvn -v 2>&1 | head -1) || { echo 0; return; }
+    local ver
+    ver=$(echo "${raw}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)
+    echo "${ver:-0}"
+}
+
+install_java_linux() {
+    info "Attempting to install Java 17 on Linux..."
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq && sudo apt-get install -y openjdk-17-jdk-headless
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y java-17-openjdk-headless
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -Sy --noconfirm jdk17-openjdk
+    elif command -v zypper &>/dev/null; then
+        sudo zypper install -y java-17-openjdk-headless
+    else
+        return 1
+    fi
+}
+
+install_java_macos() {
+    info "Attempting to install Java 17 on macOS via Homebrew..."
+    if command -v brew &>/dev/null; then
+        brew install openjdk@17
+        # Homebrew does not symlink openjdk by default
+        local brew_prefix
+        brew_prefix=$(brew --prefix)
+        sudo ln -sfn "${brew_prefix}/opt/openjdk@17/libexec/openjdk.jdk" \
+            /Library/Java/JavaVirtualMachines/openjdk-17.jdk 2>/dev/null || true
+        export PATH="${brew_prefix}/opt/openjdk@17/bin:${PATH}"
+    else
+        return 1
+    fi
+}
+
+ensure_java() {
+    local ver
+    ver=$(java_major_version)
+    if [[ "${ver}" -ge 17 ]]; then
+        success "Java ${ver} found."
+        return
+    fi
+
+    if [[ "${ver}" -gt 0 ]]; then
+        warn "Java ${ver} is installed but SAI requires Java 17+. Attempting upgrade..."
+    else
+        warn "Java not found. Attempting installation..."
+    fi
+
+    local installed=0
+    if [[ "${OS}" == "linux" ]]; then
+        install_java_linux && installed=1 || true
+    else
+        install_java_macos && installed=1 || true
+    fi
+
+    if [[ "${installed}" -eq 0 ]]; then
+        log_event "java_install_failed"
+        die "Could not install Java automatically. Please install Java 17+ manually:\n  https://adoptium.net/"
+    fi
+
+    ver=$(java_major_version)
+    if [[ "${ver}" -lt 17 ]]; then
+        log_event "java_install_failed" "installed_version" "${ver}"
+        die "Java installation succeeded but version is still ${ver}. Please install Java 17+ manually."
+    fi
+    log_event "java_installed" "version" "${ver}"
+    success "Java ${ver} installed."
+}
+
+install_maven_linux() {
+    info "Attempting to install Maven on Linux..."
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y maven
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y maven
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -Sy --noconfirm maven
+    elif command -v zypper &>/dev/null; then
+        sudo zypper install -y maven
+    else
+        return 1
+    fi
+}
+
+install_maven_macos() {
+    info "Attempting to install Maven on macOS via Homebrew..."
+    if command -v brew &>/dev/null; then
+        brew install maven
+    else
+        return 1
+    fi
+}
+
+ensure_maven() {
+    local ver
+    ver=$(mvn_major_version)
+    if [[ "${ver}" -ge 3 ]]; then
+        success "Maven ${ver} found."
+        return
+    fi
+
+    warn "Maven not found. Attempting installation..."
+
+    local installed=0
+    if [[ "${OS}" == "linux" ]]; then
+        install_maven_linux && installed=1 || true
+    else
+        install_maven_macos && installed=1 || true
+    fi
+
+    if [[ "${installed}" -eq 0 ]]; then
+        log_event "maven_install_failed"
+        die "Could not install Maven automatically. Please install Maven 3.8+ manually:\n  https://maven.apache.org/install.html"
+    fi
+
+    ver=$(mvn_major_version)
+    if [[ "${ver}" -lt 3 ]]; then
+        log_event "maven_install_failed" "installed_version" "${ver}"
+        die "Maven installation succeeded but could not confirm version. Please verify with: mvn -v"
+    fi
+    log_event "maven_installed" "version" "${ver}"
+    success "Maven ${ver} installed."
+}
+
+build_jar() {
+    info "Building SAI from source..."
+    local commit
+    commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
+    log_event "build_started" "commit" "${commit}"
+    (cd "${REPO_DIR}" && mvn -Dspotless.skip=true clean package -q)
+    cp "${REPO_DIR}/target/${BUILT_JAR_NAME}" "${JAR_PATH}"
+    git -C "${REPO_DIR}" rev-parse HEAD > "${COMMIT_STAMP}"
+    log_event "build_complete" "commit" "${commit}" "jar" "${JAR_PATH}"
+    success "Build complete → ${JAR_PATH}"
+}
+
+write_wrapper() {
+    mkdir -p "${BIN_DIR}"
+    # Use variable substitution (not a single-quoted heredoc) so the resolved
+    # BASE_HOME paths are baked into the wrapper at install time.
+    cat > "${WRAPPER}" <<EOF
+#!/usr/bin/env bash
+# SAI launcher — auto-generated by sai-installer
+SAI_ENV="${CONFIG_DIR}/.env"
+if [[ -f "\${SAI_ENV}" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "\${SAI_ENV}"
+    set +a
+fi
+exec java -jar "${JAR_PATH}" "\$@"
+EOF
+    chmod +x "${WRAPPER}"
+    log_event "wrapper_written" "path" "${WRAPPER}"
+    success "Launcher written → ${WRAPPER}"
+}
+
+install_self() {
+    local src
+    src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    if [[ "${src}" != "${INSTALLER_PATH}" ]]; then
+        cp "${src}" "${INSTALLER_PATH}"
+        chmod +x "${INSTALLER_PATH}"
+        log_event "installer_saved" "path" "${INSTALLER_PATH}"
+        success "Installer saved → ${INSTALLER_PATH}"
+    fi
+}
+
+write_env_template() {
+    if [[ -f "${ENV_FILE}" ]]; then
+        warn "Config file ${ENV_FILE} already exists — skipping template creation."
+        return
+    fi
+
+    info "Creating ${ENV_FILE} (fill in your API keys)..."
+    cat > "${ENV_FILE}" <<'EOF'
+# SAI environment configuration
+# Uncomment and fill in the variables for your chosen model provider.
+# This file is sourced automatically by the 'sai' launcher.
+
+# ── OpenAI ────────────────────────────────────────────────────────────────────
+# OPENAI_API_KEY=your_key_here
+# OPENAI_ENDPOINT=https://api.openai.com/v1
+# OPENAI_ORGANIZATION=org_...
+# OPENAI_PROJECT_ID=proj_...
+# OPENAI_EXTRA_HEADERS=Header-Name:value,Another:value
+
+# ── Azure OpenAI ──────────────────────────────────────────────────────────────
+# AZURE_ENDPOINT=https://your-resource.openai.azure.com/
+# AZURE_API_KEY=your_azure_key
+# AZURE_API_VERSION=2024-10-21
+
+# ── GitHub Copilot Proxy ──────────────────────────────────────────────────────
+# COPILOT_PROXY_ENDPOINT=http://localhost:4141
+EOF
+    success "Env template written → ${ENV_FILE}"
+
+    ask "Would you like to set your OpenAI API key now? [y/N]"
+    read -r answer
+    if [[ "${answer,,}" == "y" ]]; then
+        ask "OPENAI_API_KEY:"
+        read -rs api_key
+        echo
+        if [[ -n "${api_key}" ]]; then
+            sed -i.bak "s|# OPENAI_API_KEY=your_key_here|OPENAI_API_KEY=${api_key}|" "${ENV_FILE}"
+            rm -f "${ENV_FILE}.bak"
+            success "API key saved to ${ENV_FILE}"
+        else
+            warn "No key entered — you can edit ${ENV_FILE} later."
+        fi
+    fi
+}
+
+setup_config_dir() {
+    mkdir -p "${CONFIG_DIR}/persona" "${CONFIG_DIR}/skills"
+    mkdir -p "${STATE_DIR}"
+    success "Config directory structure ready → ${CONFIG_DIR}"
+    write_env_template
+}
+
+detect_shell_rc() {
+    local shell_name
+    shell_name=$(basename "${SHELL:-bash}")
+    case "${shell_name}" in
+        bash) echo "${HOME}/.bashrc" ;;
+        zsh)  echo "${HOME}/.zshrc" ;;
+        fish) echo "${HOME}/.config/fish/config.fish" ;;
+        ksh)  echo "${HOME}/.kshrc" ;;
+        *)    echo "${HOME}/.profile" ;;
+    esac
+}
+
+ensure_path() {
+    if echo ":${PATH}:" | grep -q ":${BIN_DIR}:"; then
+        success "${BIN_DIR} is already in PATH."
+        return
+    fi
+
+    local rc_file shell_name
+    rc_file=$(detect_shell_rc)
+    shell_name=$(basename "${SHELL:-bash}")
+
+    warn "${BIN_DIR} is not in your PATH."
+    ask "Add it to ${rc_file}? [Y/n]"
+    read -r answer
+    if [[ "${answer,,}" == "n" ]]; then
+        warn "Skipped. Add the following line to your shell config manually:"
+        echo "  export PATH=\"${BIN_DIR}:\$PATH\""
+        return
+    fi
+
+    if [[ "${shell_name}" == "fish" ]]; then
+        echo "fish_add_path ${BIN_DIR}" >> "${rc_file}"
+    else
+        echo "export PATH=\"${BIN_DIR}:\${PATH}\"" >> "${rc_file}"
+    fi
+
+    success "PATH updated in ${rc_file}"
+    echo "  Run: ${bold}source ${rc_file}${reset}  (or open a new terminal)"
+}
+
+# ─── modes ────────────────────────────────────────────────────────────────────
+
+do_install() {
+    if [[ -f "${JAR_PATH}" ]]; then
+        warn "SAI is already installed. Run ${bold}sai-installer upgrade${reset} to update, ${bold}sai-installer reinstall${reset} to reinstall, or ${bold}sai-installer uninstall${reset} to remove."
+        exit 0
+    fi
+
+    info "Installing SAI (base: ${BASE_HOME})..."
+    log_event "install_started" "base_home" "${BASE_HOME}"
+    detect_os
+    ensure_java
+    ensure_maven
+
+    mkdir -p "${INSTALL_DIR}"
+    info "Cloning repository..."
+    git clone "${REPO_URL}" "${REPO_DIR}"
+
+    build_jar
+    setup_config_dir
+    install_bundled_assets
+    write_wrapper
+    install_self
+    ensure_path
+
+    echo
+    local commit
+    commit=$(cat "${COMMIT_STAMP}" 2>/dev/null || echo "unknown")
+    log_event "install_complete" \
+        "commit"     "${commit}"     \
+        "jar"        "${JAR_PATH}"   \
+        "wrapper"    "${WRAPPER}"    \
+        "installer"  "${INSTALLER_PATH}" \
+        "config_dir" "${CONFIG_DIR}" \
+        "state_dir"  "${STATE_DIR}"
+    success "SAI installed successfully!"
+    echo
+    echo "  ${bold}Usage:${reset}"
+    echo "    sai                              # start interactive session"
+    echo "    sai --persona <name>             # load a persona"
+    echo "    sai --input \"your question\"      # one-shot mode"
+    echo "    sai-installer upgrade            # upgrade to latest"
+    echo "    sai-installer reinstall          # reinstall from scratch"
+    echo "    sai-installer uninstall          # uninstall"
+    echo "    sai-installer skill-install <source>  # install a skill"
+    echo "    sai-installer skill-remove  <name>    # remove a skill"
+    echo "    sai-installer persona-install <source>  # install a persona"
+    echo "    sai-installer persona-remove  <name>    # remove a persona"
+    echo
+    echo "  Edit ${bold}${ENV_FILE}${reset} to configure your model provider."
+}
+
+do_upgrade() {
+    if [[ ! -d "${REPO_DIR}" ]]; then
+        warn "No existing installation found. Running install instead..."
+        do_install
+        return
+    fi
+
+    info "Checking for updates (base: ${BASE_HOME})..."
+    detect_os
+
+    git -C "${REPO_DIR}" fetch origin main -q
+
+    local local_commit remote_commit
+    local_commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
+    remote_commit=$(git -C "${REPO_DIR}" rev-parse origin/main)
+
+    if [[ "${local_commit}" == "${remote_commit}" ]]; then
+        log_event "upgrade_skipped" "commit" "${local_commit}" "reason" "already_up_to_date"
+        success "Already up to date (${local_commit:0:7})."
+        exit 0
+    fi
+
+    info "New commits available: ${local_commit:0:7} → ${remote_commit:0:7}"
+    log_event "upgrade_started" "from_commit" "${local_commit}" "to_commit" "${remote_commit}"
+    git -C "${REPO_DIR}" log --oneline "${local_commit}..${remote_commit}"
+    echo
+
+    ensure_java
+    ensure_maven
+
+    git -C "${REPO_DIR}" pull -q
+    build_jar
+    install_bundled_assets --overwrite
+    install_self
+
+    log_event "upgrade_complete" "from_commit" "${local_commit}" "to_commit" "${remote_commit}"
+    success "SAI upgraded to ${remote_commit:0:7}."
+}
+
+do_reinstall() {
+    info "Reinstalling SAI (base: ${BASE_HOME})..."
+    info "This will remove the current installation and perform a clean install."
+    info "Your config directory (${CONFIG_DIR}) will be preserved."
+    log_event "reinstall_started" "base_home" "${BASE_HOME}"
+
+    if [[ -f "${WRAPPER}" ]]; then
+        rm -f "${WRAPPER}"
+        success "Removed ${WRAPPER}"
+    fi
+
+    if [[ -f "${INSTALLER_PATH}" ]]; then
+        rm -f "${INSTALLER_PATH}"
+        success "Removed ${INSTALLER_PATH}"
+    fi
+
+    if [[ -d "${INSTALL_DIR}" ]]; then
+        rm -rf "${INSTALL_DIR}"
+        success "Removed ${INSTALL_DIR}"
+    fi
+
+    log_event "reinstall_wiped"
+    do_install
+}
+
+do_uninstall() {
+    info "Uninstalling SAI (base: ${BASE_HOME})..."
+    log_event "uninstall_started" "base_home" "${BASE_HOME}"
+
+    if [[ -f "${WRAPPER}" ]]; then
+        rm -f "${WRAPPER}"
+        success "Removed ${WRAPPER}"
+    fi
+
+    if [[ -f "${INSTALLER_PATH}" ]]; then
+        rm -f "${INSTALLER_PATH}"
+        success "Removed ${INSTALLER_PATH}"
+    fi
+
+    if [[ -d "${INSTALL_DIR}" ]]; then
+        rm -rf "${INSTALL_DIR}"
+        success "Removed ${INSTALL_DIR}"
+    fi
+
+    local config_removed="no"
+    if [[ -d "${CONFIG_DIR}" ]]; then
+        ask "Remove ${CONFIG_DIR} (your personas, skills, and .env)? [y/N]"
+        read -r answer
+        if [[ "${answer,,}" == "y" ]]; then
+            rm -rf "${CONFIG_DIR}"
+            config_removed="yes"
+            success "Removed ${CONFIG_DIR}"
+        else
+            info "Kept ${CONFIG_DIR} — remove it manually if needed."
+        fi
+    fi
+
+    log_event "uninstall_complete" "config_removed" "${config_removed}"
+
+    # Shell RC reminder only makes sense for real home installs
+    if [[ "${BASE_HOME}" == "${HOME}" ]]; then
+        local rc_file
+        rc_file=$(detect_shell_rc)
+        if grep -q "${BIN_DIR}" "${rc_file}" 2>/dev/null; then
+            warn "You may want to remove the PATH line added to ${rc_file}:"
+            grep -n "${BIN_DIR}" "${rc_file}" | head -5
+        fi
+    fi
+
+    success "SAI uninstalled."
+}
+
+# ─── persona helpers ──────────────────────────────────────────────────────────
+
+PERSONA_DIR="${CONFIG_DIR}/persona"
+
+# ─── modes ─ persona-install ──────────────────────────────────────────────────
+
+do_persona_install() {
+    local source="${1:-}"
+    [[ -z "${source}" ]] && { echo "Error: persona-install requires a source argument" >&2; usage; }
+
+    mkdir -p "${PERSONA_DIR}"
+
+    # Helper: download a URL to the persona dir
+    _download_persona() {
+        local url="${1}" dest_name="${2}"
+        local dest="${PERSONA_DIR}/${dest_name}"
+        info "Downloading ${url}..."
+        if command -v curl &>/dev/null; then
+            curl -fsSL "${url}" -o "${dest}"
+        else
+            wget -q "${url}" -O "${dest}"
+        fi
+        log_event "persona_installed" "name" "${dest_name}" "source" "${url}" "dest" "${dest}"
+        success "Persona '${dest_name%.*}' installed → ${dest}"
+    }
+
+    # ── local file ────────────────────────────────────────────────────────────
+    if [[ "${source}" == /* || "${source}" == ./* || "${source}" == ../* ]]; then
+        [[ ! -f "${source}" ]] && die "Local file not found: ${source}"
+        local fname
+        fname=$(basename "${source}")
+        cp "${source}" "${PERSONA_DIR}/${fname}"
+        log_event "persona_installed" "name" "${fname%.*}" "source" "${source}" "dest" "${PERSONA_DIR}/${fname}"
+        success "Persona '${fname%.*}' installed → ${PERSONA_DIR}/${fname}"
+        return
+    fi
+
+    # ── GitHub blob URL (rewrite to raw) ──────────────────────────────────────
+    # https://github.com/owner/repo/blob/branch/path/file.yaml
+    #   → https://raw.githubusercontent.com/owner/repo/branch/path/file.yaml
+    if [[ "${source}" =~ ^https://github\.com/.*/blob/ ]]; then
+        local raw_url
+        raw_url=$(echo "${source}" | sed 's|https://github\.com/\([^/]*\)/\([^/]*\)/blob/|https://raw.githubusercontent.com/\1/\2/|')
+        local fname
+        fname=$(basename "${raw_url%%\?*}")
+        _download_persona "${raw_url}" "${fname}"
+        return
+    fi
+
+    # ── direct URL to a raw file ──────────────────────────────────────────────
+    if [[ "${source}" =~ ^https?:// ]]; then
+        local fname
+        fname=$(basename "${source%%\?*}")
+        _download_persona "${source}" "${fname}"
+        return
+    fi
+
+    # ── GitHub shorthand: owner/repo/path/to/file.yaml ───────────────────────
+    if [[ "${source}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/.+ ]]; then
+        local owner repo filepath
+        owner=$(echo "${source}"    | cut -d/ -f1)
+        repo=$(echo "${source}"     | cut -d/ -f2)
+        filepath=$(echo "${source}" | cut -d/ -f3-)
+        local raw_url="https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${filepath}"
+        local fname
+        fname=$(basename "${filepath}")
+        _download_persona "${raw_url}" "${fname}"
+        return
+    fi
+
+    die "Unrecognised source format: '${source}'"
+}
+
+# ─── modes ─ persona-remove ───────────────────────────────────────────────────
+
+do_persona_remove() {
+    local name="${1:-}"
+    [[ -z "${name}" ]] && { echo "Error: persona-remove requires a persona name" >&2; usage; }
+
+    # Strip any extension the user may have included
+    name="${name%.*}"
+
+    local removed=0
+    for ext in yaml yml json; do
+        local target="${PERSONA_DIR}/${name}.${ext}"
+        if [[ -f "${target}" ]]; then
+            rm -f "${target}"
+            log_event "persona_removed" "name" "${name}" "path" "${target}"
+            success "Persona '${name}' removed (${target})."
+            removed=1
+            break
+        fi
+    done
+
+    [[ "${removed}" -eq 0 ]] && die "Persona '${name}' is not installed (looked in ${PERSONA_DIR})."
+}
+
+# ─── skill helpers ────────────────────────────────────────────────────────────
+
+SKILLS_DIR="${CONFIG_DIR}/skills"
+
+# Read the 'name' field from a SKILL.md YAML frontmatter.
+# Falls back to the directory's basename if not found.
+skill_name_from_dir() {
+    local dir="${1}"
+    local skill_md="${dir}/SKILL.md"
+    if [[ ! -f "${skill_md}" ]]; then
+        echo ""
+        return
+    fi
+    local name
+    name=$(awk '/^---/{f=!f;next} f && /^name:/{gsub(/^name:[[:space:]]+/,""); print; exit}' "${skill_md}")
+    echo "${name:-$(basename "${dir}")}"
+}
+
+# Copy a resolved skill directory into the skills store.
+# Args: <resolved_src_dir>
+install_skill_dir() {
+    local src="${1}"
+    if [[ ! -f "${src}/SKILL.md" ]]; then
+        die "No SKILL.md found in '${src}'. Is this a valid skill directory?"
+    fi
+    local name
+    name=$(skill_name_from_dir "${src}")
+    local dest="${SKILLS_DIR}/${name}"
+    if [[ -d "${dest}" ]]; then
+        warn "Skill '${name}' is already installed at ${dest}. Overwriting..."
+        rm -rf "${dest}"
+    fi
+    mkdir -p "${SKILLS_DIR}"
+    cp -r "${src}" "${dest}"
+    log_event "skill_installed" "name" "${name}" "source" "${src}" "dest" "${dest}"
+    success "Skill '${name}' installed → ${dest}"
+}
+
+# ─── bundled asset installation ───────────────────────────────────────────────
+
+# Install personas and skills that are checked into the repo under examples/.
+# Args: [--overwrite]
+#   Without --overwrite: skip files/dirs that are already installed (fresh install).
+#   With    --overwrite: replace bundled assets (upgrade — repo has been updated).
+install_bundled_assets() {
+    local overwrite=0
+    [[ "${1:-}" == "--overwrite" ]] && overwrite=1
+
+    if [[ ! -d "${REPO_DIR}" ]]; then
+        warn "REPO_DIR not found (${REPO_DIR}); skipping bundled asset installation."
+        return
+    fi
+
+    info "Installing bundled personas..."
+    local persona_file persona_fname persona_dest
+    while IFS= read -r persona_file; do
+        [[ -z "${persona_file}" ]] && continue
+        persona_fname=$(basename "${persona_file}")
+        persona_dest="${PERSONA_DIR}/${persona_fname}"
+        if [[ -f "${persona_dest}" && "${overwrite}" -eq 0 ]]; then
+            warn "Persona '${persona_fname%.*}' already installed — skipping."
+            continue
+        fi
+        mkdir -p "${PERSONA_DIR}"
+        cp "${REPO_DIR}/${persona_file}" "${persona_dest}"
+        log_event "bundled_persona_installed" "name" "${persona_fname%.*}" "dest" "${persona_dest}" "overwrite" "${overwrite}"
+        success "Bundled persona '${persona_fname%.*}' installed → ${persona_dest}"
+    done < <(git -C "${REPO_DIR}" ls-files "examples/personas/" | grep -E '\.(yaml|yml|json)$')
+
+    info "Installing bundled skills..."
+    local skill_md_path skill_src_dir skill_name skill_dest
+    while IFS= read -r skill_md_path; do
+        [[ -z "${skill_md_path}" ]] && continue
+        skill_src_dir="${REPO_DIR}/$(dirname "${skill_md_path}")"
+        skill_name=$(skill_name_from_dir "${skill_src_dir}")
+        [[ -z "${skill_name}" ]] && continue
+        skill_dest="${SKILLS_DIR}/${skill_name}"
+        if [[ -d "${skill_dest}" && "${overwrite}" -eq 0 ]]; then
+            warn "Skill '${skill_name}' already installed — skipping."
+            continue
+        fi
+        mkdir -p "${SKILLS_DIR}"
+        rm -rf "${skill_dest}"
+        cp -r "${skill_src_dir}" "${skill_dest}"
+        log_event "bundled_skill_installed" "name" "${skill_name}" "dest" "${skill_dest}" "overwrite" "${overwrite}"
+        success "Bundled skill '${skill_name}' installed → ${skill_dest}"
+    done < <(git -C "${REPO_DIR}" ls-files "examples/skills/" | grep '/SKILL\.md$')
+}
+
+# ─── modes ─ skill-install ────────────────────────────────────────────────────
+
+do_skill_install() {
+    local source="${1:-}"
+    [[ -z "${source}" ]] && { echo "Error: skill-install requires a source argument" >&2; usage; }
+
+    mkdir -p "${SKILLS_DIR}"
+
+    # ── local path ────────────────────────────────────────────────────────────
+    if [[ "${source}" == /* || "${source}" == ./* || "${source}" == ../* ]]; then
+        local abs_src
+        abs_src=$(cd "${source}" 2>/dev/null && pwd) \
+            || die "Local path not found: ${source}"
+        install_skill_dir "${abs_src}"
+        return
+    fi
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    # shellcheck disable=SC2064
+    trap "rm -rf '${tmp_dir}'" EXIT
+
+    # ── zip / tar.gz URL ──────────────────────────────────────────────────────
+    if [[ "${source}" =~ ^https?:// && "${source}" =~ \.(zip|tar\.gz|tgz)$ ]]; then
+        info "Downloading ${source}..."
+        local archive="${tmp_dir}/skill_archive"
+        if command -v curl &>/dev/null; then
+            curl -fsSL "${source}" -o "${archive}"
+        else
+            wget -q "${source}" -O "${archive}"
+        fi
+        local extract_dir="${tmp_dir}/extracted"
+        mkdir -p "${extract_dir}"
+        if [[ "${source}" == *.zip ]]; then
+            unzip -q "${archive}" -d "${extract_dir}"
+        else
+            tar -xzf "${archive}" -C "${extract_dir}"
+        fi
+        # Find the directory containing SKILL.md
+        local skill_dir
+        skill_dir=$(find "${extract_dir}" -name "SKILL.md" -maxdepth 3 | head -1 | xargs -r dirname)
+        [[ -z "${skill_dir}" ]] && die "No SKILL.md found in downloaded archive."
+        install_skill_dir "${skill_dir}"
+        return
+    fi
+
+    # ── full git URL (with optional #subpath fragment) ────────────────────────
+    if [[ "${source}" =~ ^https?:// || "${source}" =~ ^git@ ]]; then
+        local git_url="${source%%#*}"
+        local subpath=""
+        [[ "${source}" == *#* ]] && subpath="${source##*#}"
+
+        info "Cloning ${git_url}..."
+        git clone --depth 1 "${git_url}" "${tmp_dir}/repo" -q
+        local skill_dir="${tmp_dir}/repo"
+        [[ -n "${subpath}" ]] && skill_dir="${tmp_dir}/repo/${subpath}"
+        install_skill_dir "${skill_dir}"
+        return
+    fi
+
+    # ── GitHub shorthand: owner/repo[/sub/path] ───────────────────────────────
+    if [[ "${source}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+ ]]; then
+        local parts="${source}"
+        local owner repo subpath
+        owner=$(echo "${parts}" | cut -d/ -f1)
+        repo=$(echo "${parts}"  | cut -d/ -f2)
+        subpath=$(echo "${parts}" | cut -d/ -f3-)
+
+        local git_url="https://github.com/${owner}/${repo}.git"
+        info "Cloning ${git_url}..."
+        git clone --depth 1 "${git_url}" "${tmp_dir}/repo" -q
+        local skill_dir="${tmp_dir}/repo"
+        [[ -n "${subpath}" ]] && skill_dir="${tmp_dir}/repo/${subpath}"
+        install_skill_dir "${skill_dir}"
+        return
+    fi
+
+    die "Unrecognised source format: '${source}'"
+}
+
+# ─── modes ─ skill-remove ─────────────────────────────────────────────────────
+
+do_skill_remove() {
+    local name="${1:-}"
+    [[ -z "${name}" ]] && { echo "Error: skill-remove requires a skill name" >&2; usage; }
+
+    local dest="${SKILLS_DIR}/${name}"
+    if [[ ! -d "${dest}" ]]; then
+        die "Skill '${name}' is not installed (looked in ${dest})."
+    fi
+
+    rm -rf "${dest}"
+    log_event "skill_removed" "name" "${name}" "path" "${dest}"
+    success "Skill '${name}' removed."
+}
+
+# ─── entrypoint ───────────────────────────────────────────────────────────────
+
+case "${MODE}" in
+    upgrade)         do_upgrade ;;
+    reinstall)       do_reinstall ;;
+    uninstall)       do_uninstall ;;
+    install)         do_install ;;
+    skill-install)   do_skill_install   "${SUBCMD_ARGS[@]}" ;;
+    skill-remove)    do_skill_remove    "${SUBCMD_ARGS[@]}" ;;
+    persona-install) do_persona_install "${SUBCMD_ARGS[@]}" ;;
+    persona-remove)  do_persona_remove  "${SUBCMD_ARGS[@]}" ;;
+esac

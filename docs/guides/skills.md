@@ -87,6 +87,44 @@ Provide feedback in this structure:
 [Actionable suggestions]
 ```
 
+## Bundled Skills
+
+The installer seeds the following skills into `~/.config/sai/skills/` automatically. They are ready to use immediately after installation.
+
+| Skill | Description |
+|---|---|
+| `sonar-cli` | Run SonarQube / SonarCloud static analysis on the current branch and surface actionable issues |
+| `tmux-subagent` | Spawn specialised SAI sub-agents (coder, planner, reviewer) in new tmux panes for parallel tasks |
+| `mkdocs-to-zensical` | Migrate MkDocs projects to the Zensical documentation platform |
+
+To add a new bundled skill from outside the repo:
+
+```bash
+# From a local directory
+sai-installer skill-install /path/to/skill-dir
+
+# From a GitHub repo
+sai-installer skill-install owner/repo
+sai-installer skill-install owner/repo/sub/path
+
+# From a zip or tar.gz
+sai-installer skill-install https://example.com/skill.zip
+```
+
+To remove a skill:
+
+```bash
+sai-installer skill-remove <skill-name>
+```
+
+To upgrade bundled skills to the latest repo version:
+
+```bash
+sai-installer upgrade
+```
+
+---
+
 ## Using Skills
 
 ### Discovery Mode (Default)
@@ -95,21 +133,21 @@ By default, SAI discovers skills from `~/.config/sai/skills/`:
 
 ```bash
 # Skills are automatically discovered
-java -jar target/sai-1.0-SNAPSHOT.jar
+sai
 ```
 
 The agent can then:
 
-1. **List skills** - See available skills
-2. **Activate skills** - Load instructions when needed
-3. **Use skills** - Follow the loaded instructions
+1. **List skills** — See available skills
+2. **Activate skills** — Load instructions when needed
+3. **Use skills** — Follow the loaded instructions
 
 ### Single Skill Mode
 
 Load a specific skill directly:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --skill /path/to/skill-directory
+sai --skill /path/to/skill-directory
 ```
 
 In single-skill mode:
@@ -190,7 +228,7 @@ EOF
 
 ```bash
 # Test in single-skill mode
-java -jar target/sai-1.0-SNAPSHOT.jar --skill ~/.config/sai/skills/my-skill
+sai --skill ~/.config/sai/skills/my-skill
 ```
 
 ## Example Skills
@@ -273,16 +311,16 @@ When generating documentation:
    # Component Name
    
    ## Overview
-   [What it does]
+   <What it does>
    
    ## Usage
-   [How to use it]
+   <How to use it>
    
    ## API Reference
-   [Detailed reference]
+   <Detailed reference>
    
    ## Examples
-   [Code examples]
+   <Code examples>
    ```
 
 3. **Include Examples**
@@ -554,7 +592,7 @@ ls -la ~/.config/sai/skills/
 cat ~/.config/sai/skills/my-skill/SKILL.md
 
 # Test with explicit path
-java -jar target/sai-1.0-SNAPSHOT.jar --skill ~/.config/sai/skills/my-skill
+sai --skill ~/.config/sai/skills/my-skill
 ```
 
 ### Skill Not Activating

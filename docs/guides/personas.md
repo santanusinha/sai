@@ -31,7 +31,7 @@ prompt: |
 Use it:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona helper
+sai --persona helper
 ```
 
 ## Persona File Format
@@ -75,7 +75,7 @@ Place personas in `~/.config/sai/persona/` and load by name:
 
 ```bash
 # Looks for ~/.config/sai/persona/reviewer.yaml
-java -jar target/sai-1.0-SNAPSHOT.jar --persona reviewer
+sai --persona reviewer
 ```
 
 ### By Relative Path
@@ -83,7 +83,7 @@ java -jar target/sai-1.0-SNAPSHOT.jar --persona reviewer
 Load from current directory:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona ./my-persona.yaml
+sai --persona ./my-persona.yaml
 ```
 
 ### By Absolute Path
@@ -91,8 +91,37 @@ java -jar target/sai-1.0-SNAPSHOT.jar --persona ./my-persona.yaml
 Load from anywhere:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona /path/to/persona.yaml
+sai --persona /path/to/persona.yaml
 ```
+
+## Bundled Personas
+
+The installer seeds the following personas into `~/.config/sai/persona/` automatically. They are ready to use by name immediately after installation.
+
+| Persona | Description |
+|---|---|
+| `basic` | General-purpose CLI assistant |
+| `coder` | Software-engineering assistant; reads AGENTS.md / README.md first |
+| `reviewer` | Code-quality review with low temperature for consistent output |
+| `pr-reviewer` | Pull-request review |
+| `planner` | Planning and task decomposition |
+| `appraiser` | Estimation and effort appraisal |
+| `java-coder` | Java-specific coding assistant |
+| `webdev` | Web-development assistant |
+
+To upgrade bundled personas to the latest version from the repository:
+
+```bash
+sai-installer upgrade
+```
+
+To install additional community personas:
+
+```bash
+sai-installer persona-install owner/repo/path/to/persona.yaml
+```
+
+---
 
 ## Example Personas
 
@@ -114,7 +143,7 @@ prompt: |
 Usage:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+sai --persona basic
 ```
 
 ### Code Reviewer
@@ -139,9 +168,7 @@ prompt: |
 Usage:
 
 ```bash
-git diff | java -jar target/sai-1.0-SNAPSHOT.jar \
-  --persona examples/personas/reviewer.yaml \
-  --input "Review these changes"
+git diff | sai --persona reviewer --input "Review these changes"
 ```
 
 ### Coding Assistant
@@ -168,7 +195,7 @@ prompt: |
 Usage:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar -p coder
+sai -p coder
 ```
 
 ### Documentation Writer
@@ -232,7 +259,7 @@ prompt: |
 ### Step 3: Test It
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona my-persona
+sai --persona my-persona
 ```
 
 ## Model Settings Explained
@@ -300,9 +327,7 @@ Override the model at runtime:
 
 ```bash
 # Use persona's settings but different model
-java -jar target/sai-1.0-SNAPSHOT.jar \
-  --persona reviewer \
-  --model azure/gpt-4-turbo
+sai --persona reviewer --model azure/gpt-4-turbo
 ```
 
 ## Best Practices
@@ -350,10 +375,10 @@ Always test personas with actual use cases:
 
 ```bash
 # Test code review persona
-git diff | java -jar target/sai-1.0-SNAPSHOT.jar -p reviewer
+git diff | sai -p reviewer
 
 # Test documentation persona
-java -jar target/sai-1.0-SNAPSHOT.jar -p docs -i "Document the API"
+sai -p docs -i "Document the API"
 ```
 
 ## Persona Locations
@@ -377,10 +402,10 @@ SAI looks for personas in these locations (in order):
 --persona /absolute/path/to/persona.yaml
 
 # Override model
---persona reviewer --model openai/gpt-4o
+sai --persona reviewer --model openai/gpt-4o
 
 # With custom config directory
---config-dir /path/to/config --persona reviewer
+sai --config-dir /path/to/config --persona reviewer
 ```
 
 ## Advanced: Environment-Specific Personas
@@ -402,7 +427,7 @@ Then:
 ```bash
 export SAI_MODEL=azure/gpt-4-turbo
 export ENVIRONMENT=production
-java -jar target/sai-1.0-SNAPSHOT.jar -p env-aware
+sai -p env-aware
 ```
 
 ## Troubleshooting

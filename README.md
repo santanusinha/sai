@@ -23,8 +23,9 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - Clean terminal UX with streaming output and event printing
 
 ## Table of Contents
+- Installation
 - Requirements
-- Build
+- Build from Source
 - Quick Start
 - Configuration
 - Running the Agent
@@ -35,10 +36,50 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - Logging
 - Development
 
+## Installation
+
+The recommended way to install SAI is with the bundled installer script. It checks for Java 17+ and Maven 3.8+, installs them if missing, builds the JAR, writes a `sai` launcher, and seeds your config directory with bundled personas and skills.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+```
+
+After installation, reload your shell and verify:
+
+```bash
+source ~/.bashrc   # or ~/.zshrc
+sai --version
+```
+
+Configure your model provider in `~/.config/sai/.env` (created automatically by the installer).
+
+### Installer subcommands
+
+| Command | Description |
+|---|---|
+| `sai-installer install` | Install SAI |
+| `sai-installer upgrade` | Pull latest commits and rebuild |
+| `sai-installer reinstall` | Wipe and reinstall (config preserved) |
+| `sai-installer uninstall` | Remove SAI |
+| `sai-installer skill-install <source>` | Install a skill |
+| `sai-installer skill-remove <name>` | Remove a skill |
+| `sai-installer persona-install <source>` | Install a persona |
+| `sai-installer persona-remove <name>` | Remove a persona |
+
+`<source>` for skills and personas can be a local path, `owner/repo`, `owner/repo/sub/path`, a full git URL, or a direct zip/tar.gz URL.
+
+Use `--base-dir <path>` before the subcommand to install under a non-default root:
+
+```bash
+bash sai-installer --base-dir /opt/sai install
+```
+
 ## Requirements
 - Java 17 or newer
 - Maven 3.8+ (to build from source)
 - Network access to your chosen model provider
+
+> The installer will attempt to install Java and Maven automatically if they are not present.
 
 ## Build
 

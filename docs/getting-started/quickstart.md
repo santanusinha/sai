@@ -2,49 +2,63 @@
 
 Get up and running with SAI in under 5 minutes.
 
-## Step 1: Set Up Model Provider
+## Step 1: Install SAI
 
-Choose one option:
+Run the installer (it handles Java, Maven, and everything else automatically):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+```
+
+Then reload your shell:
+
+```bash
+source ~/.bashrc   # or ~/.zshrc, or open a new terminal
+```
+
+!!! tip
+    See the [Installation Guide](installation.md) for full details, custom install locations, and the manual build path.
+
+## Step 2: Configure your model provider
+
+The installer creates `~/.config/sai/.env`. Open it and fill in your credentials:
+
+```bash
+nano ~/.config/sai/.env
+```
+
+Choose one provider:
 
 === "OpenAI"
 
     ```bash
-    export OPENAI_API_KEY=sk-proj-your_key_here
+    OPENAI_API_KEY=sk-proj-your_key_here
     ```
 
 === "Azure"
 
     ```bash
-    export AZURE_ENDPOINT=https://your-resource.openai.azure.com
-    export AZURE_API_KEY=your_azure_key
+    AZURE_ENDPOINT=https://your-resource.openai.azure.com
+    AZURE_API_KEY=your_azure_key
     ```
 
 === "Copilot Proxy"
 
     ```bash
-    # Start the proxy first
+    # Start the proxy first (separate terminal)
     npm install -g copilot-api
     copilot-api
-    
-    # No env vars needed - proxy runs on localhost:4141
+
+    # No env vars needed — proxy runs on localhost:4141 by default
     ```
 
 !!! tip
-    Need detailed setup? See [Configuration Guide](configuration.md)
+    Need detailed setup? See the [Configuration Guide](configuration.md).
 
-## Step 2: Build SAI
-
-```bash
-cd sai
-mvn clean package
-```
-
-This creates `target/sai-1.0-SNAPSHOT.jar`
-
-## Step 3: Start Your First Session
+## Step 3: Start your first session
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar
+sai
 ```
 
 You'll see the SAI prompt:
@@ -53,25 +67,19 @@ You'll see the SAI prompt:
 SAI >
 ```
 
-## Step 4: Try Your First Commands
+## Step 4: Try your first commands
 
-### Ask a Question
+### Ask a question
 
 ```
 SAI > What can you do?
 ```
 
-### Execute Shell Commands
+### Execute shell commands
 
 ```
 SAI > !ls -la
 SAI > !git status
-```
-
-### Get Help
-
-```
-SAI > Tell me about this repository
 ```
 
 ### Exit
@@ -80,128 +88,145 @@ SAI > Tell me about this repository
 SAI > exit
 ```
 
-## What Just Happened?
+## What just happened?
 
-1. **Session Created** - SAI created a new session in `~/.local/state/sai/sessions/`
-2. **Context Loaded** - Your current directory is included in the context
-3. **Conversation Saved** - All messages are persisted locally
+1. **Session created** — SAI created a new session in `~/.local/state/sai/sessions/`
+2. **Context loaded** — Your current directory is included in the context
+3. **Conversation saved** — All messages are persisted locally
 
-## Next: Try Different Modes
+---
 
-### One-Shot Command
+## Next: try different modes
+
+### One-shot command
 
 Run a single command and exit:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --input "Summarize the main files in this repo"
+sai --input "Summarize the main files in this repo"
 ```
 
-### Pipe Input
+### Pipe input
 
 ```bash
-echo "What programming language is this project?" | java -jar target/sai-1.0-SNAPSHOT.jar
+echo "What programming language is this project?" | sai
 ```
 
-### Use a Persona
+### Use a bundled persona
 
-Load a pre-configured persona:
+The installer seeds several ready-to-use personas into `~/.config/sai/persona/`. Load one by name:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
+sai --persona coder       # software-engineering assistant
+sai --persona reviewer    # code review
+sai --persona planner     # planning and task decomposition
+sai --persona pr-reviewer # pull-request review
 ```
 
-### Resume a Session
+### Resume a session
 
 List your sessions:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar list-sessions
+sai list-sessions
 ```
 
 Resume one:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
+sai --session-id <session-id>
 ```
 
-## Common First Tasks
+---
 
-### Code Review
+## Common first tasks
+
+### Code review
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --input "Review the changes in my last commit"
+sai --input "Review the changes in my last commit"
+# or pipe git diff directly
+git diff | sai --persona reviewer --input "Review these changes"
 ```
 
-### Repository Summary
+### Repository summary
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --input "Give me an overview of this codebase structure"
+sai --input "Give me an overview of this codebase structure"
 ```
 
-### Explain Code
+### Explain code
 
-```bash
-SAI > Explain what the App.java file does
+```
+SAI > Explain what App.java does
 ```
 
-### Generate Documentation
+### Generate documentation
 
-```bash
+```
 SAI > Write a README section explaining the configuration options
 ```
 
+---
+
 ## Tips
 
-!!! tip "Use shell alias"
-    Add to your `.bashrc`:
-    ```bash
-    alias sai='java -jar /path/to/sai/target/sai-1.0-SNAPSHOT.jar'
-    ```
-
 !!! tip "Enable debug mode"
-    See what's happening:
+    See what's happening under the hood:
     ```bash
-    java -jar target/sai-1.0-SNAPSHOT.jar --debug
+    sai --debug
     ```
 
-!!! tip "Read from file"
+!!! tip "Read prompt from a file"
     Use `@` syntax:
     ```bash
-    java -jar target/sai-1.0-SNAPSHOT.jar --input @prompt.txt
+    sai --input @prompt.txt
     ```
 
-## What's Next?
+!!! tip "Upgrade SAI"
+    Keep SAI up to date:
+    ```bash
+    sai-installer upgrade
+    ```
 
-- [Configuration](configuration.md) - Learn about all configuration options
-- [Installation](installation.md) - Detailed setup instructions
-- [GitHub Repository](https://github.com/santanusinha/sai) - View source code
+---
+
+## What's next?
+
+- [Configuration](configuration.md) — Learn about all configuration options
+- [Installation](installation.md) — Detailed setup, custom locations, manual build
+- [Personas](../guides/personas.md) — Customize agent behavior
+- [Skills](../guides/skills.md) — Extend SAI with bundled and community skills
+- [GitHub Repository](https://github.com/santanusinha/sai) — View source code
+
+---
 
 ## Troubleshooting
 
-### No Response from AI
+### No response from AI
 
 **Check:**
 
-1. Environment variables are set correctly
+1. `~/.config/sai/.env` has the right credentials
 2. API key is valid and has credits
 3. Network connection is working
-4. For copilot-proxy: proxy is running
+4. For copilot-proxy: the proxy is running
 
 **Debug:**
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --debug --input "test"
+sai --debug --input "test"
 ```
 
-### Command Not Working
+### Command not working
 
 **Remember:**
 
-- Shell commands need `!` prefix: `!ls` not `ls`
+- Shell commands need the `!` prefix: `!ls` not `ls`
 - Exit with `exit` not `!exit`
 - Everything else goes to the AI
 
-## Getting Help
+## Getting help
 
 - [GitHub Discussions](https://github.com/santanusinha/sai/discussions)
 - [Report Issues](https://github.com/santanusinha/sai/issues)

@@ -61,20 +61,20 @@ hide:
 ## Quick Example
 
 ```bash
-# Build the project
-mvn clean package
+# Install SAI (handles Java, Maven, config, and bundled personas/skills)
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
 
 # Start interactive mode
-java -jar target/sai-1.0-SNAPSHOT.jar
+sai
 
-# Use with a persona
-java -jar target/sai-1.0-SNAPSHOT.jar --persona reviewer
+# Use a bundled persona
+sai --persona reviewer
 
 # One-shot command
-java -jar target/sai-1.0-SNAPSHOT.jar --input "Summarize this repository"
+sai --input "Summarize this repository"
 
 # Pipe input
-echo "What can you do?" | java -jar target/sai-1.0-SNAPSHOT.jar
+echo "What can you do?" | sai
 ```
 
 ## Why SAI?
