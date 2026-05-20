@@ -117,10 +117,13 @@ public class FileIO {
                                       "File size exceeds the maximum limit of 1 MB. Use the bash tool to read and operate on large files.");
             }
             final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var lines = content.split(System.lineSeparator());
+            final var lines = content.isEmpty() ? new String[0] : content.split(System.lineSeparator(), -1);
+            final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
             if (endLine == -1) {
                 log.debug("Reading whole file {} as endLine is -1", filePath);
-                final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+                if (addLineNumbers) {
+                    return new ReadResult(addLineNumbers(lines, 1), checksum, null);
+                }
                 return new ReadResult(content, checksum, null);
             }
             if (startLine < 1 || startLine > endLine || endLine > lines.length) {
@@ -131,11 +134,7 @@ public class FileIO {
             log.debug("Reading file {} lines from {} to {}", filePath, startLine, endLine);
             final var relevantLines = Arrays.copyOfRange(lines, startLine - 1, endLine);
             if (addLineNumbers) {
-                final var numberedContent = new StringBuilder();
-                for (int i = 0; i < lines.length; i++) {
-                    numberedContent.append(String.format("%6d\t%s%n", i + 1, lines[i]));
-                }
-                return new ReadResult(numberedContent.toString(), null, null);
+                return new ReadResult(addLineNumbers(relevantLines, startLine), null, null);
             }
             return new ReadResult(String.join(System.lineSeparator(), relevantLines), null, null);
         }
@@ -168,7 +167,9 @@ public class FileIO {
         try {
             Files.writeString(path, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             return ToolIO.WriteResponse.builder()
-                    .bytesWritten(content.getBytes(StandardCharsets.UTF_8).length)
+                    .success(true)
+                    .charsWritten(content.length())
+                    .updatedChecksum(calculateChecksum(content.getBytes(StandardCharsets.UTF_8)))
                     .build();
         }
         catch (Exception e) {
@@ -176,6 +177,14 @@ public class FileIO {
             log.error(errorMessage, e);
             return ToolIO.WriteResponse.builder().error(errorMessage).build();
         }
+    }
+
+    private static String addLineNumbers(String[] lines, int startLineNumber) {
+        final var sb = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            sb.append(String.format("%6d\t%s%n", startLineNumber + i, lines[i]));
+        }
+        return sb.toString();
     }
 
     private static List<String> applyEdit(List<String> lines, int startLine, int endLine, String newContent) {
@@ -231,4 +240,5 @@ public class FileIO {
             throw new IllegalStateException("SHA-256 algorithm not found", e);
         }
     }
+
 }

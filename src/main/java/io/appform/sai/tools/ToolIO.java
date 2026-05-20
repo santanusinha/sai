@@ -191,8 +191,10 @@ public class ToolIO {
         @JsonPropertyDescription("Whether the write was successful.")
         boolean success;
         @JsonPropertyDescription("The number of bytes written to the file.")
-        long bytesWritten;
+        long charsWritten;
         @JsonPropertyDescription("Error message if any.")
         String error;
+        @JsonPropertyDescription("The new SHA-256 checksum of the file after writing.")
+        String updatedChecksum;
     }
 }

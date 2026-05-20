@@ -340,9 +340,9 @@ public class CoreToolBox implements ToolBox {
         }
         return ToolIO.ReadResponse.builder()
                 .checksum(checksum)
-                .changed(false)
                 .build();
     }
+
 
     //@Tool("Search and replace text in a file. Use this for precise text substitutions.")
     public ToolIO.SearchReplaceResponse searchReplace(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
@@ -438,7 +438,6 @@ public class CoreToolBox implements ToolBox {
                     .build();
         }
     }
-
 
     @Tool("Create or completely rewrite a file with the specified content.")
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,

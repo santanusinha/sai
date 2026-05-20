@@ -179,12 +179,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             private List<Update> printFileEditToolResponse(ToolCallResponse toolCallResponse,
                                                            List<Update> messages) {
-                final var response = mapper.readValue(toolCallResponse.getResponse(),
-                                                      ToolIO.FileEditResponse.class);
-                final var error = response.getError();
-                if (Strings.isNullOrEmpty(error) || error.equalsIgnoreCase("OK")) {
-                    messages.add(Printer.systemMessage("File edited successfully. New checksum: %s"
-                            .formatted(response.getNewChecksum())));
+                final var error = toolCallResponse.getResponse();
+                if (Strings.isNullOrEmpty(error) || error.equalsIgnoreCase("Done")) {
+                    messages.add(Printer.systemMessage("File edited successfully."));
                 }
                 else {
                     messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
@@ -430,7 +427,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (response.isChanged()) {
             if (!Strings.isNullOrEmpty(content)) {
                 messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
-                messages.add(Printer.systemMessage("Read %d bytes...".formatted(content.length())));
+                messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
             }
             else {
                 messages.add(Printer.systemMessage("File is empty."));
@@ -590,10 +587,10 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var response = mapper.readValue(toolCallResponse.getResponse(),
                                               ToolIO.WriteResponse.class);
         final var success = response.isSuccess();
-        final var bytesWritten = response.getBytesWritten();
+        final var charsWritten = response.getCharsWritten();
         final var error = response.getError();
         if (success) {
-            messages.add(Printer.systemMessage("Wrote %d bytes successfully.".formatted(bytesWritten)));
+            messages.add(Printer.systemMessage("Wrote %ld characters.".formatted(charsWritten)));
         }
         else {
             messages.add(Printer.systemMessage("Error writing file: %s".formatted(error))
