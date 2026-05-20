@@ -497,11 +497,11 @@ do_upgrade() {
     info "Checking for updates (base: ${BASE_HOME})..."
     detect_os
 
-    git -C "${REPO_DIR}" fetch origin main -q
+    git -C "${REPO_DIR}" fetch origin master -q
 
     local local_commit remote_commit
     local_commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
-    remote_commit=$(git -C "${REPO_DIR}" rev-parse origin/main)
+    remote_commit=$(git -C "${REPO_DIR}" rev-parse origin/master)
 
     if [[ "${local_commit}" == "${remote_commit}" ]]; then
         log_event "upgrade_skipped" "commit" "${local_commit}" "reason" "already_up_to_date"
