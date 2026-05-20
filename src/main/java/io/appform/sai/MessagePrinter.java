@@ -16,6 +16,7 @@
 package io.appform.sai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -64,8 +65,11 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     public class KnownToolNames {
         public static final String PRINT_TOOL = "core_tool_box_print";
         public static final String BASH_TOOL = "core_tool_box_bash";
-        public static final String READ_TOOL = "core_tool_box_read";
-        public static final String WRITE_TOOL = "core_tool_box_write";
+        public static final String READ_TOOL = "core_tool_box_read_file";
+        public static final String WRITE_TOOL = "core_tool_box_write_file";
+        public static final String FILE_EDIT_TOOL = "core_tool_box_edit_file";
+
+        //Unused
         public static final String EDIT_TOOL = "core_tool_box_edit";
         public static final String LINE_EDIT_TOOL = "core_tool_box_line_edit";
         public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
@@ -114,48 +118,77 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             public List<Update> visit(ToolCallResponse toolCallResponse) {
                 final var messages = new ArrayList<Update>();
-                switch (toolCallResponse.getToolName()) {
-                    case KnownToolNames.PRINT_TOOL -> {
-                        // Do nothing
-                    }
-                    case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolResponse(toolCallResponse, messages);
-                    case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
-                                                                                              messages);
-                    case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
-                    case Agent.OUTPUT_GENERATOR_ID -> {
-                        messages.add(Printer.debug(Actor.SYSTEM, "Output Generator Tool call completed."));
-                    }
-                    default -> {
-                        if (toolCallResponse
-                                .getErrorType() != null && toolCallResponse
-                                        .getErrorType()
-                                        .equals(ErrorType.SUCCESS)) {
-                            messages.add(Printer.systemMessage("Tool call '%s' completed successfully."
-                                    .formatted(toolCallResponse.getToolName())));
-
-                            try {
-                                final var node = mapper.readTree(toolCallResponse.getResponse());
-                                final var prettyResponse = mapper.writerWithDefaultPrettyPrinter()
-                                        .writeValueAsString(node);
-                                messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse
-                                        + Printer.Colours.RESET));
-                            }
-                            catch (JsonProcessingException e) {
-                                messages.add(Printer.raw(Printer.Colours.GRAY + toolCallResponse.getResponse()
-                                        + Printer.Colours.RESET));
-                            }
+                try {
+                    switch (toolCallResponse.getToolName()) {
+                        case KnownToolNames.PRINT_TOOL -> {
+                            // Do nothing
                         }
-                        else {
-                            messages.add(Printer.systemMessage("Error: %s - %s"
-                                    .formatted(toolCallResponse.getErrorType(),
-                                               toolCallResponse.getResponse()))
-                                    .withSeverity(Severity.ERROR));
-
+                        case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
+                                                                                                  messages);
+                        case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
+                        case Agent.OUTPUT_GENERATOR_ID -> {
+                            messages.add(Printer.debug(Actor.SYSTEM, "Output Generator Tool call completed."));
                         }
+                        default -> printGenericToolResponse(toolCallResponse, messages);
                     }
+                }
+                catch (Exception e) {
+                    log.error("Failed to process tool response for tool '{}'. Error: {}",
+                              toolCallResponse.getToolName(),
+                              e.getMessage());
+                    printGenericToolResponse(toolCallResponse, messages);
+                }
+                return messages;
+            }
+
+            private List<Update> printGenericToolResponse(ToolCallResponse toolCallResponse, List<Update> messages) {
+                if (toolCallResponse
+                        .getErrorType() != null && toolCallResponse
+                                .getErrorType()
+                                .equals(ErrorType.SUCCESS)) {
+                    messages.add(Printer.systemMessage("Tool call '%s' completed successfully."
+                            .formatted(toolCallResponse.getToolName())));
+
+                    try {
+                        final var node = mapper.readTree(toolCallResponse.getResponse());
+                        final var prettyResponse = mapper.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(node);
+                        messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse
+                                + Printer.Colours.RESET));
+                    }
+                    catch (JsonProcessingException e) {
+                        messages.add(Printer.raw(Printer.Colours.GRAY + toolCallResponse.getResponse()
+                                + Printer.Colours.RESET));
+                    }
+                }
+                else {
+                    messages.add(Printer.systemMessage("Error: %s - %s"
+                            .formatted(toolCallResponse.getErrorType(),
+                                       toolCallResponse.getResponse()))
+                            .withSeverity(Severity.ERROR));
+
+                }
+                return messages;
+            }
+
+            @SneakyThrows
+            private List<Update> printFileEditToolResponse(ToolCallResponse toolCallResponse,
+                                                           List<Update> messages) {
+                final var response = mapper.readValue(toolCallResponse.getResponse(),
+                                                      ToolIO.FileEditResponse.class);
+                final var error = response.getError();
+                if (Strings.isNullOrEmpty(error) || error.equalsIgnoreCase("OK")) {
+                    messages.add(Printer.systemMessage("File edited successfully. New checksum: %s"
+                            .formatted(response.getNewChecksum())));
+                }
+                else {
+                    messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
+                            .withSeverity(Severity.ERROR));
                 }
                 messages.add(Printer.empty());
                 return messages;
@@ -202,6 +235,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                     case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
                     case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
+                    case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolRequest(toolCall, messages);
                     case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
                     case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
                     case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
@@ -251,6 +285,56 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             }
 
         });
+    }
+
+    @SneakyThrows
+    private List<Update> printFileEditToolRequest(ToolCall toolCall, List<Update> messages) {
+        final var node = mapper.readTree(toolCall.getArguments());
+        log.info("Received file edit tool call with arguments: {}.", toolCall.getArguments());
+        if (!ensureParamsExist(node,
+                               messages,
+                               "requestReason",
+                               "filePath",
+                               "edits",
+                               "expectedChecksum")) {
+            return messages;
+        }
+        messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
+        messages.add(Printer.empty());
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "File Edit: " + Printer.Colours.WHITE
+                + node.get("filePath").asText() + Printer.Colours.RESET));
+        messages.add(Printer.empty());
+        final var edits = mapper.treeToValue(node.get("edits"),
+                                             new TypeReference<List<ToolIO.FileEditOperation>>() {
+                                             });
+        edits.forEach(edit -> {
+            final var start = edit.getStartLine();
+            final var end = edit.getEndLine();
+            final var content = edit.getContent();
+            final var numberOfLines = end - start + 1;
+            if (Strings.isNullOrEmpty(content)) {
+                if (start == end) {
+                    messages.add(Printer.raw(Printer.Colours.RED + "Deleted line %d".formatted(start)
+                            + Printer.Colours.RESET));
+                }
+                messages.add(Printer.raw(Printer.Colours.RED + "-- {%d, %d}".formatted(start, end)
+                        + Printer.Colours.RESET));
+            }
+            else {
+                if (start == end) {
+                    messages.add(Printer.raw(Printer.Colours.GREEN + "++ %d".formatted(start)
+                            + Printer.Colours.RESET));
+                    messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                }
+                else {
+                    messages.add(Printer.raw(Printer.Colours.YELLOW + "~~ {%d, %d}".formatted(start, end)
+                            + Printer.Colours.RESET));
+                    messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                }
+            }
+            messages.add(Printer.empty());
+        });
+        return messages;
     }
 
     private static String prompt(String xml) {
@@ -345,7 +429,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         }
         if (response.isChanged()) {
             if (!Strings.isNullOrEmpty(content)) {
-                //messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
                 messages.add(Printer.systemMessage("Read %d bytes...".formatted(content.length())));
             }
             else {
@@ -509,8 +593,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var bytesWritten = response.getBytesWritten();
         final var error = response.getError();
         if (success) {
-            messages.add(Printer.systemMessage("Wrote %d bytes successfully."
-                    .formatted(bytesWritten)));
+            messages.add(Printer.systemMessage("Wrote %d bytes successfully.".formatted(bytesWritten)));
         }
         else {
             messages.add(Printer.systemMessage("Error writing file: %s".formatted(error))

@@ -22,17 +22,15 @@ import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.Printer;
+import io.appform.sai.files.FileIO;
 import io.appform.sai.tools.ToolIO.LineEditOperation;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -87,13 +85,13 @@ public class CoreToolBox implements ToolBox {
             }
 
             final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+            final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
 
             if (!currentChecksum.equals(request.getExpectedChecksum())) {
                 return ToolIO.EditResponse.builder()
                         .success(false)
-                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum() + ", Actual: "
-                                + currentChecksum)
+                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum()
+                                + ", Actual: " + currentChecksum)
                         .build();
             }
 
@@ -127,7 +125,7 @@ public class CoreToolBox implements ToolBox {
 
                 // Verify and return new checksum
                 final var newContent = Files.readString(path, StandardCharsets.UTF_8);
-                final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+                final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
 
                 return ToolIO.EditResponse.builder()
                         .success(true)
@@ -150,7 +148,15 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    @Tool("Edit a file by line number. Use this to insert, replace, or delete lines at specific positions.")
+    @Tool("Edit specific parts of an exiting file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool.")
+    public String editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
+                           @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
+                           @JsonPropertyDescription("Reason for editing the file.") String requestReason,
+                           @JsonPropertyDescription("The expected checksum of the file before editing. Use the checksum from a previous read operation to edit existing file or empty string to create a new file.") String expectedChecksum) {
+        return FileIO.editFile(filePath, edits, expectedChecksum);
+    }
+
+    //@Tool("Edit a file by line number. Use this to insert, replace, or delete lines at specific positions.")
     @SuppressWarnings("java:S3776")
     public ToolIO.LineEditResponse lineEdit(@JsonPropertyDescription("Reason for editing the file.") String requestReason,
                                             @JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
@@ -170,7 +176,7 @@ public class CoreToolBox implements ToolBox {
             }
 
             final var fileContent = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = calculateChecksum(fileContent.getBytes(StandardCharsets.UTF_8));
+            final var currentChecksum = FileIO.calculateChecksum(fileContent.getBytes(StandardCharsets.UTF_8));
 
             if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.LineEditResponse.builder()
@@ -269,7 +275,7 @@ public class CoreToolBox implements ToolBox {
                               newContent,
                               StandardOpenOption.CREATE,
                               StandardOpenOption.TRUNCATE_EXISTING);
-            final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+            final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
 
             return ToolIO.LineEditResponse.builder()
                     .success(true)
@@ -308,45 +314,37 @@ public class CoreToolBox implements ToolBox {
             Use the changed flag to determine if the file has been modified since the last read.
             If it is false, use the previously known content as current content would be empty.
             If it is true, use the returned content as the current content and the returned checksum as the current checksum.
+
+            NOTE: FILE LINES ARE NUMBERED IN THE RETURNED CONTENT TO HELP WITH SUBSEQUENT EDIT OPERATIONS.
+            OUTPUT LINE FORMAT:
+            Format: <right aligned line number [6 digits] starting from 1><TAB><actual line content>
             """)
-    public ToolIO.ReadResponse read(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
-                                    @JsonPropertyDescription("The absolute path to the file to read.") String filePath,
-                                    @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty if not known.") String knownChecksum) {
-        log.info("Reading file: {}", filePath);
-        try {
-            final var path = Path.of(filePath);
-            if (!Files.exists(path)) {
-                return ToolIO.ReadResponse.builder()
-                        .error("File not found: " + filePath)
-                        .build();
-            }
-            final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
-            // If no known checksum provided or checksum doesn't match, return content + changed=true
-            // If known checksum matches current, return no content + changed=false
-            final var isModified = Strings.isNullOrEmpty(knownChecksum) || !checksum.equals(knownChecksum);
-            if (isModified) {
-                return ToolIO.ReadResponse.builder()
-                        .content(content)
-                        .checksum(checksum)
-                        .changed(true)
-                        .build();
-            }
+    public ToolIO.ReadResponse readFile(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
+                                        @JsonPropertyDescription("The absolute path to the file to read.") String filePath,
+                                        @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty if not known.") String knownChecksum) {
+        final var readResult = FileIO.readFile(filePath, 1, -1, true);
+        if (!Strings.isNullOrEmpty(readResult.getError())) {
             return ToolIO.ReadResponse.builder()
+                    .error(readResult.getError())
+                    .build();
+        }
+        final var content = readResult.getContent();
+        final var checksum = readResult.getChecksum();
+        final var isModified = !checksum.equals(knownChecksum);
+        if (isModified) {
+            return ToolIO.ReadResponse.builder()
+                    .content(content)
                     .checksum(checksum)
-                    .changed(false)
+                    .changed(true)
                     .build();
         }
-        catch (Exception e) {
-            final var errorMessage = "Error reading file: " + AgentUtils.rootCause(e).getMessage();
-            log.error(errorMessage, e);
-            return ToolIO.ReadResponse.builder()
-                    .error(errorMessage)
-                    .build();
-        }
+        return ToolIO.ReadResponse.builder()
+                .checksum(checksum)
+                .changed(false)
+                .build();
     }
 
-    @Tool("Search and replace text in a file. Use this for precise text substitutions.")
+    //@Tool("Search and replace text in a file. Use this for precise text substitutions.")
     public ToolIO.SearchReplaceResponse searchReplace(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
                                                       @JsonPropertyDescription("The exact text to search for in the file. Include enough context to make the match unique.") String searchText,
                                                       @JsonPropertyDescription("The text to replace the search text with.") String replaceText,
@@ -364,7 +362,7 @@ public class CoreToolBox implements ToolBox {
             }
 
             final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+            final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
 
             if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.SearchReplaceResponse.builder()
@@ -423,7 +421,7 @@ public class CoreToolBox implements ToolBox {
 
             // Write the new content
             Files.writeString(path, newContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            final var newChecksum = calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+            final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
 
             return ToolIO.SearchReplaceResponse.builder()
                     .success(true)
@@ -441,68 +439,13 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    @Tool("Write content to a file. This will create the file if it doesn't exist, or overwrite it if it does.")
-    public ToolIO.WriteResponse write(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
-                                      @JsonPropertyDescription("The content to write to the file.") String content,
-                                      @JsonPropertyDescription("Reason for writing the file.") String requestReason,
-                                      @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
-        log.info("Writing file: {}", filePath);
-        try {
-            final var path = Path.of(filePath);
-            if (path.getParent() != null && !Files.exists(path.getParent())) {
-                Files.createDirectories(path.getParent());
-            }
 
-            //Check if file exists and verify checksum if expectedChecksum is provided
-            if (Files.exists(path)) {
-                if (Strings.isNullOrEmpty(expectedChecksum)) {
-                    return ToolIO.WriteResponse.builder()
-                            .success(false)
-                            .error("File already exists at " + filePath
-                                    + ". Re-read the file to get the correct content and checksum, then provide the checksum in the write request to overwrite.")
-                            .build();
-                }
-                final var currContent = Files.readString(path, StandardCharsets.UTF_8);
-                final var currentChecksum = calculateChecksum(currContent.getBytes(StandardCharsets.UTF_8));
-                if (!currentChecksum.equals(expectedChecksum)) {
-                    return ToolIO.WriteResponse.builder()
-                            .success(false)
-                            .error("Checksum mismatch. Expected: " + expectedChecksum + ", Actual: "
-                                    + currentChecksum + ". Re-read the file to get the current checksum.")
-                            .build();
-                }
-            }
-            Files.writeString(path,
-                              content,
-                              StandardOpenOption.CREATE,
-                              StandardOpenOption.TRUNCATE_EXISTING);
-            final var bytes = content.getBytes(StandardCharsets.UTF_8);
-            final var checksum = calculateChecksum(bytes);
-            return ToolIO.WriteResponse.builder()
-                    .success(true)
-                    .bytesWritten(bytes.length)
-                    .checksum(checksum)
-                    .build();
-        }
-        catch (Exception e) {
-            final var errorMessage = "Error writing file: " + AgentUtils.rootCause(e).getMessage();
-            log.error(errorMessage, e);
-            return ToolIO.WriteResponse.builder()
-                    .success(false)
-                    .error(errorMessage)
-                    .build();
-        }
-    }
-
-    private String calculateChecksum(byte[] content) {
-        try {
-            final var digest = MessageDigest.getInstance("SHA-256");
-            final var encodedhash = digest.digest(content);
-            return HexFormat.of().formatHex(encodedhash);
-        }
-        catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not found", e);
-        }
+    @Tool("Create or completely rewrite a file with the specified content.")
+    public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
+                                          @JsonPropertyDescription("The content to write to the file.") String content,
+                                          @JsonPropertyDescription("Reason for writing the file.") String requestReason,
+                                          @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
+        return FileIO.write(filePath, content, expectedChecksum);
     }
 
     /**

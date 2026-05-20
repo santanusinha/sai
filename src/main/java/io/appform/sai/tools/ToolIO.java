@@ -15,6 +15,7 @@
  */
 package io.appform.sai.tools;
 
+
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
@@ -65,6 +66,35 @@ public class ToolIO {
         String newChecksum;
         @JsonPropertyDescription("Error message if any.")
         String error;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    @JsonClassDescription("""
+            Specification for text replacement in a specified chunk of lines.
+            - For replacing text, set start and end to the line numbers of the chunk to replace and newContent to the replacement text.
+            - For deleting text, set newContent to an empty string.
+            - For inserting text, set start and end to the same line number where the new content should be inserted.
+            """)
+    public static class FileEditOperation {
+        @JsonPropertyDescription("Start line number (1-based) of the chunk to replace.")
+        int startLine;
+        @JsonPropertyDescription("End line number (1-based, inclusive) of the chunk to replace. -1 means the end of the file. Send -1 if you want to replace all lines from startLine to the end of the file.")
+        int endLine;
+        @JsonPropertyDescription("The new content to replace the specified lines with. For deletion, use an empty string.")
+        String content;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
+    @JsonClassDescription("Response for chunk replacement operations")
+    public static class FileEditResponse {
+        @JsonPropertyDescription("Error message if anythign failed. OK otherwise.")
+        String error;
+        @JsonPropertyDescription("The new SHA-256 checksum of the file after all replacements.")
+        String newChecksum;
     }
 
     /**
@@ -140,8 +170,6 @@ public class ToolIO {
         String requestReason;
     }
 
-    // ==================== Line-Based Edit Tool ====================
-
     @Value
     @Builder
     @Jacksonized
@@ -164,8 +192,6 @@ public class ToolIO {
         boolean success;
         @JsonPropertyDescription("The number of bytes written to the file.")
         long bytesWritten;
-        @JsonPropertyDescription("The SHA-256 checksum of the written content.")
-        String checksum;
         @JsonPropertyDescription("Error message if any.")
         String error;
     }

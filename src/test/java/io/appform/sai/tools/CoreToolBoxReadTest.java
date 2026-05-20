@@ -64,7 +64,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
         // Act - First read with empty checksum
-        ToolIO.ReadResponse response = toolBox.read("test first read", testFile.toString(), "");
+        ToolIO.ReadResponse response = toolBox.readFile("test first read", testFile.toString(), "");
 
         // Assert
         assertNull(response.getError(), "Should not have error");
@@ -80,7 +80,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
         // Act - First read with null checksum
-        ToolIO.ReadResponse response = toolBox.read("test first read", testFile.toString(), null);
+        ToolIO.ReadResponse response = toolBox.readFile("test first read", testFile.toString(), null);
 
         // Assert
         assertNull(response.getError(), "Should not have error");
@@ -95,7 +95,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, "", StandardCharsets.UTF_8);
 
         // Act - First read
-        ToolIO.ReadResponse firstRead = toolBox.read("first read", testFile.toString(), "");
+        ToolIO.ReadResponse firstRead = toolBox.readFile("first read", testFile.toString(), "");
 
         // Assert first read
         assertNull(firstRead.getError(), "Should not have error");
@@ -104,9 +104,9 @@ class CoreToolBoxReadTest {
         assertTrue(firstRead.isChanged(), "Should mark as changed on first read");
 
         // Act - Second read with same checksum
-        ToolIO.ReadResponse secondRead = toolBox.read("second read",
-                                                      testFile.toString(),
-                                                      firstRead.getChecksum());
+        ToolIO.ReadResponse secondRead = toolBox.readFile("second read",
+                                                          testFile.toString(),
+                                                          firstRead.getChecksum());
 
         // Assert second read
         assertNull(secondRead.getError(), "Should not have error");
@@ -121,14 +121,14 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
         // Act - First read to get checksum
-        ToolIO.ReadResponse firstRead = toolBox.read("first read", testFile.toString(), "");
+        ToolIO.ReadResponse firstRead = toolBox.readFile("first read", testFile.toString(), "");
         String checksum = firstRead.getChecksum();
 
         // Delete the file
         Files.delete(testFile);
 
         // Act - Try to read deleted file
-        ToolIO.ReadResponse secondRead = toolBox.read("second read", testFile.toString(), checksum);
+        ToolIO.ReadResponse secondRead = toolBox.readFile("second read", testFile.toString(), checksum);
 
         // Assert
         assertNotNull(secondRead.getError(), "Should have error");
@@ -144,7 +144,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content1, StandardCharsets.UTF_8);
 
         // Act - First read
-        ToolIO.ReadResponse read1 = toolBox.read("read 1", testFile.toString(), "");
+        ToolIO.ReadResponse read1 = toolBox.readFile("read 1", testFile.toString(), "");
         String checksum1 = read1.getChecksum();
 
         // Modify file
@@ -152,7 +152,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content2, StandardCharsets.UTF_8);
 
         // Act - Second read (detects change)
-        ToolIO.ReadResponse read2 = toolBox.read("read 2", testFile.toString(), checksum1);
+        ToolIO.ReadResponse read2 = toolBox.readFile("read 2", testFile.toString(), checksum1);
         String checksum2 = read2.getChecksum();
 
         // Assert read2 detected change
@@ -160,7 +160,7 @@ class CoreToolBoxReadTest {
         assertEquals(content2, read2.getContent(), "Should return new content");
 
         // Act - Third read with new checksum (no change)
-        ToolIO.ReadResponse read3 = toolBox.read("read 3", testFile.toString(), checksum2);
+        ToolIO.ReadResponse read3 = toolBox.readFile("read 3", testFile.toString(), checksum2);
 
         // Assert read3 sees no change
         assertFalse(read3.isChanged(), "Should not detect change");
@@ -171,7 +171,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content3, StandardCharsets.UTF_8);
 
         // Act - Fourth read (detects another change)
-        ToolIO.ReadResponse read4 = toolBox.read("read 4", testFile.toString(), checksum2);
+        ToolIO.ReadResponse read4 = toolBox.readFile("read 4", testFile.toString(), checksum2);
 
         // Assert read4 detected change
         assertTrue(read4.isChanged(), "Should detect second change");
@@ -186,9 +186,9 @@ class CoreToolBoxReadTest {
 
         // Act - Read with a fake/wrong checksum
         String fakeChecksum = "0000000000000000000000000000000000000000000000000000000000000000";
-        ToolIO.ReadResponse response = toolBox.read("read with wrong checksum",
-                                                    testFile.toString(),
-                                                    fakeChecksum);
+        ToolIO.ReadResponse response = toolBox.readFile("read with wrong checksum",
+                                                        testFile.toString(),
+                                                        fakeChecksum);
 
         // Assert
         assertNull(response.getError(), "Should not have error");
@@ -206,7 +206,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, originalContent, StandardCharsets.UTF_8);
 
         // Act - First read to get checksum
-        ToolIO.ReadResponse firstRead = toolBox.read("first read", testFile.toString(), "");
+        ToolIO.ReadResponse firstRead = toolBox.readFile("first read", testFile.toString(), "");
         String originalChecksum = firstRead.getChecksum();
 
         // Modify the file
@@ -214,7 +214,7 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, modifiedContent, StandardCharsets.UTF_8);
 
         // Act - Second read with old checksum (file changed)
-        ToolIO.ReadResponse secondRead = toolBox.read("second read", testFile.toString(), originalChecksum);
+        ToolIO.ReadResponse secondRead = toolBox.readFile("second read", testFile.toString(), originalChecksum);
 
         // Assert
         assertNull(secondRead.getError(), "Should not have error");
@@ -232,13 +232,13 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
         // Act - First read
-        ToolIO.ReadResponse firstRead = toolBox.read("first read", testFile.toString(), "");
+        ToolIO.ReadResponse firstRead = toolBox.readFile("first read", testFile.toString(), "");
         String checksum = firstRead.getChecksum();
 
         // Act - Multiple subsequent reads without file modification
-        ToolIO.ReadResponse secondRead = toolBox.read("second read", testFile.toString(), checksum);
-        ToolIO.ReadResponse thirdRead = toolBox.read("third read", testFile.toString(), checksum);
-        ToolIO.ReadResponse fourthRead = toolBox.read("fourth read", testFile.toString(), checksum);
+        ToolIO.ReadResponse secondRead = toolBox.readFile("second read", testFile.toString(), checksum);
+        ToolIO.ReadResponse thirdRead = toolBox.readFile("third read", testFile.toString(), checksum);
+        ToolIO.ReadResponse fourthRead = toolBox.readFile("fourth read", testFile.toString(), checksum);
 
         // Assert - All subsequent reads should indicate no change
         assertFalse(secondRead.isChanged(), "Second read should not be changed");
@@ -263,11 +263,11 @@ class CoreToolBoxReadTest {
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
         // Act - First read to get checksum
-        ToolIO.ReadResponse firstRead = toolBox.read("first read", testFile.toString(), "");
+        ToolIO.ReadResponse firstRead = toolBox.readFile("first read", testFile.toString(), "");
         String checksum = firstRead.getChecksum();
 
         // Act - Second read with same checksum (file unchanged)
-        ToolIO.ReadResponse secondRead = toolBox.read("second read", testFile.toString(), checksum);
+        ToolIO.ReadResponse secondRead = toolBox.readFile("second read", testFile.toString(), checksum);
 
         // Assert
         assertNull(secondRead.getError(), "Should not have error");
@@ -282,7 +282,7 @@ class CoreToolBoxReadTest {
         Path nonExistentFile = tempDir.resolve("does-not-exist.txt");
 
         // Act
-        ToolIO.ReadResponse response = toolBox.read("test read", nonExistentFile.toString(), "");
+        ToolIO.ReadResponse response = toolBox.readFile("test read", nonExistentFile.toString(), "");
 
         // Assert
         assertNotNull(response.getError(), "Should have error");
