@@ -4,11 +4,13 @@ description: Spawn specialized Sai subagents (coder, planner, reviewer) in new t
 license: Apache-2.0
 metadata:
   author: sai-project
-  version: "1.0"
-compatibility: Requires tmux installed and running inside a tmux session. Requires Sai JAR at target/sai-1.0-SNAPSHOT.jar
+  version: "1.2"
+compatibility: Requires tmux installed and running inside a tmux session. Requires the `sai` command to be installed (via sai-installer) and available in PATH
 ---
 
 # Tmux Subagent Spawner
+
+
 
 ## Purpose
 This skill enables you to spawn specialized Sai subagents in new tmux panes. Use this when:
@@ -16,14 +18,16 @@ This skill enables you to spawn specialized Sai subagents in new tmux panes. Use
 - You want to delegate subtasks to run in parallel
 - You need persistent, visible subagent sessions the user can interact with
 - You want to demonstrate multi-agent coordination patterns
-
 ## How It Works
 The skill provides a script that:
 1. Checks if running inside tmux
 2. Creates a new horizontal or vertical split pane
-3. Launches a Sai agent with a specified persona in that pane
-4. Uses file-based communication protocol for reliable inter-agent messaging
-5. Polls for task completion and automatically retrieves results
+3. Launches a Sai agent with a specified persona in that pane using the `sai` wrapper command
+4. **Pane lifetime is tied to the agent process** — when sai exits, the pane closes automatically
+5. Uses file-based communication protocol for reliable inter-agent messaging
+6. Polls for task completion and automatically retrieves results
+
+
 
 ### Communication Protocol
 The script establishes a robust file-based communication channel:
@@ -37,8 +41,8 @@ This protocol works seamlessly with `--input` mode and enables asynchronous task
 
 ## Prerequisites
 - Must be running inside a tmux session
-- Sai JAR must exist at `target/sai-1.0-SNAPSHOT.jar` (relative to current directory)
-- Persona files must exist (default: `examples/personas/*.yaml`)
+- The `sai` command must be installed and available in PATH (installed via `bash sai-installer install`)
+- Persona files must exist (default: `examples/personas/*.yaml` or `~/.config/sai/persona/*.yaml`)
 
 ## Instructions
 
@@ -71,27 +75,48 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 - `--task`: Optional initial task to send to the subagent
 - `--working-dir`: Optional working directory for the subagent (default: current directory)
 - `--debug`: Enable debug output in the subagent pane for visibility
+- `--no-wait`: Skip polling for completion (returns immediately after spawn, for parallel scenarios)
 
 **Example**:
+
 ```bash
 bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --split-direction vertical \
   --task "Implement a new feature for user authentication"
 ```
+**Example (parallel spawn)**:
+```bash
+# Spawn multiple subagents in parallel
+bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+  --persona coder \
+  --task "Implement feature A" \
+  --no-wait
+
+bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+  --persona coder \
+  --task "Implement feature B" \
+  --no-wait
+
+# Later, check for completion by looking at marker files:
+# ls /tmp/sai/${SAI_SESSION_ID}/scratch/*-done.marker
+```
+
 
 ### Step 4: Monitor and Coordinate
 After spawning with `--task`:
 - Script automatically waits for completion (polls every 2 seconds, max 5 minutes timeout)
 - Output is captured and displayed when subagent finishes
-- Pane closes automatically after task completion
+- **Pane closes automatically** when agent exits (task completion or error)
 - Communication files are cleaned up
 
 Without `--task` (interactive mode):
 - The new pane will be visible alongside your current pane
-- The subagent will wait for interactive commands
-- You can switch to the pane using tmux navigation (Ctrl+b + arrow keys)
-- Close manually when done (Ctrl+d or type 'exit')
+- The subagent waits for interactive commands
+- **Pane closes automatically** when you exit sai (Ctrl+C or type 'exit')
+- Switch between panes using tmux navigation (Ctrl+b + arrow keys)
+
+
 
 **Debug Mode**:
 Use `--debug` flag to see real-time progress in the subagent pane while still using the communication protocol.
@@ -123,8 +148,8 @@ For complex workflows:
 
 ## Troubleshooting
 - **"Not in tmux"**: Run Sai from within a tmux session first
-- **"JAR not found"**: Ensure you're in the sai project root, or build with `mvn package`
-- **"Persona not found"**: Check persona exists in `examples/personas/` or provide full path
+- **"sai command not found"**: Install sai via `bash sai-installer install` and ensure `~/.local/bin` is in PATH
+- **"Persona not found"**: Check persona exists in `examples/personas/` or `~/.config/sai/persona/` or provide full path
 - **Pane doesn't spawn**: Check tmux version (`tmux -V`), requires tmux 2.0+
 - **Timeout waiting for completion**: Task may need more time, check subagent pane for progress
 - **Output file not found**: Check scratch directory permissions and subagent errors in pane

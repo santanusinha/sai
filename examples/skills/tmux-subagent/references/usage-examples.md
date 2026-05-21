@@ -83,11 +83,71 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 
 **Interactive mode:**
 - No communication files created
-- Pane remains open for manual interaction
+- Pane closes automatically when sai exits (Ctrl+C, type 'exit', or process completes)
 - Navigate with `Ctrl+b` then arrow keys
-- Close manually with `Ctrl+d` or type `exit`
 
-## Example 5: Multi-Stage Workflow
+
+## Pane Lifecycle Behavior
+
+As of v1.2, **pane lifetime is tied directly to the agent process**. This is achieved by passing a launcher script directly to `tmux split-window` as its command argument.
+
+### How It Works
+
+1. The spawn script generates a temporary launcher script in the scratch directory
+2. `tmux split-window` receives the launcher script as its command argument
+3. When the launcher script (and thus sai) exits, tmux automatically closes the pane
+4. No orphan shells are left behind, even if the agent crashes
+
+### Verified Behavior
+
+| Phase | Pane Count | Notes |
+|-------|------------|-------|
+| Before spawn | N | Initial state |
+| During execution | N+1 | Subagent pane is active |
+| After agent exits | N | Pane closes automatically |
+
+### Benefits Over Previous Approach
+
+- **No orphan panes**: Previously `split-window` + `send-keys` could leave empty shells
+- **Crash-safe**: If sai crashes, the pane still closes cleanly
+- **No manual cleanup**: No need to track and kill panes
+- **Simpler code**: Avoids complex quoting with `send-keys`
+
+## Example 5: Parallel Spawning with --no-wait
+
+Spawn multiple subagents in parallel for independent tasks:
+
+```bash
+# Spawn planner and reviewer in parallel
+bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+  --persona planner \
+  --task "Break down the authentication feature into subtasks" \
+  --split-direction horizontal \
+  --no-wait
+
+bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+  --persona reviewer \
+  --task "Review current codebase for security issues" \
+  --split-direction vertical \
+  --no-wait
+
+# Later, poll for completion:
+for marker in /tmp/sai/${SAI_SESSION_ID}/scratch/*-done.marker; do
+  if [[ -f "$marker" ]]; then
+    echo "Completed: $marker"
+    output="${marker%-done.marker}-output.txt"
+    cat "$output"
+  fi
+done
+```
+
+**--no-wait mode:**
+- Returns immediately after spawning
+- Does not poll for completion marker
+- Caller is responsible for checking results later
+- Useful when spawning multiple subagents that should run concurrently
+
+## Example 6: Multi-Stage Workflow
 
 Use multiple subagents for a complex workflow:
 
@@ -110,6 +170,7 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --task "Review the REST API implementation for security and best practices" \
   --split-direction horizontal
 ```
+
 
 ## Tmux Navigation Tips
 

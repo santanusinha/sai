@@ -148,11 +148,11 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    @Tool("Edit specific parts of an exiting file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool.")
-    public String editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
-                           @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
-                           @JsonPropertyDescription("Reason for editing the file.") String requestReason,
-                           @JsonPropertyDescription("The expected checksum of the file before editing. Use the checksum from a previous read operation to edit existing file or empty string to create a new file.") String expectedChecksum) {
+    @Tool("Edit specific parts of an existing file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool.")
+    public ToolIO.FileEditResponse editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
+                                            @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
+                                            @JsonPropertyDescription("Reason for editing the file.") String requestReason,
+                                            @JsonPropertyDescription("The expected checksum of the file before editing. Use the checksum from a previous read operation to edit existing file or empty string to create a new file.") String expectedChecksum) {
         return FileIO.editFile(filePath, edits, expectedChecksum);
     }
 
@@ -314,6 +314,7 @@ public class CoreToolBox implements ToolBox {
             Use the changed flag to determine if the file has been modified since the last read.
             If it is false, use the previously known content as current content would be empty.
             If it is true, use the returned content as the current content and the returned checksum as the current checksum.
+            Send empty string for knownChecksum to force re-read the file contents regardless of prior state.
 
             NOTE: FILE LINES ARE NUMBERED IN THE RETURNED CONTENT TO HELP WITH SUBSEQUENT EDIT OPERATIONS.
             OUTPUT LINE FORMAT:
@@ -330,7 +331,7 @@ public class CoreToolBox implements ToolBox {
         }
         final var content = readResult.getContent();
         final var checksum = readResult.getChecksum();
-        final var isModified = !checksum.equals(knownChecksum);
+        final var isModified = Strings.isNullOrEmpty(knownChecksum) || !checksum.equals(knownChecksum);
         if (isModified) {
             return ToolIO.ReadResponse.builder()
                     .content(content)

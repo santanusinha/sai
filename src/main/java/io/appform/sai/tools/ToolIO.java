@@ -75,8 +75,9 @@ public class ToolIO {
             Specification for text replacement in a specified chunk of lines.
             - For replacing text, set start and end to the line numbers of the chunk to replace and newContent to the replacement text.
             - For deleting text, set newContent to an empty string.
-            - For inserting text, set start and end to the same line number where the new content should be inserted.
+            - For inserting text, set start and end to the same line number and include that line's original content along with the new content.
             """)
+
     public static class FileEditOperation {
         @JsonPropertyDescription("Start line number (1-based) of the chunk to replace.")
         int startLine;
@@ -91,8 +92,9 @@ public class ToolIO {
     @Jacksonized
     @JsonClassDescription("Response for chunk replacement operations")
     public static class FileEditResponse {
-        @JsonPropertyDescription("Error message if anythign failed. OK otherwise.")
+        @JsonPropertyDescription("Error message if anything failed. OK otherwise.")
         String error;
+
         @JsonPropertyDescription("The new SHA-256 checksum of the file after all replacements.")
         String newChecksum;
     }

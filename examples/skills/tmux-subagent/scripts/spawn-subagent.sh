@@ -13,9 +13,10 @@ PERSONA=""
 SPLIT_DIRECTION="horizontal"
 TASK=""
 WORKING_DIR="$(pwd)"
-SAI_JAR="target/sai-1.0-SNAPSHOT.jar"
 DEBUG=false
+NO_WAIT=false
 SCRATCH_DIR="/tmp/sai/${SAI_SESSION_ID:-$(uuidgen)}/scratch"
+
 
 # Color output
 RED='\033[0;31m'
@@ -47,6 +48,11 @@ while [[ $# -gt 0 ]]; do
       DEBUG=true
       shift
       ;;
+    --no-wait)
+      NO_WAIT=true
+      shift
+      ;;
+
     --help)
       cat <<EOF
 Usage: spawn-subagent.sh --persona <name> [OPTIONS]
@@ -61,13 +67,14 @@ Optional:
   --task <description>          Initial task to send to subagent
   --working-dir <path>          Working directory for subagent (default: current directory)
   --debug                       Pass --debug to subagent for verbose output
+  --no-wait                     Don't wait for task completion (for parallel spawning)
   --help                        Show this help message
 
 Communication Protocol:
   - Creates input prompt file in scratch directory
   - Subagent writes output to response file
   - Subagent writes completion marker when done
-  - Parent agent polls for completion and reads output
+  - Parent agent polls for completion and reads output (unless --no-wait)
 
 Examples:
   # Spawn a coder subagent in horizontal split
@@ -78,7 +85,12 @@ Examples:
 
   # Spawn planner with debug output
   spawn-subagent.sh --persona planner --task "Create a project plan" --debug
+
+  # Spawn multiple subagents in parallel (no waiting)
+  spawn-subagent.sh --persona coder --task "Implement feature A" --no-wait
+  spawn-subagent.sh --persona coder --task "Implement feature B" --no-wait
 EOF
+
       exit 0
       ;;
     *)
@@ -122,10 +134,11 @@ else
   exit 1
 fi
 
-# Check if Sai JAR exists
-if [[ ! -f "$SAI_JAR" ]]; then
-  echo -e "${RED}Error: Sai JAR not found at $SAI_JAR${NC}" >&2
-  echo "Build it first: mvn clean package" >&2
+# Check if sai command is available
+if ! command -v sai &>/dev/null; then
+  echo -e "${RED}Error: 'sai' command not found in PATH${NC}" >&2
+  echo "Install sai first: bash sai-installer install" >&2
+  echo "Ensure ~/.local/bin is in your PATH" >&2
   exit 1
 fi
 
@@ -178,23 +191,20 @@ EOF
   echo -e "${BLUE}Created input file: $INPUT_FILE${NC}"
 fi
 
-# Build Sai command
-SAI_CMD="cd '$WORKING_DIR' && java -jar '$SAI_JAR' --persona '$PERSONA_PATH'"
+# Build Sai command using the sai wrapper script
+SAI_CMD="cd '$WORKING_DIR' && sai --persona '$PERSONA_PATH'"
 
-# Add debug flag if requested
-if [[ "$DEBUG" == "true" ]]; then
+# Always add debug flag for task-based subagents for visibility,
+# or if explicitly requested by the user
+if [[ "$DEBUG" == "true" || -n "$TASK" ]]; then
   SAI_CMD="$SAI_CMD --debug"
 fi
 
-# Add input file if task provided
+# Add input file if task provided (use @<file> syntax to read from file)
 if [[ -n "$TASK" ]]; then
-  SAI_CMD="$SAI_CMD --input '$INPUT_FILE'"
+  SAI_CMD="$SAI_CMD --input '@$INPUT_FILE'"
 fi
 
-# Add exit command at the end if task is provided
-if [[ -n "$TASK" ]]; then
-  SAI_CMD="$SAI_CMD; exit"
-fi
 
 echo -e "${GREEN}Spawning subagent...${NC}"
 echo "  Persona: $PERSONA_PATH"
@@ -212,60 +222,75 @@ if [[ "$DEBUG" == "true" ]]; then
 fi
 echo ""
 
-# Execute tmux split and send command
-tmux $SPLIT_CMD
-sleep 0.2  # Brief delay to ensure pane is created
+# Write the command to a temporary launcher script.
+# This avoids complex quoting issues with tmux split-window and ensures
+# the pane lifetime is tied to the agent process (pane closes when sai exits).
+LAUNCHER_SCRIPT="${SCRATCH_DIR}/${SESSION_ID}-launcher.sh"
+cat > "$LAUNCHER_SCRIPT" <<LAUNCHER
+#!/usr/bin/env bash
+$SAI_CMD
+LAUNCHER
+chmod +x "$LAUNCHER_SCRIPT"
 
-# Send the command to the new pane
-tmux send-keys "$SAI_CMD" C-m
+# Execute tmux split with the launcher script.
+# The pane runs the script directly - when sai exits, the pane closes automatically.
+tmux $SPLIT_CMD "$LAUNCHER_SCRIPT"
 
 echo -e "${GREEN}Subagent spawned successfully!${NC}"
 
+
 if [[ -n "$TASK" ]]; then
-  echo -e "${YELLOW}Waiting for subagent to complete task...${NC}"
-  echo -e "${BLUE}Polling for completion marker: $MARKER_FILE${NC}"
-  
-  # Poll for completion marker
-  MAX_WAIT=300  # 5 minutes max
-  ELAPSED=0
-  while [[ $ELAPSED -lt $MAX_WAIT ]]; do
-    if [[ -f "$MARKER_FILE" ]]; then
-      MARKER_CONTENT=$(cat "$MARKER_FILE" 2>/dev/null || echo "")
-      if [[ "$MARKER_CONTENT" == "$COMPLETION_MARKER" ]]; then
-        echo -e "${GREEN}✓ Subagent task completed!${NC}"
-        
-        # Read and display output
-        if [[ -f "$OUTPUT_FILE" ]]; then
-          echo -e "\n${GREEN}=== Subagent Output ===${NC}"
-          cat "$OUTPUT_FILE"
-          echo -e "${GREEN}=== End Output ===${NC}\n"
-        else
-          echo -e "${YELLOW}Warning: Output file not found: $OUTPUT_FILE${NC}"
+  if [[ "$NO_WAIT" == "true" ]]; then
+    echo -e "${YELLOW}--no-wait mode: Not waiting for completion${NC}"
+
+    echo -e "${BLUE}Monitor output file: $OUTPUT_FILE${NC}"
+    echo -e "${BLUE}Monitor marker file: $MARKER_FILE${NC}"
+  else
+    echo -e "${YELLOW}Waiting for subagent to complete task...${NC}"
+    echo -e "${BLUE}Polling for completion marker: $MARKER_FILE${NC}"
+    
+    # Poll for completion marker
+    MAX_WAIT=300  # 5 minutes max
+    ELAPSED=0
+    while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+      if [[ -f "$MARKER_FILE" ]]; then
+        MARKER_CONTENT=$(cat "$MARKER_FILE" 2>/dev/null || echo "")
+        if [[ "$MARKER_CONTENT" == "$COMPLETION_MARKER" ]]; then
+          echo -e "${GREEN}✓ Subagent task completed!${NC}"
+          
+          # Read and display output
+          if [[ -f "$OUTPUT_FILE" ]]; then
+            echo -e "\n${GREEN}=== Subagent Output ===${NC}"
+            cat "$OUTPUT_FILE"
+            echo -e "${GREEN}=== End Output ===${NC}\n"
+          else
+            echo -e "${YELLOW}Warning: Output file not found: $OUTPUT_FILE${NC}"
+          fi
+          
+          # Cleanup
+          rm -f "$INPUT_FILE" "$MARKER_FILE"
+          
+          break
         fi
-        
-        # Cleanup
-        rm -f "$INPUT_FILE" "$MARKER_FILE"
-        
-        break
       fi
+      
+      sleep 2
+      ELAPSED=$((ELAPSED + 2))
+      
+      # Show progress every 10 seconds
+      if [[ $((ELAPSED % 10)) -eq 0 ]]; then
+        echo -e "${BLUE}Still waiting... (${ELAPSED}s elapsed)${NC}"
+      fi
+    done
+    
+    if [[ $ELAPSED -ge $MAX_WAIT ]]; then
+      echo -e "${YELLOW}Warning: Timeout waiting for subagent completion${NC}"
+      echo -e "${YELLOW}Check the tmux pane for status${NC}"
     fi
     
-    sleep 2
-    ELAPSED=$((ELAPSED + 2))
-    
-    # Show progress every 10 seconds
-    if [[ $((ELAPSED % 10)) -eq 0 ]]; then
-      echo -e "${BLUE}Still waiting... (${ELAPSED}s elapsed)${NC}"
-    fi
-  done
-  
-  if [[ $ELAPSED -ge $MAX_WAIT ]]; then
-    echo -e "${YELLOW}Warning: Timeout waiting for subagent completion${NC}"
-    echo -e "${YELLOW}Check the tmux pane for status${NC}"
+    echo -e "${YELLOW}Pane will close automatically${NC}"
   fi
-  
-  echo -e "${YELLOW}Pane will close automatically${NC}"
 else
+  echo -e "${YELLOW}Pane is tied to agent lifetime - it will close when agent exits${NC}"
   echo -e "${YELLOW}Switch to the new pane: Ctrl+b then arrow keys${NC}"
-  echo -e "${YELLOW}Close pane when done: Ctrl+d or type 'exit'${NC}"
 fi

@@ -100,6 +100,7 @@ class FileIOTest {
 
     @Test
     void editChecksumMismatch() throws Exception {
+
         Files.writeString(testFile, "line1\nline2\nline3", StandardCharsets.UTF_8);
         final var edits = List.of(
                                   ToolIO.FileEditOperation.builder().startLine(1).endLine(2).content("replaced")
@@ -107,7 +108,9 @@ class FileIOTest {
 
         final var result = FileIO.editFile(testFile.toString(), edits, "wrong-checksum");
 
-        assertTrue(result.contains("Checksum mismatch"), result);
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("Checksum mismatch"), result.getError());
+        assertNull(result.getNewChecksum());
     }
 
     @Test
@@ -117,8 +120,10 @@ class FileIOTest {
         final var edits = List.of(
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("").build());
 
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
         final var written = Files.readString(testFile);
         assertFalse(written.contains("line2"));
         assertFalse(written.contains("line3"));
@@ -133,12 +138,45 @@ class FileIOTest {
         final var edits = List.of(
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("").build());
 
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
         final var written = Files.readString(testFile);
         assertFalse(written.contains("line2"));
         assertTrue(written.contains("line1"));
         assertTrue(written.contains("line3"));
+    }
+
+    @Test
+    void editEndLineMinusOneDeleteToEnd() throws Exception {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(-1).content("")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("line1", written);
+    }
+
+    @Test
+    void editEndLineMinusOneReplacesToEnd() throws Exception {
+        final var content = "line1\nline2\nline3\nline4";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(-1).content("replaced")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nline2\nreplaced", written);
     }
 
     @Test
@@ -147,22 +185,11 @@ class FileIOTest {
         final var edits = List.of(
                                   ToolIO.FileEditOperation.builder().startLine(1).endLine(1).content("new").build());
 
-        assertEquals("File not found", FileIO.editFile(nonExistent.toString(), edits, "any"));
-    }
+        final var result = FileIO.editFile(nonExistent.toString(), edits, "any");
 
-    @Test
-    void editInsertAtLine() throws Exception {
-        final var content = "line1\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("line2").build());
-
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
-
-        final var written = Files.readString(testFile);
-        assertTrue(written.contains("line1"));
-        assertTrue(written.contains("line2"));
-        assertTrue(written.contains("line3"));
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("File not found"), result.getError());
+        assertNull(result.getNewChecksum());
     }
 
     @Test
@@ -173,8 +200,9 @@ class FileIOTest {
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("").build(),
                                   ToolIO.FileEditOperation.builder().startLine(4).endLine(4).content("").build());
 
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
+        assertNull(result.getError());
         final var written = Files.readString(testFile);
         assertFalse(written.contains("B"));
         assertFalse(written.contains("D"));
@@ -191,8 +219,9 @@ class FileIOTest {
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("replaced")
                                           .build());
 
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
+        assertNull(result.getError());
         final var written = Files.readString(testFile);
         assertTrue(written.contains("replaced"));
         assertFalse(written.contains("line2"));
@@ -208,8 +237,9 @@ class FileIOTest {
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("new1\nnew2\nnew3")
                                           .build());
 
-        assertEquals("Done", FileIO.editFile(testFile.toString(), edits, checksum(content)));
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
+        assertNull(result.getError());
         final var written = Files.readString(testFile);
         assertTrue(written.contains("new1"));
         assertTrue(written.contains("new2"));
@@ -221,7 +251,55 @@ class FileIOTest {
     }
 
     @Test
+    void editReplaceSingleLine() throws Exception {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nreplaced\nline3", written);
+    }
+
+    @Test
+    void editReturnsNewChecksum() throws Exception {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("changed")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        final var written = Files.readString(testFile);
+        assertEquals(checksum(written), result.getNewChecksum());
+    }
+
+    @Test
+    void editTrailingNewlineStripped() throws Exception {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced\n")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nreplaced\nline3", written);
+    }
+
+    @Test
     void readEmptyFile() {
+
         final var result = FileIO.readFile(testFile.toString(), 1, -1, false);
 
         assertNull(result.getError());

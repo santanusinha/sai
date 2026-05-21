@@ -43,6 +43,25 @@ class CoreToolBoxReadTest {
     private Path testFile;
 
     @Test
+    void emptyChecksumForcesReReadEvenWhenUnchanged() throws IOException {
+        Files.writeString(testFile, "Unchanged content", StandardCharsets.UTF_8);
+        final var firstRead = toolBox.readFile("first read", testFile.toString(), "");
+        final var checksum = firstRead.getChecksum();
+
+        // Verify file is unchanged with correct checksum
+        final var unchanged = toolBox.readFile("check unchanged", testFile.toString(), checksum);
+        assertFalse(unchanged.isChanged());
+        assertNull(unchanged.getContent());
+
+        // Force re-read with empty checksum — should return content even though file is unchanged
+        final var forced = toolBox.readFile("force re-read", testFile.toString(), "");
+        assertTrue(forced.isChanged());
+        assertNotNull(forced.getContent());
+        assertTrue(forced.getContent().contains("Unchanged content"), forced.getContent());
+        assertEquals(checksum, forced.getChecksum());
+    }
+
+    @Test
     void firstReadEmptyChecksum() throws IOException {
         final var content = "Hello, World!";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -66,6 +85,27 @@ class CoreToolBoxReadTest {
         assertNull(response.getError());
         assertTrue(response.getContent().contains(content), response.getContent());
         assertTrue(response.getContent().startsWith("     1\t"), response.getContent());
+        assertNotNull(response.getChecksum());
+        assertTrue(response.isChanged());
+    }
+
+    @Test
+    void nullChecksumForcesReReadEvenWhenUnchanged() throws IOException {
+        Files.writeString(testFile, "Unchanged content", StandardCharsets.UTF_8);
+        final var firstRead = toolBox.readFile("first read", testFile.toString(), "");
+        final var checksum = firstRead.getChecksum();
+
+        // Verify file is unchanged with correct checksum
+        final var unchanged = toolBox.readFile("check unchanged", testFile.toString(), checksum);
+        assertFalse(unchanged.isChanged());
+        assertNull(unchanged.getContent());
+
+        // Force re-read with null checksum — should return content even though file is unchanged
+        final var forced = toolBox.readFile("force re-read", testFile.toString(), null);
+        assertTrue(forced.isChanged());
+        assertNotNull(forced.getContent());
+        assertTrue(forced.getContent().contains("Unchanged content"), forced.getContent());
+        assertEquals(checksum, forced.getChecksum());
     }
 
     @Test

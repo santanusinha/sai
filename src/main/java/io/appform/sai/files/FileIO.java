@@ -57,40 +57,38 @@ public class FileIO {
      * @return An EditResponse indicating whether the edit was successful, the new checksum of the file after editing,
      *         and any error message if an error occurred.
      */
-    public static String editFile(String filePath,
-                                  List<ToolIO.FileEditOperation> edits,
-                                  String expectedChecksum) {
+    public static ToolIO.FileEditResponse editFile(String filePath,
+                                                   List<ToolIO.FileEditOperation> edits,
+                                                   String expectedChecksum) {
         log.debug("Editing file: {}", filePath);
-        //If file exists, validate checksum
         final var path = Path.of(filePath);
         if (!Files.exists(path)) {
             log.debug("File {} does not exist", filePath);
-            return "File not found";
+            return error("File not found");
         }
         final var currentContent = readFile(filePath, 1, -1, false);
         if (!Strings.isNullOrEmpty(currentContent.error)) {
-            // We don't want to handle massive files in the edit tool,
-            // so if we get an error reading the file (like file too large),
-            // we return that error instead of proceeding with edits.
-            return currentContent.error;
+            return error(currentContent.error);
         }
         if (!currentContent.checksum.equals(expectedChecksum)) {
-            final var errorMessage = "Checksum mismatch. Re-read the file and try again with the latest checksum.";
             log.error("Checksum mismatch for file {}.", filePath);
-            return errorMessage;
+            return error("Checksum mismatch. Re-read the file and try again with the latest checksum.");
         }
         final var content = currentContent.getContent();
         try {
             final var lines = editLines(content, edits);
             final var editedContent = String.join(System.lineSeparator(), lines);
             Files.writeString(path, editedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            final var newChecksum = calculateChecksum(editedContent.getBytes(StandardCharsets.UTF_8));
+            return ToolIO.FileEditResponse.builder()
+                    .newChecksum(newChecksum)
+                    .build();
         }
         catch (Exception e) {
             final var errorMessage = "Error accessing file: " + AgentUtils.rootCause(e).getMessage();
             log.error(errorMessage, e);
-            return errorMessage;
+            return error(errorMessage);
         }
-        return "Done";
     }
 
     /**
@@ -188,31 +186,22 @@ public class FileIO {
     }
 
     private static List<String> applyEdit(List<String> lines, int startLine, int endLine, String newContent) {
-        if (startLine < 1 || endLine < startLine || endLine > lines.size()) {
-            throw new IllegalArgumentException("Invalid line range in replacement: " + startLine + "-" + endLine);
+        final var effectiveEndLine = endLine == -1 ? lines.size() : endLine;
+        if (startLine < 1 || effectiveEndLine < startLine || effectiveEndLine > lines.size()) {
+            throw new IllegalArgumentException("Invalid line range in replacement: " + startLine + "-"
+                    + effectiveEndLine);
         }
-        final var replacementLines = !Strings.isNullOrEmpty(newContent)
-                ? List.of(newContent.split(System.lineSeparator(), -1))
+        final var trimmedContent = newContent != null && newContent.endsWith("\n")
+                ? newContent.substring(0, newContent.length() - 1)
+                : newContent;
+        final var replacementLines = !Strings.isNullOrEmpty(trimmedContent)
+                ? List.of(trimmedContent.split(System.lineSeparator(), -1))
                 : List.<String>of();
-        if (startLine == endLine) { //New content
-            if (Strings.isNullOrEmpty(newContent)) {
-                //Delete the line
-                lines.remove(startLine - 1);
-            }
-            else {
-                //Replace the line
-                lines.addAll(startLine - 1, replacementLines);
-            }
+        for (int lineNum = effectiveEndLine; lineNum >= startLine; lineNum--) {
+            lines.remove(lineNum - 1);
         }
-        else {
-            //Remove lines from startLine to endLine (inclusive)
-            for (int lineNum = endLine; lineNum >= startLine; lineNum--) {
-                lines.remove(lineNum - 1);
-            }
-            if (!Strings.isNullOrEmpty(newContent)) {
-                //Insert replacement content at line startLine (before the line currently at startLine)
-                lines.addAll(startLine - 1, replacementLines);
-            }
+        if (!Strings.isNullOrEmpty(trimmedContent)) {
+            lines.addAll(startLine - 1, replacementLines);
         }
         return lines;
     }
@@ -228,6 +217,12 @@ public class FileIO {
             applyEdit(lines, startLine, endLine, newContent);
         }
         return lines;
+    }
+
+    private static final ToolIO.FileEditResponse error(String message) {
+        return ToolIO.FileEditResponse.builder()
+                .error(message)
+                .build();
     }
 
     public String calculateChecksum(byte[] content) {

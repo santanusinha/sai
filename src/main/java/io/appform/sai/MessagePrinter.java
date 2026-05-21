@@ -179,8 +179,10 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             private List<Update> printFileEditToolResponse(ToolCallResponse toolCallResponse,
                                                            List<Update> messages) {
-                final var error = toolCallResponse.getResponse();
-                if (Strings.isNullOrEmpty(error) || error.equalsIgnoreCase("Done")) {
+                final var response = mapper.readValue(toolCallResponse.getResponse(),
+                                                      ToolIO.FileEditResponse.class);
+                final var error = response.getError();
+                if (Strings.isNullOrEmpty(error)) {
                     messages.add(Printer.systemMessage("File edited successfully."));
                 }
                 else {
