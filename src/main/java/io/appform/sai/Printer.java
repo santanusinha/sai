@@ -18,10 +18,13 @@ package io.appform.sai;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 
+import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.reader.impl.LineReaderImpl;
+import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
@@ -193,9 +196,23 @@ public class Printer implements AutoCloseable {
         return this;
     }
 
+    /**
+     * Prepend {@code completer} to the active JLine completer chain. The supplied completer is
+     * wrapped together with the existing completer in an {@link AggregateCompleter} so that both
+     * participate in TAB-completion. A no-op when the underlying {@link LineReader} is not a
+     * {@link LineReaderImpl} (e.g. in headless / test mode where a stub reader is injected).
+     *
+     * @param completer the {@link Completer} to prepend
+     */
+    public void addCompleter(Completer completer) {
+        if (lineReader instanceof LineReaderImpl impl) {
+            impl.setCompleter(new AggregateCompleter(completer, impl.getCompleter()));
+        }
+    }
+
     @SuppressWarnings("java:S106")
     private void processPrintingQueue() {
-        while (!Thread.currentThread().isInterrupted()) {
+        while (!Thread.currentThread().isInterrupted())
             try {
                 final var printables = printingQueue.take();
                 if (null != printables) {
@@ -239,7 +256,6 @@ public class Printer implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 log.info("Shutting down printer");
             }
-        }
     }
 
     public static Update markIdleStatus() {

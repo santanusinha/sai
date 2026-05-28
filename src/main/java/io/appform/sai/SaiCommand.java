@@ -32,6 +32,10 @@ import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
+import io.appform.sai.cli.handlers.ShellCommandHandler;
+import io.appform.sai.cli.handlers.SlashCommandHandler;
+import io.appform.sai.cli.slash.SlashCommandContext;
+import io.appform.sai.cli.slash.SlashCommandDispatcher;
 import io.appform.sai.commands.DeleteSessionsCommand;
 import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListSessionsCommand;
@@ -57,6 +61,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import lombok.Getter;
@@ -239,13 +244,14 @@ public class SaiCommand implements Callable<Integer> {
                                                   okHttpClient);
 
         final var agent = agentFactory.createAgent(modelName, agentConfig);
+        final var agentRef = new AtomicReference<>(agent);
 
         try (final var printer = Printer.builder()
                 .settings(settings)
                 .executorService(executorService)
                 .build()
                 .start()) {
-            // Setup rest of the connentcions
+            // Setup rest of the connections
             agent.registerToolbox(new CoreToolBox(printer));
             sessionExtension.onSessionSummarized()
                     .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
@@ -261,15 +267,20 @@ public class SaiCommand implements Callable<Integer> {
                 }
             });
 
-            try (final var commandProcessor = CommandProcessor.builder()
-                    .sessionId(settings.getSessionId())
-                    .agent(agent)
+            final var slashContext = SlashCommandContext.builder()
+                    .currentModel(new AtomicReference<>(modelPointer))
+                    .currentAgentConfig(new AtomicReference<>(agentConfig))
+                    .currentAgent(agentRef)
+                    .agentFactory(agentFactory)
                     .printer(printer)
-                    .build()
-                    .start();
-                 final var interruptMonitor = new InterruptMonitor(commandProcessor,
-                                                                   printer)) {
+                    .settings(settings)
+                    .mapper(mapper)
+                    .build();
+            slashContext.setOnAgentRebuilt(newAgent -> newAgent.registerToolbox(new CoreToolBox(printer)));
 
+            var commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
+            final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
+            try {
                 if (!settings.isHeadless()) {
                     printer.print(Update.builder()
                             .actor(Actor.SYSTEM)
@@ -293,14 +304,23 @@ public class SaiCommand implements Callable<Integer> {
                 }
 
                 var userInput = effectiveInput;
-                final var cliCommandRegistry = new CliCommandRegistry();
+                final var dispatcher = new SlashCommandDispatcher(slashContext);
+                final var cliCommandRegistry = new CliCommandRegistry(
+                                                                      List.of(new ShellCommandHandler(),
+                                                                              new SlashCommandHandler(dispatcher)));
+                printer.addCompleter(new SlashCommandCompleter(dispatcher.getCommandLine()));
                 while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
                     if (Strings.isNullOrEmpty(userInput)) {
                         userInput = readInput(printer).orElse("exit");
                     }
                     else {
-                        // Check for client-side CLI commands (e.g. ! for shell) before forwarding to agent
+                        // Check for client-side CLI commands (e.g. ! for shell, / for slash) before forwarding to agent
                         if (cliCommandRegistry.tryHandle(userInput, printer)) {
+                            if (slashContext.isAgentChanged()) {
+                                commandProcessor.close();
+                                commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
+                                slashContext.resetAgentChanged();
+                            }
                             userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                             continue;
                         }
@@ -321,6 +341,10 @@ public class SaiCommand implements Callable<Integer> {
                 if (!settings.isHeadless() && !Strings.isNullOrEmpty(userInput) && userInput.equalsIgnoreCase("exit")) {
                     printer.print(Printer.systemMessage("Resume: -s %s".formatted(effectiveSessionId)));
                 }
+            }
+            finally {
+                interruptMonitor.close();
+                commandProcessor.close();
             }
         }
         catch (Exception e) {
@@ -363,6 +387,15 @@ public class SaiCommand implements Callable<Integer> {
         }
 
 
+    }
+
+    private CommandProcessor buildCommandProcessor(SaiAgent saiAgent, Settings currentSettings, Printer printer) {
+        return CommandProcessor.builder()
+                .sessionId(currentSettings.getSessionId())
+                .agent(saiAgent)
+                .printer(printer)
+                .build()
+                .start();
     }
 
     private Optional<String> readInput(final Printer printer) {

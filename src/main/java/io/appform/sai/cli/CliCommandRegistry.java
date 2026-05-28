@@ -25,17 +25,38 @@ import java.util.Optional;
  * Registry that holds all known {@link CliCommandHandler} instances and dispatches user input to
  * the first matching handler.
  *
- * <p>To register additional handlers in the future, add them to the {@code HANDLERS} list.
+ * <p>The no-arg constructor initialises the registry with the built-in {@link ShellCommandHandler}
+ * ({@code !} prefix). To register additional handlers (e.g., the slash-command handler), use
+ * {@link #CliCommandRegistry(List)}.
  */
 public class CliCommandRegistry {
 
     /**
-     * All registered handlers. Handlers in this list <em>must</em> be stateless and
-     * thread-safe — a single shared instance is reused across all calls.
+     * All registered handlers. Evaluated in order; the first handler whose
+     * {@link CliCommandHandler#canHandle(String)} returns {@code true} is used.
      */
-    private static final List<CliCommandHandler> HANDLERS = List.of(new ShellCommandHandler());
+    private final List<CliCommandHandler> handlers;
 
-    // Future handlers: new HelpCommandHandler(), new ClearCommandHandler(), …
+    /**
+     * Constructs a registry with the default built-in handlers:
+     * <ul>
+     * <li>{@link ShellCommandHandler} — {@code !} prefix for shell pass-through</li>
+     * </ul>
+     */
+    public CliCommandRegistry() {
+        this(List.of(new ShellCommandHandler()));
+    }
+
+    /**
+     * Constructs a registry with a caller-supplied handler list. Use this constructor when
+     * additional stateful handlers (e.g., a slash-command handler with session context) are
+     * required.
+     *
+     * @param handlers ordered list of handlers; must not be {@code null}
+     */
+    public CliCommandRegistry(List<CliCommandHandler> handlers) {
+        this.handlers = List.copyOf(handlers);
+    }
 
     /**
      * Returns the first handler that claims ownership of {@code input}, or empty if none match.
@@ -44,7 +65,7 @@ public class CliCommandRegistry {
      * @return matching handler, or {@link Optional#empty()}
      */
     public Optional<CliCommandHandler> findHandler(String input) {
-        return HANDLERS.stream()
+        return handlers.stream()
                 .filter(h -> h.canHandle(input))
                 .findFirst();
     }

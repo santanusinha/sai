@@ -18,7 +18,9 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │   ├── java/io/appform/sai/
     │   │   ├── agent/     # Agent instantiation and MCP configuration
     │   │   ├── cli/       # Client-side CLI command handlers (e.g. ! for shell)
-    │   │   │   └── handlers/  # CliCommandHandler implementations
+    │   │   │   ├── handlers/  # CliCommandHandler implementations (ShellCommandHandler, SlashCommandHandler)
+    │   │   │   └── slash/     # Slash-command subsystem (interactive /cmd routing via Picocli)
+    │   │   │       └── commands/  # Slash sub-commands: /help, /model, /persona
     │   │   ├── commands/  # CLI subcommands (list, delete sessions)
     │   │   ├── config/    # Persona/config file loaders
     │   │   ├── models/    # Data models (Session, Actor, Severity)
@@ -147,12 +149,14 @@ When modifying CLI flags, environment variables, or behavior:
 2. If project structure changes, update the tree in this file
 3. Run `java -jar target/sai-1.0-SNAPSHOT.jar --help` to verify CLI docs
 
-## Testing Patterns
-
 - **Framework**: JUnit 5 (Jupiter)
+- **Libraries**: AssertJ (fluent assertions), Mockito (mocking)
 - **Naming**: `{ClassName}Test.java` (e.g., `CoreToolBoxLineEditTest.java`)
 - **Structure**: Tests use `@BeforeEach`/`@AfterEach` for setup/teardown
-- **Temp files**: Use `Files.createTempFile()` and clean up in `@AfterEach`
+- **Temp files**: Use `Files.createTempFile()` or `@TempDir` (JUnit 5) and clean up in `@AfterEach`
+- **Assertions**: AssertJ `assertThat(...)` preferred; standard JUnit assertions acceptable
+- **Mocking**: Mockito `mock()` / `verify()` for unit tests with collaborators
+- **Capturing output**: `CapturingPrinter` inner-class pattern (extends `Printer` with headless `Settings`)
 - **Assertions**: Standard JUnit assertions (`assertEquals`, `assertTrue`, `assertFalse`)
 - **No mocking framework** currently in use - tests use real implementations with temp files
 
