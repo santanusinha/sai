@@ -304,10 +304,11 @@ public class SaiCommand implements Callable<Integer> {
                             userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                             continue;
                         }
+                        final var resolvedInput = resolveInput(userInput);
                         final var command = CommandProcessor.Command.builder()
                                 .command(CommandType.INPUT)
                                 .input(new InputCommand("run-" + UUID.randomUUID()
-                                        .toString(), userInput))
+                                        .toString(), resolvedInput))
                                 .build();
                         try {
                             commandProcessor.handle(command);
@@ -396,6 +397,6 @@ public class SaiCommand implements Callable<Integer> {
             }
             return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
         }
-        return input;
+        return input.replaceAll("@(\\S+)", "$1");
     }
 }
