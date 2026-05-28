@@ -36,6 +36,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import lombok.SneakyThrows;
+
 class ShellCommandHandlerTest {
 
     /**
@@ -47,7 +49,8 @@ class ShellCommandHandlerTest {
         private List<Printer.Update> capture = new CopyOnWriteArrayList<>();
         private final ExecutorService executorService;
 
-        InterceptingPrinter() throws Exception {
+        @SneakyThrows
+        InterceptingPrinter() {
             super(Settings.builder().headless(true).build(),
                   Executors.newSingleThreadExecutor(),
                   null,
@@ -94,39 +97,77 @@ class ShellCommandHandlerTest {
     // ── canHandle ──────────────────────────────────────────────────────────────
 
     @Test
-    void canHandle_returnsFalseForExitCommand() {
+    void canHandleReturnsFalseForExit() {
         assertFalse(handler.canHandle("exit"));
     }
 
     @Test
-    void canHandle_returnsFalseForNormalInput() {
+    void canHandleReturnsFalseForNormalInput() {
         assertFalse(handler.canHandle("hello world"));
     }
 
     @Test
-    void canHandle_returnsFalseForSlashCommand() {
+    void canHandleReturnsFalseForSlashCommand() {
         assertFalse(handler.canHandle("/help"));
     }
 
     @Test
-    void canHandle_returnsTrueForBangPrefix() {
+    void canHandleReturnsTrueForBangPrefix() {
         assertTrue(handler.canHandle("!ls"));
     }
 
     @Test
-    void canHandle_returnsTrueForBangWithSpace() {
+    void canHandleReturnsTrueForBangWithSpace() {
         assertTrue(handler.canHandle("! pwd"));
     }
 
     @Test
-    void canHandle_returnsTrueForLeadingWhitespaceBeforeBang() {
+    void canHandleReturnsTrueForLeadingWhitespaceBang() {
         assertTrue(handler.canHandle("  !echo hello"));
     }
 
     // ── handle (verifying Update objects constructed by the handler) ───────────
 
     @Test
-    void handle_commandExceedingTimeout_reportsTimeoutError() {
+    void handleCommandWithArguments() {
+        final var updates = captureUpdates("!echo hello world");
+        assertTrue(updatesContain(updates, "hello world"),
+                   "Expected full argument string in captured output");
+    }
+
+    @Test
+    void handleEchoPrintsOutput() {
+        final var updates = captureUpdates("!echo sai_test_output");
+        assertTrue(updatesContain(updates, "sai_test_output"),
+                   "Expected stdout to contain the echoed string");
+    }
+
+    @Test
+    void handleEmptyAfterBangPrintsUsage() {
+        final var updates = captureUpdates("!");
+        assertTrue(updatesContain(updates, "Usage"),
+                   "Expected usage hint when no command follows '!'");
+    }
+
+    @Test
+    void handleEmptyAfterBangWithSpacesPrintsUsage() {
+        final var updates = captureUpdates("!   ");
+        assertTrue(updatesContain(updates, "Usage"),
+                   "Expected usage hint when only whitespace follows '!'");
+    }
+
+    @Test
+    void handleFailingCommandContainsExitCode() {
+        // 'false' always exits with code 1 on POSIX systems
+        final var updates = captureUpdates("!false");
+        assertTrue(updatesContain(updates, "Exit code"),
+                   "Expected 'Exit code' error message for a failing command");
+    }
+
+    // ── timeout handling ──────────────────────────────────────────────────────
+
+    @Test
+    void handleTimeoutReportsError() {
         // Use a 1-second timeout so the test completes quickly
         // Use an anonymous subclass to access the protected timeout constructor
         final ShellCommandHandler shortTimeoutHandler = new ShellCommandHandler(Duration.ofSeconds(1)) {
@@ -147,48 +188,10 @@ class ShellCommandHandlerTest {
                    "Expected 'timed out' in the error message");
     }
 
-    @Test
-    void handle_commandWithArguments_works() {
-        final var updates = captureUpdates("!echo hello world");
-        assertTrue(updatesContain(updates, "hello world"),
-                   "Expected full argument string in captured output");
-    }
-
-    @Test
-    void handle_emptyCommandAfterBangWithSpaces_printsUsage() {
-        final var updates = captureUpdates("!   ");
-        assertTrue(updatesContain(updates, "Usage"),
-                   "Expected usage hint when only whitespace follows '!'");
-    }
-
-    @Test
-    void handle_emptyCommandAfterBang_printsUsage() {
-        final var updates = captureUpdates("!");
-        assertTrue(updatesContain(updates, "Usage"),
-                   "Expected usage hint when no command follows '!'");
-    }
-
-    @Test
-    void handle_failingCommand_containsExitCode() {
-        // 'false' always exits with code 1 on POSIX systems
-        final var updates = captureUpdates("!false");
-        assertTrue(updatesContain(updates, "Exit code"),
-                   "Expected 'Exit code' error message for a failing command");
-    }
-
-    // ── timeout handling ──────────────────────────────────────────────────────
-
-    @Test
-    void handle_successfulEchoCommand_printsOutput() {
-        final var updates = captureUpdates("!echo sai_test_output");
-        assertTrue(updatesContain(updates, "sai_test_output"),
-                   "Expected stdout to contain the echoed string");
-    }
-
     // ── registry integration ───────────────────────────────────────────────────
 
     @Test
-    void registry_routesBangToShellHandler() {
+    void registryRoutesBangToShellHandler() {
         final var registry = new CliCommandRegistry();
         assertTrue(registry.findHandler("!ls").isPresent(), "Registry should find handler for !ls");
         assertFalse(registry.findHandler("normal input").isPresent(),
@@ -198,13 +201,15 @@ class ShellCommandHandlerTest {
     // ── helpers ────────────────────────────────────────────────────────────────
 
     @BeforeEach
-    void setUp() throws Exception {
+    @SneakyThrows
+    void setUp() {
         handler = new ShellCommandHandler();
         interceptingPrinter = new InterceptingPrinter();
     }
 
     @AfterEach
-    void tearDown() throws Exception {
+    @SneakyThrows
+    void tearDown() {
         interceptingPrinter.close();
     }
 

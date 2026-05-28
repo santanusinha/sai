@@ -32,6 +32,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
+import lombok.SneakyThrows;
+
 class CoreToolBoxSearchReplaceTest {
 
     private CoreToolBox coreToolBox;
@@ -49,7 +51,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceAll() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceAll() {
         String content = "Hello world! Hello again! Hello once more!";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -67,7 +70,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceChecksumMismatch() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceChecksumMismatch() {
         String content = "Hello world!";
         Files.writeString(testFile, content);
 
@@ -83,7 +87,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceEmptySearchText() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceEmptySearchText() {
         String content = "Hello world!";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -113,7 +118,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceFirstOccurrence() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceFirstOccurrence() {
         String content = "foo bar foo baz foo";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -131,7 +137,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceMultiLine() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceMultiLine() {
         String content = "line1\nold code\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -148,7 +155,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceOccurrenceNotFound() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceOccurrenceNotFound() {
         String content = "apple banana";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -165,7 +173,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceSpecificOccurrence() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceSpecificOccurrence() {
         String content = "apple banana apple cherry apple";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -183,7 +192,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceTextNotFound() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceTextNotFound() {
         String content = "Hello world!";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -200,7 +210,8 @@ class CoreToolBoxSearchReplaceTest {
     }
 
     @Test
-    void testSearchReplaceWithDelete() throws Exception {
+    @SneakyThrows
+    void testSearchReplaceWithDelete() {
         String content = "keep this remove_this keep this too";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -216,7 +227,8 @@ class CoreToolBoxSearchReplaceTest {
         assertEquals("keep this keep this too", Files.readString(testFile));
     }
 
-    private String calculateChecksum(String content) throws Exception {
+    @SneakyThrows
+    private String calculateChecksum(String content) {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
         return HexFormat.of().formatHex(hash);

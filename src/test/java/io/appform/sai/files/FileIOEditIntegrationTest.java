@@ -33,6 +33,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import lombok.SneakyThrows;
+
 /**
  * Complex integration tests for editFile to verify all 4 reported bugs are fixed
  * and the tool works correctly in real-world multi-edit scenarios.
@@ -43,189 +45,8 @@ class FileIOEditIntegrationTest {
     private Path testFile;
 
     @Test
-    void bug1_singleLineDelete_emptyContent() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nline3", written);
-    }
-
-    @Test
-    void bug1_singleLineReplace_doesNotDuplicate() throws Exception {
-        final var content = "public class Foo {\n    int x = 1;\n    int y = 2;\n}";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("    int x = 42;")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("public class Foo {\n    int x = 42;\n    int y = 2;\n}", written);
-        // Critical: original line must NOT be present
-        assertFalse(written.contains("int x = 1"));
-    }
-
-    @Test
-    void bug1_singleLineReplace_withMultilineContent() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content(
-                                                                                                     "new2a\nnew2b\nnew2c")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nnew2a\nnew2b\nnew2c\nline3", written);
-    }
-
-    // ===== Bug #1: Single-line replacement =====
-
-    @Test
-    void bug2_endLineMinusOne_deletesFromStartToEnd() throws Exception {
-        final var content = "keep1\nremove2\nremove3\nremove4";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(-1).content("").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("keep1", written);
-    }
-
-    @Test
-    void bug2_endLineMinusOne_fromLine1_replacesEntireFile() throws Exception {
-        final var content = "old1\nold2\nold3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(-1).content(
-                                                                                                      "completely\nnew\ncontent")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("completely\nnew\ncontent", written);
-    }
-
-    @Test
-    void bug2_endLineMinusOne_replacesFromStartToEnd() throws Exception {
-        final var content = "keep1\nkeep2\nremove3\nremove4\nremove5";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(-1).content("new_end").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("keep1\nkeep2\nnew_end", written);
-    }
-
-    // ===== Bug #2: endLine=-1 replaces to end of file =====
-
-    @Test
-    void bug3_checksumCanBeUsedForSubsequentEdit() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-
-        // First edit
-        final var edits1 = List.of(
-                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified2")
-                                           .build()
-        );
-        final var result1 = FileIO.editFile(testFile.toString(), edits1, checksum(content));
-        assertNull(result1.getError());
-        assertNotNull(result1.getNewChecksum());
-
-        // Second edit using returned checksum — should NOT get checksum mismatch
-        final var edits2 = List.of(
-                                   ToolIO.FileEditOperation.builder().startLine(3).endLine(3).content("modified3")
-                                           .build()
-        );
-        final var result2 = FileIO.editFile(testFile.toString(), edits2, result1.getNewChecksum());
-        assertNull(result2.getError(),
-                   "Second edit with returned checksum should succeed, but got: " + result2.getError());
-        assertNotNull(result2.getNewChecksum());
-
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nmodified2\nmodified3", written);
-    }
-
-    @Test
-    void bug3_successfulEditReturnsChecksum() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum(), "Checksum must be returned after successful edit");
-        assertFalse(result.getNewChecksum().isEmpty(), "Checksum must not be empty");
-        // Verify returned checksum matches the actual file content
-        final var actualContent = Files.readString(testFile);
-        assertEquals(checksum(actualContent), result.getNewChecksum());
-    }
-
-    @Test
-    void bug4_multilineContentWithTrailingNewline() throws Exception {
-        final var content = "line1\nline2\nline3\nline4";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("new2\nnew3\n")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nnew2\nnew3\nline4", written);
-    }
-
-    // ===== Bug #3: Checksum returned after edit =====
-
-    @Test
-    void bug4_trailingNewlineInContent_doesNotCreateExtraLine() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced\n")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        // Should NOT have an extra blank line: "line1\nreplaced\n\nline3"
-        assertEquals("line1\nreplaced\nline3", written);
-    }
-
-    @Test
-    void complexScenario_chainedEditsWithChecksum() throws Exception {
+    @SneakyThrows
+    void chainedEditsWithChecksum() {
         final var content = "a\nb\nc\nd\ne";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
@@ -256,10 +77,57 @@ class FileIOEditIntegrationTest {
         assertEquals("A\nb\nC\nd\nE", written);
     }
 
-    // ===== Bug #4: Trailing newline handling =====
+    @Test
+    @SneakyThrows
+    void checksumMismatchReturnsError() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, "wrong_checksum_value");
+
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("Checksum mismatch"));
+        // File should be unchanged
+        assertEquals(content, Files.readString(testFile));
+    }
 
     @Test
-    void complexScenario_deleteMultipleLinesAndReplace() throws Exception {
+    @SneakyThrows
+    void checksumUsedForSubsequentEdit() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+
+        // First edit
+        final var edits1 = List.of(
+                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified2")
+                                           .build()
+        );
+        final var result1 = FileIO.editFile(testFile.toString(), edits1, checksum(content));
+        assertNull(result1.getError());
+        assertNotNull(result1.getNewChecksum());
+
+        // Second edit using returned checksum — should NOT get checksum mismatch
+        final var edits2 = List.of(
+                                   ToolIO.FileEditOperation.builder().startLine(3).endLine(3).content("modified3")
+                                           .build()
+        );
+        final var result2 = FileIO.editFile(testFile.toString(), edits2, result1.getNewChecksum());
+        assertNull(result2.getError(),
+                   "Second edit with returned checksum should succeed, but got: " + result2.getError());
+        assertNotNull(result2.getNewChecksum());
+
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nmodified2\nmodified3", written);
+    }
+
+    // ===== Bug #1: Single-line replacement =====
+
+    @Test
+    @SneakyThrows
+    void deleteMultipleLinesAndReplace() {
         final var content = "header\n// remove this\n// and this\n// and this too\nkeep\nfooter";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
@@ -276,7 +144,95 @@ class FileIOEditIntegrationTest {
     }
 
     @Test
-    void complexScenario_multipleEditsInReverseOrder() throws Exception {
+    @SneakyThrows
+    void endLineMinusOneDeletesFromStartToEnd() {
+        final var content = "keep1\nremove2\nremove3\nremove4";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(-1).content("").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("keep1", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void endLineMinusOneFromLine1ReplacesAll() {
+        final var content = "old1\nold2\nold3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(-1).content(
+                                                                                                      "completely\nnew\ncontent")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("completely\nnew\ncontent", written);
+    }
+
+    // ===== Bug #2: endLine=-1 replaces to end of file =====
+
+    @Test
+    @SneakyThrows
+    void endLineMinusOneReplacesFromStartToEnd() {
+        final var content = "keep1\nkeep2\nremove3\nremove4\nremove5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(-1).content("new_end").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("keep1\nkeep2\nnew_end", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void invalidLineRange() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(5).endLine(5).content("out_of_range")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("Invalid line range"));
+    }
+
+    @Test
+    @SneakyThrows
+    void multilineContentWithTrailingNewline() {
+        final var content = "line1\nline2\nline3\nline4";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("new2\nnew3\n")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nnew2\nnew3\nline4", written);
+    }
+
+    // ===== Bug #3: Checksum returned after edit =====
+
+    @Test
+    @SneakyThrows
+    void multipleEditsInReverseOrder() {
         final var content = "import java.util.List;\nimport java.util.Map;\n\npublic class Example {\n    void method1() {}\n    void method2() {}\n    void method3() {}\n}";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         // Multiple edits: replace method2 AND add a new import
@@ -300,10 +256,9 @@ class FileIOEditIntegrationTest {
                     "Should not duplicate Map import");
     }
 
-    // ===== Complex multi-edit scenarios =====
-
     @Test
-    void complexScenario_realWorldJavaMethodReplacement() throws Exception {
+    @SneakyThrows
+    void realWorldJavaMethodReplacement() {
         final var content = String.join("\n",
                                         List.of(
                                                 "package com.example;",
@@ -342,8 +297,46 @@ class FileIOEditIntegrationTest {
         assertTrue(written.contains("package com.example;"));
     }
 
+    // ===== Bug #4: Trailing newline handling =====
+
     @Test
-    void complexScenario_replaceRangeWithFewerLines() throws Exception {
+    @SneakyThrows
+    void replaceFirstLine() {
+        final var content = "old_first\nsecond\nthird";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(1).content("new_first")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("new_first\nsecond\nthird", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void replaceLastLine() {
+        final var content = "first\nsecond\nold_last";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(3).content("new_last").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("first\nsecond\nnew_last", written);
+    }
+
+    // ===== Complex multi-edit scenarios =====
+
+    @Test
+    @SneakyThrows
+    void replaceRangeWithFewerLines() {
         final var content = "line1\nline2\nline3\nline4\nline5";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         // Replace 3 lines (2-4) with 1 line
@@ -361,7 +354,8 @@ class FileIOEditIntegrationTest {
     }
 
     @Test
-    void complexScenario_replaceRangeWithMoreLines() throws Exception {
+    @SneakyThrows
+    void replaceRangeWithMoreLines() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         // Replace 1 line (2) with 4 lines
@@ -378,72 +372,82 @@ class FileIOEditIntegrationTest {
         assertEquals("line1\nexpanded_a\nexpanded_b\nexpanded_c\nexpanded_d\nline3", written);
     }
 
+    @BeforeEach
+    void setUp() throws IOException {
+        tempDir = Files.createTempDirectory("fileio-edit-integration");
+        testFile = tempDir.resolve("test.java");
+    }
+
     @Test
-    void edgeCase_checksumMismatchReturnsError() throws Exception {
+    @SneakyThrows
+    void singleLineDeleteEmpty() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nline3", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void singleLineReplaceNoDuplicate() {
+        final var content = "public class Foo {\n    int x = 1;\n    int y = 2;\n}";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("    int x = 42;")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("public class Foo {\n    int x = 42;\n    int y = 2;\n}", written);
+        // Critical: original line must NOT be present
+        assertFalse(written.contains("int x = 1"));
+    }
+
+    @Test
+    @SneakyThrows
+    void singleLineReplaceWithMultilineContent() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content(
+                                                                                                     "new2a\nnew2b\nnew2c")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("line1\nnew2a\nnew2b\nnew2c\nline3", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void successfulEditReturnsChecksum() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified").build()
         );
 
-        final var result = FileIO.editFile(testFile.toString(), edits, "wrong_checksum_value");
-
-        assertNotNull(result.getError());
-        assertTrue(result.getError().contains("Checksum mismatch"));
-        // File should be unchanged
-        assertEquals(content, Files.readString(testFile));
-    }
-
-    @Test
-    void edgeCase_invalidLineRange() throws Exception {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(5).endLine(5).content("out_of_range")
-                                          .build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNotNull(result.getError());
-        assertTrue(result.getError().contains("Invalid line range"));
-    }
-
-    @Test
-    void edgeCase_replaceFirstLine() throws Exception {
-        final var content = "old_first\nsecond\nthird";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(1).content("new_first")
-                                          .build()
-        );
-
         final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
 
         assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("new_first\nsecond\nthird", written);
-    }
-
-    @Test
-    void edgeCase_replaceLastLine() throws Exception {
-        final var content = "first\nsecond\nold_last";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(3).content("new_last").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("first\nsecond\nnew_last", written);
-    }
-
-    @BeforeEach
-    void setUp() throws IOException {
-        tempDir = Files.createTempDirectory("fileio-edit-integration");
-        testFile = tempDir.resolve("test.java");
+        assertNotNull(result.getNewChecksum(), "Checksum must be returned after successful edit");
+        assertFalse(result.getNewChecksum().isEmpty(), "Checksum must not be empty");
+        // Verify returned checksum matches the actual file content
+        final var actualContent = Files.readString(testFile);
+        assertEquals(checksum(actualContent), result.getNewChecksum());
     }
 
     @AfterEach
@@ -452,6 +456,24 @@ class FileIOEditIntegrationTest {
             Files.delete(testFile);
         }
         Files.delete(tempDir);
+    }
+
+    @Test
+    @SneakyThrows
+    void trailingNewlineNoExtraLine() {
+        final var content = "line1\nline2\nline3";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced\n")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        // Should NOT have an extra blank line: "line1\nreplaced\n\nline3"
+        assertEquals("line1\nreplaced\nline3", written);
     }
 
     private String checksum(String content) {

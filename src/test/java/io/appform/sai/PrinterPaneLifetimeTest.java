@@ -28,13 +28,16 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 
+import lombok.SneakyThrows;
+
 class PrinterPaneLifetimeTest {
 
     private static class CapturingPrinter extends Printer {
 
         private volatile List<Printer.Update> captured = new CopyOnWriteArrayList<>();
 
-        CapturingPrinter() throws Exception {
+        @SneakyThrows
+        CapturingPrinter() {
             super(Settings.builder().headless(true).build(),
                   Executors.newSingleThreadExecutor(),
                   null,
@@ -101,7 +104,8 @@ class PrinterPaneLifetimeTest {
     }
 
     @BeforeEach
-    void setUp() throws Exception {
+    @SneakyThrows
+    void setUp() {
         printer = new CapturingPrinter();
     }
 
