@@ -4,10 +4,51 @@ When running SAI in interactive mode, special commands allow you to execute shel
 
 ## Overview
 
-SAI recognizes two types of input in interactive mode:
+SAI recognizes three types of input in interactive mode:
 
-1. **Special Commands** - Processed by SAI itself
-2. **AI Queries** - Everything else goes to the AI agent
+1. **Special Commands** - Processed by SAI itself (shell execution, exit)
+2. **`@file` References** - File paths resolved before the query reaches the agent
+3. **AI Queries** - Everything else goes to the AI agent
+
+You can reference local files in any prompt by prefixing their path with `@`. SAI resolves the reference before forwarding the query to the agent.
+
+### Whole-prompt from file
+
+If your entire input is a single `@<path>` token, SAI reads that file and uses its full contents as the prompt:
+
+```
+SAI > @prompts/refactor-task.txt
+```
+
+This is equivalent to typing the file's contents directly.
+
+### Inline file references
+
+Embed `@<path>` anywhere in a prompt to pass the file path to the agent (the `@` is stripped). The agent will use its `read()` tool to read the file when needed:
+
+```
+SAI > Explain @AGENTS.md and compare it with @README.md
+SAI > What does @src/main/java/io/appform/sai/SaiCommand.java do?
+```
+
+### Tab completion for `@` paths
+
+The interactive prompt supports Tab completion for `@`-prefixed file paths:
+
+1. Type `@` followed by the start of a path
+2. Press **Tab** to expand to matching files
+
+```
+SAI > @src/main/<Tab>
+→ completes to matching files under src/main/
+```
+
+Tab completion only triggers when the current word starts with `@` — ordinary words are not expanded.
+
+!!! note
+    Only regular files are injected or completed. Directories are not expanded.
+
+---
 
 ## Shell Command Execution
 
@@ -435,7 +476,7 @@ While in interactive mode:
 - **Ctrl+C** - Interrupt current operation / Exit SAI
 - **Ctrl+D** - Send EOF / Exit SAI
 - **Up/Down arrows** - Command history (if supported by terminal)
-- **Tab** - Auto-completion (if supported by terminal)
+- **Tab** - Complete `@<path>` file references (type `@` then press Tab to expand)
 
 ## Troubleshooting
 

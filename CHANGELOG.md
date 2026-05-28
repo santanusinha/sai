@@ -13,7 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works across Linux, macOS, and Windows
   - Gracefully cancels the current agent task and returns to input prompt
   - No need to kill the process or wait for completion
-  
+
+- **`@file` Input Syntax**: Reference local files in prompts using `@<path>`
+  - `sai -i @prompt.txt` reads the file and uses its entire contents as the prompt
+  - Inline references (`sai -i "Explain @AGENTS.md"`) strip the `@` so the agent can
+    resolve the path with its `read()` tool
+  - The same syntax works in the interactive REPL prompt
+
+- **`@`-gated Tab Completion**: File path autocompletion only activates when the
+  current word starts with `@`
+  - Type `@src/main/<Tab>` to expand matching files
+  - Ordinary words are not autocompleted, avoiding unintended expansions
+  - Completed candidates retain the `@` prefix so `resolveInput` handles them correctly
+
 - **File Read Optimization**: Checksum-based change detection for file reads
   - `read()` tool now accepts a `knownChecksum` parameter
   - Returns `changed=false` and no content when file is unchanged since last read
@@ -43,10 +55,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Details
 - Added `InterruptMonitor` class for portable Ctrl-C detection using JLine Terminal
 - Modified `CommandProcessor` to expose `cancelRunningTask()` method
-- Added `changed` field to `ToolIO.ReadResponse` 
+- Added `changed` field to `ToolIO.ReadResponse`
 - Added `knownChecksum` parameter to `ToolIO.ReadRequest`
 - Added `expectedChecksum` parameter to `ToolIO.WriteRequest`
 - Exposed `Terminal` in `Printer` class via `@Getter` annotation
+- Added `AtFileCompleter` class: JLine `Completer` that delegates to `FileNameCompleter`
+  only for words starting with `@`, re-prefixing all candidates with `@`
+- Wired `AtFileCompleter` into `Printer`'s `LineReaderBuilder`, replacing the previous
+  unconditional `FileNameCompleter`
+- `SaiCommand.resolveInput` handles both whole-file (`@file`) and inline (`@token`)
+  resolution; inline tokens in interactive REPL are resolved the same way as `--input`
 
 ## [1.0-SNAPSHOT] - Initial Release
 

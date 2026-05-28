@@ -133,30 +133,42 @@ See [Persona Format Reference](persona-format.md) for complete schema documentat
 
 #### `--input`, `-i`
 
-Provides input to SAI from a file or as a direct command. Useful for automation and scripting.
+Provides input to SAI as a direct prompt string or reads a prompt from a file using the `@file` syntax. Useful for automation and scripting.
 
-**Format:** File path or command string
+**Format:** Prompt string, or `@<filepath>` to read the prompt from a file
+
+**`@file` syntax:**
+
+- If the value is exactly `@<path>` (a single token starting with `@`), SAI reads the entire file and uses its contents as the prompt.
+- If the value contains `@<path>` tokens embedded in longer text, the `@` prefix is stripped and the plain path is passed to the agent, which can then read the file via its `read()` tool.
 
 **Examples:**
 
-=== "File Input"
+=== "Prompt from File"
     ```bash
-    sai --input prompt.txt
+    sai -i @prompts/refactor-task.txt
     ```
 
-=== "Direct Command"
+=== "Inline File Reference"
     ```bash
-    sai -i "Analyze the main.java file"
+    sai -i "Explain @AGENTS.md and summarise @README.md"
+    ```
+
+=== "Direct Prompt"
+    ```bash
+    sai -i "What is in this directory?"
     ```
 
 === "With Headless Mode"
     ```bash
-    sai --headless --input "Generate test cases" > output.txt
+    sai --headless -i @prompts/task.txt > output.txt
     ```
 
-!!! warning "Interactive vs Headless"
-    When using `--input` without `--headless`, SAI will process the input and then enter interactive mode.
+!!! tip "`@file` in interactive mode"
+    The same `@<path>` syntax works when typing prompts at the interactive `>` prompt — both whole-file (`@file`) and inline references are resolved the same way.
 
+!!! warning "Interactive vs Headless"
+    When using `--input` without `--headless`, SAI processes the input and then enters interactive mode.
 ---
 
 ### Skill Management
