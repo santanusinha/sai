@@ -23,27 +23,32 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.Optional;
 
+import lombok.SneakyThrows;
+
 class CoreToolBoxPatchValidationTest {
 
     private Method validatePatchFormatMethod;
     private CoreToolBox coreToolBox;
 
     @BeforeEach
-    void setUp() throws Exception {
+    @SneakyThrows
+    void setUp() {
         coreToolBox = new CoreToolBox(null);
         validatePatchFormatMethod = CoreToolBox.class.getDeclaredMethod("validatePatchFormat", String.class);
         validatePatchFormatMethod.setAccessible(true);
     }
 
     @Test
-    void testEmptyPatch() throws Exception {
+    @SneakyThrows
+    void testEmptyPatch() {
         Optional<String> result = validatePatch("");
         assertTrue(result.isPresent());
         assertTrue(result.get().contains("empty"));
     }
 
     @Test
-    void testHunkLineCountMismatch() throws Exception {
+    @SneakyThrows
+    void testHunkLineCountMismatch() {
         // Hunk says 3 lines but only has 2
         String badPatch = "--- a/test.txt\n"
                 + "+++ b/test.txt\n"
@@ -59,7 +64,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testMultipleHunks() throws Exception {
+    @SneakyThrows
+    void testMultipleHunks() {
         String multiHunkPatch = "--- a/test.txt\n"
                 + "+++ b/test.txt\n"
                 + "@@ -1,3 +1,3 @@\n"
@@ -78,14 +84,16 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testNullPatch() throws Exception {
+    @SneakyThrows
+    void testNullPatch() {
         Optional<String> result = validatePatch(null);
         assertTrue(result.isPresent());
         assertTrue(result.get().contains("empty"));
     }
 
     @Test
-    void testPatchWithCorrectJavaCode() throws Exception {
+    @SneakyThrows
+    void testPatchWithCorrectJavaCode() {
         // Correct version with leading space on context line
         String goodPatch = "--- a/SaiCommand.java\n"
                 + "+++ b/SaiCommand.java\n"
@@ -100,7 +108,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testPatchWithLineNotStartingWithValidMarker() throws Exception {
+    @SneakyThrows
+    void testPatchWithLineNotStartingWithValidMarker() {
         // This tests when a line doesn't start with space, -, or +
         // Note: If a line happens to start with spaces (like Java indentation),
         // it will be treated as a valid context line. The validation can only
@@ -120,7 +129,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testPatchWithMissingLeadingSpace() throws Exception {
+    @SneakyThrows
+    void testPatchWithMissingLeadingSpace() {
         // This simulates the exact error: context line without leading space
         String badPatch = "--- a/test.txt\n"
                 + "+++ b/test.txt\n"
@@ -137,7 +147,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testPatchWithoutHunkHeader() throws Exception {
+    @SneakyThrows
+    void testPatchWithoutHunkHeader() {
         String noHunkPatch = "--- a/test.txt\n"
                 + "+++ b/test.txt\n"
                 + " some content\n";
@@ -148,7 +159,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @Test
-    void testValidPatch() throws Exception {
+    @SneakyThrows
+    void testValidPatch() {
         String validPatch = "--- a/test.txt\n"
                 + "+++ b/test.txt\n"
                 + "@@ -1,3 +1,3 @@\n"
@@ -162,7 +174,8 @@ class CoreToolBoxPatchValidationTest {
     }
 
     @SuppressWarnings("unchecked")
-    private Optional<String> validatePatch(String patchContent) throws Exception {
+    @SneakyThrows
+    private Optional<String> validatePatch(String patchContent) {
         return (Optional<String>) validatePatchFormatMethod.invoke(coreToolBox, patchContent);
     }
 }

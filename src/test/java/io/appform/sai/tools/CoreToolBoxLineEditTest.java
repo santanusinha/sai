@@ -32,6 +32,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
+import lombok.SneakyThrows;
+
 class CoreToolBoxLineEditTest {
 
     private CoreToolBox coreToolBox;
@@ -49,7 +51,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testChecksumMismatch() throws Exception {
+    @SneakyThrows
+    void testChecksumMismatch() {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
 
@@ -66,7 +69,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testDeleteMultipleLines() throws Exception {
+    @SneakyThrows
+    void testDeleteMultipleLines() {
         String content = "line1\nline2\nline3\nline4\nline5";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -84,7 +88,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testDeleteSingleLine() throws Exception {
+    @SneakyThrows
+    void testDeleteSingleLine() {
         String content = "line1\nline2\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -102,7 +107,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testEndLineLessThanStartLine() throws Exception {
+    @SneakyThrows
+    void testEndLineLessThanStartLine() {
         String content = "line1\nline2\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -134,7 +140,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInsertAfter() throws Exception {
+    @SneakyThrows
+    void testInsertAfter() {
         String content = "line1\nline2\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -152,7 +159,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInsertAfterLastLine() throws Exception {
+    @SneakyThrows
+    void testInsertAfterLastLine() {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -170,7 +178,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInsertBefore() throws Exception {
+    @SneakyThrows
+    void testInsertBefore() {
         String content = "line1\nline2\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -188,7 +197,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInsertBeforeFirstLine() throws Exception {
+    @SneakyThrows
+    void testInsertBeforeFirstLine() {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -206,7 +216,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInsertMultipleLines() throws Exception {
+    @SneakyThrows
+    void testInsertMultipleLines() {
         String content = "line1\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -224,7 +235,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testInvalidLineNumber() throws Exception {
+    @SneakyThrows
+    void testInvalidLineNumber() {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -242,7 +254,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testLineNumberOutOfBounds() throws Exception {
+    @SneakyThrows
+    void testLineNumberOutOfBounds() {
         String content = "line1\nline2";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -260,7 +273,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testReplaceMultipleLines() throws Exception {
+    @SneakyThrows
+    void testReplaceMultipleLines() {
         String content = "line1\nold1\nold2\nold3\nline5";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -278,7 +292,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testReplaceSingleLine() throws Exception {
+    @SneakyThrows
+    void testReplaceSingleLine() {
         String content = "line1\nold line\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -296,7 +311,8 @@ class CoreToolBoxLineEditTest {
     }
 
     @Test
-    void testReplaceWithMultipleLines() throws Exception {
+    @SneakyThrows
+    void testReplaceWithMultipleLines() {
         String content = "line1\nold\nline3";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -313,7 +329,8 @@ class CoreToolBoxLineEditTest {
         assertEquals("line1\nnew1\nnew2\nnew3\nline3", Files.readString(testFile));
     }
 
-    private String calculateChecksum(String content) throws Exception {
+    @SneakyThrows
+    private String calculateChecksum(String content) {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
         return HexFormat.of().formatHex(hash);

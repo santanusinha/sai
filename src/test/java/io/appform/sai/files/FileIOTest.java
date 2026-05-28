@@ -40,6 +40,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.stream.Stream;
 
+import lombok.SneakyThrows;
+
 
 class FileIOTest {
 
@@ -53,7 +55,8 @@ class FileIOTest {
                          Arguments.of("end beyond file length", 1, 100));
     }
 
-    private static String checksum(String content) throws Exception {
+    @SneakyThrows
+    private static String checksum(String content) {
         final var digest = MessageDigest.getInstance("SHA-256");
         final var hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
         return HexFormat.of().formatHex(hash);
@@ -99,7 +102,8 @@ class FileIOTest {
     }
 
     @Test
-    void editChecksumMismatch() throws Exception {
+    @SneakyThrows
+    void editChecksumMismatch() {
 
         Files.writeString(testFile, "line1\nline2\nline3", StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -114,7 +118,8 @@ class FileIOTest {
     }
 
     @Test
-    void editDeleteRange() throws Exception {
+    @SneakyThrows
+    void editDeleteRange() {
         final var content = "line1\nline2\nline3\nline4";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -132,7 +137,8 @@ class FileIOTest {
     }
 
     @Test
-    void editDeleteSingleLine() throws Exception {
+    @SneakyThrows
+    void editDeleteSingleLine() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -149,7 +155,8 @@ class FileIOTest {
     }
 
     @Test
-    void editEndLineMinusOneDeleteToEnd() throws Exception {
+    @SneakyThrows
+    void editEndLineMinusOneDeleteToEnd() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -164,7 +171,8 @@ class FileIOTest {
     }
 
     @Test
-    void editEndLineMinusOneReplacesToEnd() throws Exception {
+    @SneakyThrows
+    void editEndLineMinusOneReplacesToEnd() {
         final var content = "line1\nline2\nline3\nline4";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -193,7 +201,8 @@ class FileIOTest {
     }
 
     @Test
-    void editMultipleEditsAppliedInReverseOrder() throws Exception {
+    @SneakyThrows
+    void editMultipleEditsAppliedInReverseOrder() {
         final var content = "A\nB\nC\nD\nE";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -212,7 +221,8 @@ class FileIOTest {
     }
 
     @Test
-    void editReplaceRange() throws Exception {
+    @SneakyThrows
+    void editReplaceRange() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -230,7 +240,8 @@ class FileIOTest {
     }
 
     @Test
-    void editReplaceRangeWithMultipleLines() throws Exception {
+    @SneakyThrows
+    void editReplaceRangeWithMultipleLines() {
         final var content = "before\nold1\nold2\nafter";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -251,7 +262,8 @@ class FileIOTest {
     }
 
     @Test
-    void editReplaceSingleLine() throws Exception {
+    @SneakyThrows
+    void editReplaceSingleLine() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -267,7 +279,8 @@ class FileIOTest {
     }
 
     @Test
-    void editReturnsNewChecksum() throws Exception {
+    @SneakyThrows
+    void editReturnsNewChecksum() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -283,7 +296,8 @@ class FileIOTest {
     }
 
     @Test
-    void editTrailingNewlineStripped() throws Exception {
+    @SneakyThrows
+    void editTrailingNewlineStripped() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
         final var edits = List.of(
@@ -320,7 +334,8 @@ class FileIOTest {
     }
 
     @Test
-    void readFileTooLarge() throws Exception {
+    @SneakyThrows
+    void readFileTooLarge() {
         Files.write(testFile, new byte[1024 * 1024 + 1]);
 
         final var result = FileIO.readFile(testFile.toString(), 1, -1, false);
@@ -332,7 +347,8 @@ class FileIOTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidLineRangeArgs")
-    void readPartialInvalidLineRange(String description, int startLine, int endLine) throws Exception {
+    @SneakyThrows
+    void readPartialInvalidLineRange(String description, int startLine, int endLine) {
         Files.writeString(testFile, "a\nb\nc", StandardCharsets.UTF_8);
 
         final var result = FileIO.readFile(testFile.toString(), startLine, endLine, false);
@@ -342,7 +358,8 @@ class FileIOTest {
     }
 
     @Test
-    void readWholeFile() throws Exception {
+    @SneakyThrows
+    void readWholeFile() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
@@ -354,7 +371,8 @@ class FileIOTest {
     }
 
     @Test
-    void readWholeFileChecksumMatchesContent() throws Exception {
+    @SneakyThrows
+    void readWholeFileChecksumMatchesContent() {
         final var content = "hello";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
@@ -364,7 +382,8 @@ class FileIOTest {
     }
 
     @Test
-    void readWholeFileWithLineNumbersFlag() throws Exception {
+    @SneakyThrows
+    void readWholeFileWithLineNumbersFlag() {
         final var content = "alpha\nbeta";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
@@ -398,7 +417,8 @@ class FileIOTest {
     }
 
     @Test
-    void writeEmptyContent() throws Exception {
+    @SneakyThrows
+    void writeEmptyContent() {
         final var newFile = tempDir.resolve("empty.txt");
 
         final var response = FileIO.write(newFile.toString(), "", "");
@@ -409,7 +429,8 @@ class FileIOTest {
     }
 
     @Test
-    void writeFileTooLargeReturnsError() throws Exception {
+    @SneakyThrows
+    void writeFileTooLargeReturnsError() {
         Files.write(testFile, new byte[1024 * 1024 + 1]);
 
         final var response = FileIO.write(testFile.toString(), "small content", "any");
@@ -419,7 +440,8 @@ class FileIOTest {
     }
 
     @Test
-    void writeNewFile() throws Exception {
+    @SneakyThrows
+    void writeNewFile() {
         final var newFile = tempDir.resolve("new.txt");
         final var content = "hello world";
 
@@ -432,7 +454,8 @@ class FileIOTest {
     }
 
     @Test
-    void writeOverwritesWithCorrectChecksum() throws Exception {
+    @SneakyThrows
+    void writeOverwritesWithCorrectChecksum() {
         final var original = "original content";
         Files.writeString(testFile, original, StandardCharsets.UTF_8);
         final var newContent = "new content";
@@ -458,7 +481,8 @@ class FileIOTest {
     }
 
     @Test
-    void writeWrongChecksumReturnsError() throws Exception {
+    @SneakyThrows
+    void writeWrongChecksumReturnsError() {
         final var content = "some content";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
 
