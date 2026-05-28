@@ -28,7 +28,6 @@ import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
-import org.jline.terminal.impl.NativeSignalHandler;
 import org.jline.utils.AttributedString;
 import org.jline.utils.InfoCmp.Capability;
 import org.jline.utils.Status;
@@ -140,9 +139,6 @@ public class Printer implements AutoCloseable {
                 final var handler = signalHandlers.get(signal);
                 if (null != handler) {
                     handler.accept(signal);
-                }
-                else {
-                    NativeSignalHandler.SIG_DFL.handle(signal);
                 }
             });
         }
