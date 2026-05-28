@@ -142,8 +142,7 @@ public class Printer implements AutoCloseable {
                     handler.accept(signal);
                 }
                 else {
-                    log.warn("No handler registered for signal: {}", signal);
-                    NativeSignalHandler.SIG_IGN.handle(signal);
+                    NativeSignalHandler.SIG_DFL.handle(signal);
                 }
             });
         }
@@ -360,11 +359,4 @@ public class Printer implements AutoCloseable {
             case NORMAL -> Colours.WHITE;
         };
     }
-
-    public Printer registerSignalHandler(jnr.constants.platform.Signal sigint, Object handler) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'registerSignalHandler'");
-    }
-
-
 }
