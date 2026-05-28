@@ -90,15 +90,7 @@ class AtFileCompleterTest {
     }
 
     @Test
-    void atAlone_cursorAtZero_doesNotThrow() {
-        // Edge: wordCursor = 0 should guard to 0 without going negative
-        final var candidates = new ArrayList<Candidate>();
-        completer.complete(lineReader, parsedLine("@", 0), candidates);
-        assertTrue(true, "Completing '@' with wordCursor=0 must not throw");
-    }
-
-    @Test
-    void atAlone_cursorRightAfterAt_doesNotThrow() {
+    void atAloneAfterCursor() {
         // word = "@", wordCursor = 1  →  AtParsedLine reduces to 0 (guarded)
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine("@", 1), candidates);
@@ -106,12 +98,20 @@ class AtFileCompleterTest {
         assertTrue(true, "Completing '@' alone must not throw");
     }
 
+    @Test
+    void atAloneZeroCursor() {
+        // Edge: wordCursor = 0 should guard to 0 without going negative
+        final var candidates = new ArrayList<Candidate>();
+        completer.complete(lineReader, parsedLine("@", 0), candidates);
+        assertTrue(true, "Completing '@' with wordCursor=0 must not throw");
+    }
+
     // -------------------------------------------------------------------------
     // Gate tests — no '@' → no candidates
     // -------------------------------------------------------------------------
 
     @Test
-    void atPrefixedDirPath_allCandidatesRetainAtPrefix() {
+    void atPrefixCandidatesRetainAt() {
         final var word = "@" + tempDir.toString() + "/";
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine(word, word.length()), candidates);
@@ -126,7 +126,7 @@ class AtFileCompleterTest {
     }
 
     @Test
-    void atPrefixedDirPath_knownFilesAppearInCandidates() {
+    void atPrefixKnownFilesInCandidates() {
         final var word = "@" + tempDir.toString() + "/";
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine(word, word.length()), candidates);
@@ -141,7 +141,7 @@ class AtFileCompleterTest {
     }
 
     @Test
-    void atPrefixedDirPath_subdirAppearsInCandidates() {
+    void atPrefixSubdirInCandidates() {
         final var word = "@" + tempDir.toString() + "/";
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine(word, word.length()), candidates);
@@ -157,21 +157,21 @@ class AtFileCompleterTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void emptyWord_producesNoCandidates() {
+    void emptyWordNoCandidates() {
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine("", 0), candidates);
         assertTrue(candidates.isEmpty(), "Expected no candidates for empty word");
     }
 
     @Test
-    void noAtPrefix_producesNoCandidates() {
+    void noAtNoCandidates() {
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine("alpha", 5), candidates);
         assertTrue(candidates.isEmpty(), "Expected no candidates when word has no '@' prefix");
     }
 
     @Test
-    void plainPath_withoutAt_producesNoCandidates() {
+    void plainPathNoCandidates() {
         final var word = tempDir.toString() + "/";
         final var candidates = new ArrayList<Candidate>();
         completer.complete(lineReader, parsedLine(word, word.length()), candidates);
