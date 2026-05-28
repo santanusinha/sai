@@ -18,6 +18,7 @@ package io.appform.sai.cli.slash;
 import io.appform.sai.cli.slash.commands.HelpCommand;
 import io.appform.sai.cli.slash.commands.ModelCommand;
 import io.appform.sai.cli.slash.commands.PersonaCommand;
+import io.appform.sai.cli.slash.commands.SkillsCommand;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -29,13 +30,14 @@ import picocli.CommandLine.Command;
  * dispatched.
  *
  * <p>The root command itself is a no-op {@link Runnable}; all real work is done by its subcommands
- * ({@code /help}, {@code /model}, {@code /persona}).
+ * ({@code /help}, {@code /model}, {@code /persona}, {@code /skills}).
  */
 @Getter
 @Command(name = "", mixinStandardHelpOptions = false, subcommands = {
         HelpCommand.class,
         ModelCommand.class,
-        PersonaCommand.class
+        PersonaCommand.class,
+        SkillsCommand.class
 })
 public class SlashRootCommand implements Runnable {
 

@@ -16,6 +16,7 @@
 package io.appform.sai.cli.slash;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.Printer;
@@ -26,6 +27,8 @@ import io.appform.sai.agent.AgentFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+
+import javax.annotation.Nullable;
 
 import lombok.Builder;
 import lombok.Data;
@@ -38,6 +41,9 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>Slash-commands that change the model or persona call {@link #rebuildAgent()} to create a new
  * {@link SaiAgent} and notify the REPL loop via the {@code onAgentRebuilt} callback.
+ *
+ * <p>The {@link #agentSkillsExtension} field is optional; it is {@code null} in test contexts that
+ * do not exercise skill-related commands.
  */
 @Slf4j
 @Data
@@ -71,6 +77,12 @@ public class SlashCommandContext {
     /** Jackson mapper for YAML/JSON deserialization (used by {@code /persona}). */
     @NonNull
     private final ObjectMapper mapper;
+
+    /**
+     * Skills extension for the current session; may be {@code null} in test contexts or when no skills are configured.
+     */
+    @Nullable
+    private final AgentSkillsExtension<String, String, SaiAgent> agentSkillsExtension;
 
     /**
      * Callback invoked after {@link #rebuildAgent()} creates a new agent. The REPL loop uses this
