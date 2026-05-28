@@ -233,11 +233,48 @@ java -jar target/sai-1.0-SNAPSHOT.jar --config-dir /path/to/config
 
 While in interactive mode, the following special commands are available directly in the prompt. They are processed by SAI itself and are **not** forwarded to the AI agent.
 
-| Command       | Description                                              |
-|---------------|----------------------------------------------------------|
-| `!<cmd>`      | Execute a shell command (e.g. `!ls -la`, `!git status`) |
-| `Ctrl-C`      | Interrupt running agent task and return to prompt        |
-| `exit`        | Exit the application                                     |
+| Command              | Description                                                        |
+|----------------------|--------------------------------------------------------------------|
+| `!<cmd>`             | Execute a shell command (e.g. `!ls -la`, `!git status`)           |
+| `/<command>`         | Run a slash command (e.g. `/help`, `/model`, `/persona`)          |
+| `Ctrl-C`             | Interrupt running agent task and return to prompt                  |
+| `exit`               | Exit the application                                               |
+
+### Slash commands (`/`)
+
+Slash commands give you live control over the session without leaving SAI. Type `/help` to list them all:
+
+```text
+> /help
+```
+
+| Command                          | Description                                              |
+|----------------------------------|----------------------------------------------------------|
+| `/help`                          | List all available slash commands                        |
+| `/model`                         | Show the currently active model                          |
+| `/model <provider/model>`        | Switch to a different model mid-session                  |
+| `/persona`                       | Show the name of the currently active persona            |
+| `/persona <name-or-path>`        | Load a different persona mid-session                     |
+| `/skills`                        | List all available agent skills                          |
+
+#### Examples
+
+```text
+# Check which model is active
+> /model
+Current model: copilot-proxy/claude-haiku-4.5
+
+# Switch model for the rest of the session
+> /model openai/gpt-4
+Model switched to: openai/gpt-4
+
+# Switch persona
+> /persona reviewer
+Persona loaded: Code Reviewer (model: copilot-proxy/claude-sonnet-4.6)
+
+# List loaded skills
+> /skills
+```
 
 ### Interrupt handling
 

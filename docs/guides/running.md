@@ -23,11 +23,16 @@ Start a conversational session with the AI agent.
   - Allows you to start a new query without waiting
   - No need to kill the process
 
-- **Shell Commands**: Execute shell commands with `!` prefix
-  ```bash
-  > !ls -la
-  > !git status
+- **Slash Commands**: Control session settings with `/` commands
   ```
+  > /model                        # show current model
+  > /model openai/gpt-4           # switch model
+  > /persona reviewer             # load a persona
+  > /skills                       # list available skills
+  > /help                         # list all slash commands
+  ```
+
+- **Shell Commands**: Execute shell commands with `!` prefix
 
 - **Exit**: Type `exit` to quit the application
 

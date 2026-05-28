@@ -1,52 +1,98 @@
 # Interactive Commands
 
-When running SAI in interactive mode, special commands allow you to execute shell commands and control the session without leaving the interface.
+When running SAI in interactive mode, special commands allow you to execute shell commands, control the session, and change settings without leaving the interface.
 
 ## Overview
 
-SAI recognizes three types of input in interactive mode:
+SAI recognizes four types of input in interactive mode:
 
-1. **Special Commands** - Processed by SAI itself (shell execution, exit)
-2. **`@file` References** - File paths resolved before the query reaches the agent
-3. **AI Queries** - Everything else goes to the AI agent
+1. **Slash Commands** (`/`) - Processed by SAI to control session settings (model, persona, skills)
+2. **Special Commands** (`!`, `exit`) - Processed by SAI itself (shell execution, exit)
+3. **`@file` References** - File paths resolved before the query reaches the agent
+4. **AI Queries** - Everything else goes to the AI agent
 
-You can reference local files in any prompt by prefixing their path with `@`. SAI resolves the reference before forwarding the query to the agent.
+---
 
-### Whole-prompt from file
+## Slash Commands
 
-If your entire input is a single `@<path>` token, SAI reads that file and uses its full contents as the prompt:
+Slash commands give you live control over the session. They start with `/` and are **not** sent to the AI agent.
 
-```
-SAI > @prompts/refactor-task.txt
-```
+### Reference
 
-This is equivalent to typing the file's contents directly.
+| Command                          | Description                                              |
+|----------------------------------|----------------------------------------------------------|
+| `/help`                          | List all available slash commands                        |
+| `/model`                         | Show the currently active model                          |
+| `/model <provider/model>`        | Switch to a different model mid-session                  |
+| `/persona`                       | Show the name of the currently active persona            |
+| `/persona <name-or-path>`        | Load a different persona mid-session                     |
+| `/skills`                        | List all available agent skills                          |
 
-### Inline file references
+### `/help`
 
-Embed `@<path>` anywhere in a prompt to pass the file path to the agent (the `@` is stripped). The agent will use its `read()` tool to read the file when needed:
-
-```
-SAI > Explain @AGENTS.md and compare it with @README.md
-SAI > What does @src/main/java/io/appform/sai/SaiCommand.java do?
-```
-
-### Tab completion for `@` paths
-
-The interactive prompt supports Tab completion for `@`-prefixed file paths:
-
-1. Type `@` followed by the start of a path
-2. Press **Tab** to expand to matching files
+Prints a list of all available slash commands with their descriptions:
 
 ```
-SAI > @src/main/<Tab>
-→ completes to matching files under src/main/
+SAI > /help
+Available slash commands:
+  /help     Show available slash commands
+  /model    Get or set the current model (format: provider/model)
+  /persona  Load a persona file (.yaml/.yml/.json)
+  /skills   List available agent skills
 ```
 
-Tab completion only triggers when the current word starts with `@` — ordinary words are not expanded.
+### `/model`
 
-!!! note
-    Only regular files are injected or completed. Directories are not expanded.
+Get or set the active model for the current session.
+
+```
+# Show the current model
+SAI > /model
+Current model: copilot-proxy/claude-haiku-4.5
+
+# Switch to a different model
+SAI > /model openai/gpt-4
+Model switched to: openai/gpt-4
+
+# Another example
+SAI > /model copilot-proxy/claude-sonnet-4.6
+Model switched to: copilot-proxy/claude-sonnet-4.6
+```
+
+The model change takes effect immediately — subsequent queries in the same session use the new model.
+
+### `/persona`
+
+Get or load a persona for the current session.
+
+```
+# Show the active persona name
+SAI > /persona
+Current persona: Sai Agent
+
+# Load a persona by name (looked up in ~/.config/sai/persona/)
+SAI > /persona reviewer
+Persona loaded: Code Reviewer (model: copilot-proxy/claude-sonnet-4.6)
+
+# Load a persona from a relative path
+SAI > /persona examples/personas/basic.yaml
+Persona loaded: Basic Agent (model: copilot-proxy/claude-haiku-4.5)
+```
+
+Loading a persona also switches the model to whichever model is defined in that persona file (if any).
+
+### `/skills`
+
+List all agent skills that are loaded in the current session.
+
+```
+SAI > /skills
+Available skills:
+  sonar-cli  Run SonarQube / SonarCloud static-analysis on the current Git branch
+  ...
+```
+
+If no skills extension is configured (e.g., in headless or `--skill` single-skill mode), a short informational message is shown instead.
 
 ---
 

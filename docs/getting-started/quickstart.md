@@ -82,6 +82,27 @@ SAI > !ls -la
 SAI > !git status
 ```
 
+### Use slash commands
+
+Slash commands control the session itself and are never sent to the AI agent.
+
+```
+# List all slash commands
+SAI > /help
+
+# See which model is active
+SAI > /model
+
+# Switch model mid-session
+SAI > /model copilot-proxy/claude-sonnet-4.6
+
+# Load a different persona
+SAI > /persona reviewer
+
+# List loaded skills
+SAI > /skills
+```
+
 ### Exit
 
 ```
