@@ -1,0 +1,6 @@
+agentId: no-vars-agent
+name: Static Agent
+description: A persona with no env var placeholders
+model: openai/gpt-4o
+prompt: |
+  You are a helpful assistant.

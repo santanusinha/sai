@@ -17,13 +17,13 @@ Supported platforms: **Linux** (apt, dnf, pacman, zypper) and **macOS** (Homebre
 ### One-line install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/master/sai-installer | bash -s -- install
 ```
 
 Or download and inspect it first (recommended):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer -o sai-installer
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/master/sai-installer -o sai-installer
 bash sai-installer install
 ```
 
@@ -132,7 +132,7 @@ sai-installer persona-install /path/to/persona.yaml
 sai-installer persona-install owner/repo/personas/my-persona.yaml
 
 # Install a persona from a GitHub blob or raw URL
-sai-installer persona-install https://github.com/owner/repo/blob/main/personas/p.yaml
+sai-installer persona-install https://github.com/owner/repo/blob/master/personas/p.yaml
 
 # Remove a persona
 sai-installer persona-remove <persona-name>

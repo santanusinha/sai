@@ -62,7 +62,7 @@ hide:
 
 ```bash
 # Install SAI (handles Java, Maven, config, and bundled personas/skills)
-curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/master/sai-installer | bash -s -- install
 
 # Start interactive mode
 sai

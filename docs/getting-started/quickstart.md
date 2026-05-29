@@ -7,7 +7,7 @@ Get up and running with SAI in under 5 minutes.
 Run the installer (it handles Java, Maven, and everything else automatically):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/master/sai-installer | bash -s -- install
 ```
 
 Then reload your shell:

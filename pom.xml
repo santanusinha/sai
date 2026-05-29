@@ -20,6 +20,7 @@
         <failsafe.version>3.3.2</failsafe.version>
         <spotless.version>3.2.1</spotless.version>
         <jackson.version>2.18.3</jackson.version>
+        <commons-text.version>1.13.0</commons-text.version>
     </properties>
 
     <dependencyManagement>
@@ -127,6 +128,16 @@
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>
             <version>0.24.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.commonmark</groupId>
+            <artifactId>commonmark</artifactId>
+            <version>0.24.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+            <version>${commons-text.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.jnr</groupId>

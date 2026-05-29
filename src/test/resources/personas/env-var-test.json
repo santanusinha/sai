@@ -1,0 +1,7 @@
+{
+  "agentId": "test-agent-json",
+  "name": "Test Agent JSON",
+  "description": "A JSON persona with env var substitution",
+  "model": "${TEST_MODEL_PROVIDER}/gpt-4o",
+  "prompt": "You are a ${TEST_AGENT_ROLE} assistant."
+}

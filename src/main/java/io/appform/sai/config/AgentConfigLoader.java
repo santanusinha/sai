@@ -22,6 +22,9 @@ import com.google.common.base.Strings;
 
 import io.appform.sai.AgentConfig;
 
+import org.apache.commons.text.StringSubstitutor;
+
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,16 +52,18 @@ public final class AgentConfigLoader {
         }
         final var fileName = path.getFileName().toString().toLowerCase();
         try {
+            final var raw = Files.readString(path, StandardCharsets.UTF_8);
+            final var content = substituteEnvVars(raw);
             if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
                 final var yamlMapper = new ObjectMapper(new YAMLFactory()).findAndRegisterModules();
                 // Align key deserialization features with the JSON mapper for consistency
                 yamlMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
                                      jsonMapper.getDeserializationConfig().isEnabled(
                                                                                      DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES));
-                return yamlMapper.readValue(Files.readAllBytes(path), AgentConfig.class);
+                return yamlMapper.readValue(content, AgentConfig.class);
             }
             else if (fileName.endsWith(".json")) {
-                return jsonMapper.readValue(Files.readAllBytes(path), AgentConfig.class);
+                return jsonMapper.readValue(content, AgentConfig.class);
             }
             else {
                 throw new IllegalArgumentException("Unsupported persona file type. Use .yaml, .yml, or .json: " + path);
@@ -114,5 +119,9 @@ public final class AgentConfigLoader {
 
         throw new IllegalArgumentException("Persona '" + persona + "' not found. Looked in: " + personaDir
                 + " with extensions: " + SUPPORTED_EXTENSIONS);
+    }
+
+    private static String substituteEnvVars(String content) {
+        return StringSubstitutor.replace(content, System.getenv());
     }
 }

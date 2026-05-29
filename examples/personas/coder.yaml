@@ -35,7 +35,7 @@ mcp:
 # Skills
 # sonar-cli: runs SonarCloud analysis on the current branch and reports issues
 skillDirectories:
-  - /home/santanu/.config/sai/skills
+  - ${HOME}/.config/sai/skills
 skillNames:
   - sonar-cli
 

@@ -511,7 +511,7 @@ SAI > Generate JavaDoc comments for this class
 ### Diff Analysis
 
 ```bash
-SAI > !git diff main...feature-branch
+SAI > !git diff master...feature-branch
 SAI > Summarize the key changes
 ```
 

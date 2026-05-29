@@ -41,7 +41,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 The recommended way to install SAI is with the bundled installer script. It checks for Java 17+ and Maven 3.8+, installs them if missing, builds the JAR, writes a `sai` launcher, and seeds your config directory with bundled personas and skills.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/main/sai-installer | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/santanusinha/sai/master/sai-installer | bash -s -- install
 ```
 
 After installation, reload your shell and verify:

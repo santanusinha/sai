@@ -1,0 +1,6 @@
+agentId: partial-agent
+name: Partial Agent
+description: A persona where some env vars are not set
+model: openai/${UNDEFINED_MODEL_VAR}
+prompt: |
+  Hello from ${UNDEFINED_PROMPT_VAR}.
