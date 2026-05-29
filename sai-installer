@@ -2,7 +2,7 @@
 # sai-installer — SAI installer / upgrader / uninstaller
 #
 # Usage:
-#   bash sai-installer [--base-dir <path>] install                  # install SAI
+#   bash sai-installer [--base-dir <path>] [--force] install         # install SAI (--force reinstalls if already present)
 #   bash sai-installer [--base-dir <path>] upgrade                  # upgrade to latest commit
 #   bash sai-installer [--base-dir <path>] reinstall                # remove and re-install SAI (keeps config)
 #   bash sai-installer [--base-dir <path>] uninstall                # remove SAI
@@ -32,10 +32,11 @@ set -euo pipefail
 # ─── parse arguments ──────────────────────────────────────────────────────────
 MODE=""
 BASE_HOME="${HOME}"
+FORCE=0
 SUBCMD_ARGS=()
 
 usage() {
-    echo "Usage: sai-installer [--base-dir <path>] <subcommand> [args]" >&2
+    echo "Usage: sai-installer [--base-dir <path>] [--force] <subcommand> [args]" >&2
     echo "" >&2
     echo "Subcommands:" >&2
     echo "  install                    Install SAI" >&2
@@ -62,9 +63,9 @@ usage() {
     echo "" >&2
     echo "Options:" >&2
     echo "  --base-dir <path>  Override the root for all install paths" >&2
+    echo "  --force            Force reinstall even if SAI is already installed" >&2
     exit 1
 }
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base-dir)
@@ -74,6 +75,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --base-dir=*)
             BASE_HOME="${1#--base-dir=}"
+            shift
+            ;;
+        --force)
+            FORCE=1
             shift
             ;;
         install|upgrade|reinstall|uninstall|skill-install|skill-remove|persona-install|persona-remove)
@@ -224,9 +229,9 @@ ensure_java() {
 
     local installed=0
     if [[ "${OS}" == "linux" ]]; then
-        install_java_linux && installed=1 || true
+        if install_java_linux; then installed=1; fi
     else
-        install_java_macos && installed=1 || true
+        if install_java_macos; then installed=1; fi
     fi
 
     if [[ "${installed}" -eq 0 ]]; then
@@ -279,11 +284,10 @@ ensure_maven() {
 
     local installed=0
     if [[ "${OS}" == "linux" ]]; then
-        install_maven_linux && installed=1 || true
+        if install_maven_linux; then installed=1; fi
     else
-        install_maven_macos && installed=1 || true
+        if install_maven_macos; then installed=1; fi
     fi
-
     if [[ "${installed}" -eq 0 ]]; then
         log_event "maven_install_failed"
         die "Could not install Maven automatically. Please install Maven 3.8+ manually:\n  https://maven.apache.org/install.html"
@@ -332,8 +336,15 @@ EOF
 }
 
 install_self() {
+    # BASH_SOURCE is unbound when the script is piped through bash (e.g. curl | bash).
+    # In that case we cannot copy ourselves, so skip the self-install step.
+    local script_source="${BASH_SOURCE[0]:-}"
+    if [[ -z "${script_source}" ]]; then
+        warn "Installer run via pipe — cannot save installer to ${INSTALLER_PATH}. Download and save it manually if needed."
+        return
+    fi
     local src
-    src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+    src="$(cd "$(dirname "${script_source}")" && pwd)/$(basename "${script_source}")"
     if [[ "${src}" != "${INSTALLER_PATH}" ]]; then
         cp "${src}" "${INSTALLER_PATH}"
         chmod +x "${INSTALLER_PATH}"
@@ -373,7 +384,7 @@ EOF
 
     ask "Would you like to set your OpenAI API key now? [y/N]"
     read -r answer
-    if [[ "${answer,,}" == "y" ]]; then
+    if [[ "$(echo "${answer}" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
         ask "OPENAI_API_KEY:"
         read -rs api_key
         echo
@@ -419,7 +430,7 @@ ensure_path() {
     warn "${BIN_DIR} is not in your PATH."
     ask "Add it to ${rc_file}? [Y/n]"
     read -r answer
-    if [[ "${answer,,}" == "n" ]]; then
+    if [[ "$(echo "${answer}" | tr '[:upper:]' '[:lower:]')" == "n" ]]; then
         warn "Skipped. Add the following line to your shell config manually:"
         echo "  export PATH=\"${BIN_DIR}:\$PATH\""
         return
@@ -435,15 +446,19 @@ ensure_path() {
     echo "  Run: ${bold}source ${rc_file}${reset}  (or open a new terminal)"
 }
 
+
 # ─── modes ────────────────────────────────────────────────────────────────────
 
 do_install() {
     if [[ -f "${JAR_PATH}" ]]; then
+        if [[ "${FORCE}" -eq 1 ]]; then
+            warn "--force specified: reinstalling over existing installation."
+            do_reinstall
+            return
+        fi
         warn "SAI is already installed. Run ${bold}sai-installer upgrade${reset} to update, ${bold}sai-installer reinstall${reset} to reinstall, or ${bold}sai-installer uninstall${reset} to remove."
         exit 0
     fi
-
-    info "Installing SAI (base: ${BASE_HOME})..."
     log_event "install_started" "base_home" "${BASE_HOME}"
     detect_os
     ensure_java
@@ -574,7 +589,7 @@ do_uninstall() {
     if [[ -d "${CONFIG_DIR}" ]]; then
         ask "Remove ${CONFIG_DIR} (your personas, skills, and .env)? [y/N]"
         read -r answer
-        if [[ "${answer,,}" == "y" ]]; then
+        if [[ "$(echo "${answer}" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
             rm -rf "${CONFIG_DIR}"
             config_removed="yes"
             success "Removed ${CONFIG_DIR}"
@@ -640,8 +655,12 @@ do_persona_install() {
     #   → https://raw.githubusercontent.com/owner/repo/branch/path/file.yaml
     if [[ "${source}" =~ ^https://github\.com/.*/blob/ ]]; then
         local raw_url
-        raw_url=$(echo "${source}" | sed 's|https://github\.com/\([^/]*\)/\([^/]*\)/blob/|https://raw.githubusercontent.com/\1/\2/|')
-        local fname
+        local raw_url
+        # Strip the github.com/owner/repo/blob/ prefix and replace with raw host
+        local _stripped="${source#https://github.com/}"
+        local _owner="${_stripped%%/*}"           ; _stripped="${_stripped#*/}"
+        local _repo="${_stripped%%/*}"             ; _stripped="${_stripped#*/blob/}"
+        raw_url="https://raw.githubusercontent.com/${_owner}/${_repo}/${_stripped}"
         fname=$(basename "${raw_url%%\?*}")
         _download_persona "${raw_url}" "${fname}"
         return
