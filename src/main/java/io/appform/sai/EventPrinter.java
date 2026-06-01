@@ -118,39 +118,11 @@ public class EventPrinter implements AgentEventVisitor<Void> {
 
     @Override
     public Void visit(final ToolCallCompletedAgentEvent toolCallCompleted) {
-        /*             final var content = toolCallCompleted.getErrorType().equals(ErrorType.SUCCESS)
-                    ? "%s%s%s".formatted(Printer.Colours.WHITE_ON_DARK_GRAY_BACKGROUND,
-                                         toolCallCompleted.getContent(),
-                                         Printer.Colours.RESET)
-                            : "%sError: %s - %s%s".formatted(Printer.Colours.RED,
-                                                     toolCallCompleted.getErrorType(),
-                                                     toolCallCompleted.getContent(),
-                                                     Printer.Colours.RESET);
-            printer.print(Update.builder()
-                    .actor(Actor.SYSTEM)
-                    .severity(Severity.NORMAL)
-                    .colour(Printer.Colours.RESET)
-                    .data(content)
-                    .build());
-          */ return null;
+        return null;
     }
 
     @Override
     public Void visit(final ToolCalledAgentEvent toolCalled) {
-        /*             final var content = "Tool %s%s (id: %s)%s called with arguments: %s%s%s"
-                    .formatted(Printer.Colours.CYAN,
-                            toolCalled.getToolCallName(),
-                               toolCalled.getToolCallId(),
-                               Printer.Colours.RESET,
-                               Printer.Colours.PURPLE,
-                               toolCalled.getArguments(),
-                               Printer.Colours.RESET);
-            printer.print(Update.builder()
-                    .actor(Actor.ASSISTANT)
-                    .severity(Severity.NORMAL)
-                    .colour(Printer.Colours.RESET)
-                    .data(content)
-                    .build());
-         */ return null;
+        return null;
     }
 }

@@ -228,7 +228,7 @@ class CoreToolBoxReadTest {
     @BeforeEach
     void setUp() throws IOException {
         toolBox = new CoreToolBox((Printer) null);
-        tempDir = Files.createTempDirectory("coretoolbox-read-test");
+        tempDir = Files.createTempDirectory(Path.of("target"), "coretoolbox-read-test");
         testFile = tempDir.resolve("test.txt");
     }
 

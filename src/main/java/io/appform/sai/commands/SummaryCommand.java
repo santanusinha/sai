@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.QueryDirection;
 
 import io.appform.sai.SaiCommand;
-import io.appform.sai.Settings;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -39,6 +38,10 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
+/**
+ * {@code summary <sessionId>} — prints a detailed human-readable summary for a single session,
+ * including metadata, keywords, raw JSON, and per-type message counts.
+ */
 @Slf4j
 @Command(name = "summary", description = "Show detailed summary of a specific session")
 @SuppressWarnings("java:S106")
@@ -61,11 +64,7 @@ public class SummaryCommand implements Callable<Integer> {
             return 1;
         }
 
-        final var settingsBuilder = Settings.builder();
-        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
-            settingsBuilder.dataDir(parent.getDataDir());
-        }
-        final var settings = settingsBuilder.build();
+        final var settings = SaiCommand.resolveSettings(parent);
 
         final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
         if (!Files.exists(dataDirPath)) {

@@ -15,6 +15,7 @@
  */
 package io.appform.sai.models;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.phonepe.sentinelai.core.model.ModelUsageStats;
 import com.phonepe.sentinelai.session.SessionSummary;
 
@@ -29,6 +30,7 @@ import lombok.extern.jackson.Jacksonized;
 @Jacksonized
 public class Session {
     String sessionId;
-    SessionSummary sessonSummary;
+    @JsonAlias("sessonSummary")
+    SessionSummary sessionSummary;
     ModelUsageStats usage;
 }

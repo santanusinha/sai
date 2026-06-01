@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.appform.sai.tools.ToolIO;
@@ -395,9 +396,54 @@ class FileIOTest {
         assertTrue(result.getContent().contains("     2\tbeta"), result.getContent());
     }
 
+    @Test
+    @SneakyThrows
+    void safePathAllowsPathUnderTmp() {
+        final var tmpDir = Files.createTempDirectory("sai-test-");
+        final var tmpFile = tmpDir.resolve("test.txt");
+        try {
+            final var content = "tmp content";
+            final var response = FileIO.write(tmpFile.toString(), content, "");
+            assertNull(response.getError());
+            final var readResult = FileIO.readFile(tmpFile.toString(), 1, -1, false);
+            assertNull(readResult.getError());
+            assertEquals(content, readResult.getContent());
+        }
+        finally {
+            deleteRecursive(tmpDir);
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void safePathAllowsSubdirectoryUnderTmp() {
+        final var tmpSubDir = Files.createTempDirectory("sai-subdir-");
+        final var tmpSubFile = tmpSubDir.resolve("nested.txt");
+        try {
+            final var content = "nested tmp content";
+            final var response = FileIO.write(tmpSubFile.toString(), content, "");
+            assertNull(response.getError());
+            final var readResult = FileIO.readFile(tmpSubFile.toString(), 1, -1, false);
+            assertNull(readResult.getError());
+            assertEquals(content, readResult.getContent());
+        }
+        finally {
+            deleteRecursive(tmpSubDir);
+        }
+    }
+
+    @Test
+    void safePathRejectsPathOutsideCwdAndTmp() {
+        final var outsidePath = "/etc/hosts";
+        final var readResult = FileIO.readFile(outsidePath, 1, -1, false);
+        assertNotNull(readResult.getError());
+        assertTrue(readResult.getError().contains("Path escapes"), readResult.getError());
+        assertThrows(IllegalArgumentException.class, () -> FileIO.write(outsidePath, "data", ""));
+    }
+
     @BeforeEach
     void setUp() throws IOException {
-        tempDir = Files.createTempDirectory("fileio-test-");
+        tempDir = Files.createTempDirectory(Path.of("target"), "fileio-test-");
         testFile = tempDir.resolve("test.txt");
         Files.createFile(testFile);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import com.phonepe.sentinelai.session.SessionStore;
 import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.SaiCommand;
-import io.appform.sai.Settings;
 
 import org.commonmark.node.Document;
 import org.commonmark.node.FencedCodeBlock;
@@ -45,6 +44,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +52,10 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
+/**
+ * {@code export-session <sessionId> [outputFile]} — exports a session's messages and metadata
+ * to a Markdown document. Writes to stdout when no output file is given.
+ */
 @Slf4j
 @Command(name = "export-session", description = "Export a session to a markdown file")
 public class ExportSessionCommand implements Callable<Integer> {
@@ -110,7 +114,7 @@ public class ExportSessionCommand implements Callable<Integer> {
         text(messageNode,
              " " + DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss.SSS")
                      .withZone(ZoneId.systemDefault())
-                     .format(new Date(message.getTimestamp() / 1000000)
+                     .format(new Date(TimeUnit.NANOSECONDS.toMillis(message.getTimestamp()))
                              .toInstant()));
         lineBreak(messageNode);
         code(messageNode, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(message));
@@ -129,11 +133,7 @@ public class ExportSessionCommand implements Callable<Integer> {
             return 1;
         }
 
-        final var settingsBuilder = Settings.builder();
-        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
-            settingsBuilder.dataDir(parent.getDataDir());
-        }
-        final var settings = settingsBuilder.build();
+        final var settings = SaiCommand.resolveSettings(parent);
 
         final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
         if (!Files.exists(dataDirPath)) {
@@ -195,8 +195,7 @@ public class ExportSessionCommand implements Callable<Integer> {
         bold(summaryText, "Updated At:");
         text(summaryText,
              " " + DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
-                     .withZone(ZoneId.systemDefault())
-                     .format(new Date(summary.getUpdatedAt() / 1000000).toInstant()));
+                     .format(new Date(TimeUnit.NANOSECONDS.toMillis(summary.getUpdatedAt())).toInstant()));
         lineBreak(summaryText);
         bold(summaryText, "Summary:");
         text(summaryText, " " + summary.getSummary());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,7 @@
  */
 package io.appform.sai.commands;
 
-import com.google.common.base.Strings;
-
 import io.appform.sai.SaiCommand;
-import io.appform.sai.Settings;
 
 import org.apache.commons.io.FileUtils;
 
@@ -32,6 +29,10 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
+/**
+ * {@code delete-sessions <sessionId>} — permanently removes a single session directory
+ * from the data store.
+ */
 @Slf4j
 @Command(name = "delete-sessions", description = "Delete a session")
 @SuppressWarnings("java:S106")
@@ -46,12 +47,7 @@ public class DeleteSessionsCommand implements Callable<Integer> {
     @Override
     @SneakyThrows
     public Integer call() {
-        final var settingsBuilder = Settings.builder();
-        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
-            settingsBuilder.dataDir(parent.getDataDir());
-        }
-
-        final var settings = settingsBuilder.build();
+        final var settings = SaiCommand.resolveSettings(parent);
 
         final var sessionDirPath = Paths.get(settings.getDataDir(), "sessions", sessionId);
         if (!Files.exists(sessionDirPath)) {

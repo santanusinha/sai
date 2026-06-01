@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -126,6 +127,21 @@ public class SaiCommand implements Callable<Integer> {
     }, description = "Model to use, in the format 'provider/model' (e.g. 'copilot-proxy/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
     private String model;
 
+    /**
+     * Resolves a {@link Settings} instance from a parent {@link SaiCommand}, applying the
+     * {@code --data-dir} override if provided.
+     *
+     * @param parent the parent picocli command carrying global option values
+     * @return a fully-built {@code Settings} object
+     */
+    public static Settings resolveSettings(SaiCommand parent) {
+        final var builder = Settings.builder();
+        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
+            builder.dataDir(parent.getDataDir());
+        }
+        return builder.build();
+    }
+
     @Override
     @SuppressWarnings("java:S106")
     public Integer call() throws Exception {
@@ -137,67 +153,14 @@ public class SaiCommand implements Callable<Integer> {
         final var executorService = Executors.newCachedThreadPool();
         final var eventBus = new EventBus(executorService);
 
-        final var okHttpClient = new OkHttpClient.Builder().readTimeout(Duration
-                .ofSeconds(300))
-                .callTimeout(Duration.ofSeconds(300))
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-        // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
-        // read all of System.in now and treat it as a single-shot input — identical to --input.
-        // If stdin is piped (i.e. not an interactive TTY) and --input was not explicitly given,
-        // read all of System.in now and treat it as a single-shot input — identical to --input.
-        final String pipedInput;
-        if (!headless && System.console() == null && Strings.isNullOrEmpty(input)) {
-            try {
-                if (System.in.available() == 0) {
-                    throw new IllegalStateException("No TTY detected and no input provided. " +
-                            "Please run interactively with a TTY, pipe input via stdin, or use the --input flag.");
-                }
-                pipedInput = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
-                        .lines()
-                        .collect(Collectors.joining("\n"))
-                        .strip();
-            }
-            catch (java.io.IOException e) {
-                throw new IllegalStateException("Failed to read from standard input", e);
-            }
-        }
-        else {
-            pipedInput = null;
-        }
+        final var okHttpClient = buildOkHttpClient();
+        final var pipedInput = readPipedInput();
         // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
         final var effectiveInput = !Strings.isNullOrEmpty(input) ? resolveInput(input)
                 : !Strings.isNullOrEmpty(pipedInput) ? pipedInput
                 : null;
 
-        final var settingsBuilder = Settings.builder()
-                .sessionId(effectiveSessionId)
-                .debug(debug)
-                .headless(headless || !Strings.isNullOrEmpty(effectiveInput))
-                .noSession(!Strings.isNullOrEmpty(effectiveInput));
-        if (!Strings.isNullOrEmpty(configDir)) {
-            settingsBuilder.configDir(configDir);
-        }
-        if (Strings.isNullOrEmpty(effectiveInput)) {
-            if (!Strings.isNullOrEmpty(dataDir)) {
-                settingsBuilder.dataDir(dataDir);
-            }
-        }
-        else {
-            // If input is provided (via --input or piped stdin), we don't care about session persistence,
-            // so we can skip setting up data dir. However we do care about compaction etc so we provide
-            // the session extension a temporary directory
-            final var tempDataDir = Files.createTempDirectory("sai-data-")
-                    .toAbsolutePath()
-                    .normalize()
-                    .toString();
-            settingsBuilder.dataDir(tempDataDir);
-        }
-        // Apply configDir override regardless of session
-        if (!Strings.isNullOrEmpty(configDir)) {
-            settingsBuilder.configDir(configDir);
-        }
-        final var settings = settingsBuilder.build();
+        final var settings = buildSettings(effectiveSessionId, effectiveInput);
 
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
@@ -354,7 +317,12 @@ public class SaiCommand implements Callable<Integer> {
         }
         finally {
             executorService.shutdown();
-            executorService.awaitTermination(1, TimeUnit.SECONDS);
+            try {
+                executorService.awaitTermination(1, TimeUnit.SECONDS);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             if (settings.isNoSession()) {
                 sessionStore.deleteSession(effectiveSessionId);
             }
@@ -399,6 +367,56 @@ public class SaiCommand implements Callable<Integer> {
                 .start();
     }
 
+    /**
+     * Builds the shared {@link OkHttpClient} with project-standard timeouts.
+     *
+     * @return a configured {@code OkHttpClient}
+     */
+    private OkHttpClient buildOkHttpClient() {
+        return new OkHttpClient.Builder()
+                .readTimeout(Duration.ofSeconds(300))
+                .callTimeout(Duration.ofSeconds(300))
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+    }
+
+    /**
+     * Constructs the {@link Settings} object for this invocation, applying CLI overrides and
+     * routing to a temporary data directory when a one-shot {@code effectiveInput} is provided.
+     *
+     * @param effectiveSessionId the resolved session ID to embed in settings
+     * @param effectiveInput     the resolved input string (may be {@code null} for interactive mode)
+     * @return a fully-built {@code Settings} instance
+     * @throws java.io.IOException if a temporary data directory cannot be created
+     */
+    @SneakyThrows
+    private Settings buildSettings(String effectiveSessionId, String effectiveInput) {
+        final var settingsBuilder = Settings.builder()
+                .sessionId(effectiveSessionId)
+                .debug(debug)
+                .headless(headless || !Strings.isNullOrEmpty(effectiveInput))
+                .noSession(!Strings.isNullOrEmpty(effectiveInput));
+        if (!Strings.isNullOrEmpty(configDir)) {
+            settingsBuilder.configDir(configDir);
+        }
+        if (Strings.isNullOrEmpty(effectiveInput)) {
+            if (!Strings.isNullOrEmpty(dataDir)) {
+                settingsBuilder.dataDir(dataDir);
+            }
+        }
+        else {
+            // If input is provided (via --input or piped stdin), we don't care about session persistence,
+            // so we can skip setting up data dir. However we do care about compaction etc so we provide
+            // the session extension a temporary directory
+            final var tempDataDir = Files.createTempDirectory("sai-data-")
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString();
+            settingsBuilder.dataDir(tempDataDir);
+        }
+        return settingsBuilder.build();
+    }
+
     private Optional<String> readInput(final Printer printer) {
         var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
         try {
@@ -407,6 +425,33 @@ public class SaiCommand implements Callable<Integer> {
         catch (EndOfFileException | UserInterruptException e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Reads all of {@code System.in} when stdin is piped (non-interactive, no explicit
+     * {@code --input} flag) and returns the content as a single string. Returns {@code null} when
+     * running interactively, in headless mode, or when {@code --input} was already specified.
+     *
+     * @return the piped stdin content, or {@code null} if not applicable
+     * @throws IllegalStateException if stdin appears to be piped but is empty, or on read failure
+     */
+    private String readPipedInput() {
+        if (!headless && System.console() == null && Strings.isNullOrEmpty(input)) {
+            try {
+                if (System.in.available() == 0) {
+                    throw new IllegalStateException("No TTY detected and no input provided. " +
+                            "Please run interactively with a TTY, pipe input via stdin, or use the --input flag.");
+                }
+                return new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
+                        .lines()
+                        .collect(Collectors.joining("\n"))
+                        .strip();
+            }
+            catch (IOException e) {
+                throw new IllegalStateException("Failed to read from standard input", e);
+            }
+        }
+        return null;
     }
 
     private AgentConfig resolveAgentConfig(String persona, String configDir, ObjectMapper mapper) {

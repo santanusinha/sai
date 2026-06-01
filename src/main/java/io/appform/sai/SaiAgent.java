@@ -26,6 +26,17 @@ import java.util.Map;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Core AI agent for the Sai CLI, specialised for terminal interaction.
+ *
+ * <p>{@code SaiAgent} extends {@link Agent} with a terminal-aware system-prompt augmentation
+ * that instructs the model to apply ANSI colour coding and syntax highlighting to its responses.
+ * The agent name is configurable and exposed via the {@link #name()} method required by the
+ * {@code Agent} contract.
+ *
+ * <p>Instances are created by {@link io.appform.sai.agent.AgentFactory}; callers should not
+ * construct this class directly.
+ */
 @Slf4j
 public class SaiAgent extends Agent<String, String, SaiAgent> {
     private static final String TERM_PRINT_EXTRA = """

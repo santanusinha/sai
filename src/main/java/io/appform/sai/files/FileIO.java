@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 @UtilityClass
 @Slf4j
 public class FileIO {
-
     private static final int MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1 MB
 
     @Value
@@ -61,7 +60,7 @@ public class FileIO {
                                                    List<ToolIO.FileEditOperation> edits,
                                                    String expectedChecksum) {
         log.debug("Editing file: {}", filePath);
-        final var path = Path.of(filePath);
+        final var path = safePath(filePath);
         if (!Files.exists(path)) {
             log.debug("File {} does not exist", filePath);
             return error("File not found");
@@ -105,7 +104,7 @@ public class FileIO {
     public static ReadResult readFile(String filePath, int startLine, int endLine, boolean addLineNumbers) {
         log.debug("Reading file: {}", filePath);
         try {
-            final var path = Path.of(filePath);
+            final var path = safePath(filePath);
             if (!Files.exists(path)) {
                 return new ReadResult(null, null, "File not found: " + filePath);
             }
@@ -145,7 +144,7 @@ public class FileIO {
 
     public static ToolIO.WriteResponse write(String filePath, String content, String expectedChecksum) {
         log.debug("Writing to file: {}", filePath);
-        final var path = Path.of(filePath);
+        final var path = safePath(filePath);
         if (Files.exists(path)) {
             final var currentContent = readFile(filePath, 1, -1, false);
             if (!Strings.isNullOrEmpty(currentContent.error)) {
@@ -223,6 +222,24 @@ public class FileIO {
         return ToolIO.FileEditResponse.builder()
                 .error(message)
                 .build();
+    }
+
+    /**
+     * Resolves a file path safely, ensuring it doesn't escape the current working directory
+     * or the system's temporary directory (/tmp).
+     *
+     * @param filePath The file path to resolve.
+     * @return The resolved, normalized absolute path.
+     * @throws IllegalArgumentException if the path escapes both the working directory and /tmp.
+     */
+    private static Path safePath(final String filePath) {
+        final var resolved = Path.of(filePath).toAbsolutePath().normalize();
+        final var cwd = Path.of("").toAbsolutePath();
+        final var tmp = Path.of("/tmp").toAbsolutePath().normalize();
+        if (!resolved.startsWith(cwd) && !resolved.startsWith(tmp)) {
+            throw new IllegalArgumentException("Path escapes working directory: " + resolved);
+        }
+        return resolved;
     }
 
     public String calculateChecksum(byte[] content) {

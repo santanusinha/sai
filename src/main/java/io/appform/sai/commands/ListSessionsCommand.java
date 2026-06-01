@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.SaiCommand;
-import io.appform.sai.Settings;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -36,6 +35,9 @@ import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.ParentCommand;
 
+/**
+ * {@code list-sessions} — lists all available sessions with ID, timestamp, and title.
+ */
 @Slf4j
 @Command(name = "list-sessions", description = "List available sessions")
 @SuppressWarnings("java:S106")
@@ -50,11 +52,7 @@ public class ListSessionsCommand implements Callable<Integer> {
     @Override
     @SneakyThrows
     public Integer call() {
-        final var settingsBuilder = Settings.builder();
-        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
-            settingsBuilder.dataDir(parent.getDataDir());
-        }
-        final var settings = settingsBuilder.build();
+        final var settings = SaiCommand.resolveSettings(parent);
 
         final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
         if (!Files.exists(dataDirPath)) {

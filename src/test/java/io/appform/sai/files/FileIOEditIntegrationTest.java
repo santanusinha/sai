@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -374,7 +374,7 @@ class FileIOEditIntegrationTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        tempDir = Files.createTempDirectory("fileio-edit-integration");
+        tempDir = Files.createTempDirectory(Path.of("target"), "fileio-edit-integration");
         testFile = tempDir.resolve("test.java");
     }
 

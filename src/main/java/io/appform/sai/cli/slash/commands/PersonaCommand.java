@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,13 +60,28 @@ public class PersonaCommand implements Runnable {
                                                                           context.getSettings().getConfigDir());
             final var newConfig = AgentConfigLoader.load(resolvedPath, context.getMapper());
 
+            final var previousConfig = context.getCurrentAgentConfig().get();
+            final var previousModel = context.getCurrentModel().get();
+
             context.getCurrentAgentConfig().set(newConfig);
 
             if (newConfig.getModel() != null && !newConfig.getModel().isBlank()) {
                 context.getCurrentModel().set(newConfig.getModel());
             }
 
-            context.rebuildAgent();
+            try {
+                context.rebuildAgent();
+            }
+            catch (Exception rebuildEx) {
+                context.getCurrentAgentConfig().set(previousConfig);
+                context.getCurrentModel().set(previousModel);
+                log.warn("Failed to rebuild agent for persona '{}': {}", personaPath, rebuildEx.getMessage());
+                printer.print(Printer.systemMessage(
+                                                    Printer.Colours.RED + "Failed to activate persona '" + personaPath
+                                                            + "': " + rebuildEx.getMessage()
+                                                            + " — previous persona restored." + Printer.Colours.RESET));
+                return;
+            }
 
             printer.print(Printer.systemMessage(
                                                 Printer.Colours.GREEN + "Persona loaded: " + Printer.Colours.WHITE

@@ -71,83 +71,6 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    // Patch-based edit - kept for internal use but not exposed to LLM due to formatting issues
-    @SuppressWarnings("java:S3776")
-    public ToolIO.EditResponse edit(ToolIO.EditRequest request) {
-        log.info("Editing file: {}", request.getPath());
-        try {
-            final var path = Path.of(request.getPath());
-            if (!Files.exists(path)) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("File not found: " + request.getPath())
-                        .build();
-            }
-
-            final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
-
-            if (!currentChecksum.equals(request.getExpectedChecksum())) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum()
-                                + ", Actual: " + currentChecksum)
-                        .build();
-            }
-
-            // Validate patch format before applying
-            final var validationError = validatePatchFormat(request.getPatchContent());
-            if (validationError.isPresent()) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("Invalid patch format: " + validationError.get())
-                        .build();
-            }
-
-            // Create temporary patch file
-            final var patchFile = Files.createTempFile("sai-patch-", ".diff");
-            Files.writeString(patchFile,
-                              request.getPatchContent(),
-                              StandardOpenOption.CREATE,
-                              StandardOpenOption.TRUNCATE_EXISTING);
-
-            try {
-                final var command = String.format("patch %s %s", path.toAbsolutePath(), patchFile.toAbsolutePath());
-                final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30), line -> line).call();
-
-                if (commandOutput.getStatusCode() != 0) {
-                    return ToolIO.EditResponse.builder()
-                            .success(false)
-                            .error("Patch failed: " + commandOutput.getStderr() + "\nStdout: " + commandOutput
-                                    .getStdout())
-                            .build();
-                }
-
-                // Verify and return new checksum
-                final var newContent = Files.readString(path, StandardCharsets.UTF_8);
-                final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
-
-                return ToolIO.EditResponse.builder()
-                        .success(true)
-                        .newChecksum(newChecksum)
-                        .build();
-
-            }
-            finally {
-                Files.deleteIfExists(patchFile);
-            }
-
-        }
-        catch (Exception e) {
-            final var errorMessage = "Error editing file: " + AgentUtils.rootCause(e).getMessage();
-            log.error(errorMessage, e);
-            return ToolIO.EditResponse.builder()
-                    .success(false)
-                    .error(errorMessage)
-                    .build();
-        }
-    }
-
     @Tool("Edit specific parts of an existing file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool.")
     public ToolIO.FileEditResponse editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
                                             @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
@@ -187,7 +110,7 @@ public class CoreToolBox implements ToolBox {
             }
 
             // Split into lines, preserving trailing empty line if present
-            final var lines = new ArrayList<>(List.of(fileContent.split("\n", -1)));
+            final var lines = new ArrayList<>(List.of(fileContent.split(System.lineSeparator(), -1)));
             final var totalLines = lines.size();
 
             final var opEndLine = endLine != null ? endLine : startLine;
@@ -228,9 +151,8 @@ public class CoreToolBox implements ToolBox {
 
             // Parse content to insert (split by newlines)
             final var contentLines = !Strings.isNullOrEmpty(content)
-                    ? List.of(content.split("\n", -1))
+                    ? List.of(content.split(System.lineSeparator(), -1))
                     : List.<String>of();
-
             switch (operation) {
                 case INSERT_BEFORE:
                     // Insert content before the specified line
@@ -268,9 +190,7 @@ public class CoreToolBox implements ToolBox {
             }
 
             // Join lines back together
-            final var newContent = String.join("\n", lines);
-
-            // Write the new content
+            final var newContent = String.join(System.lineSeparator(), lines);
             Files.writeString(path,
                               newContent,
                               StandardOpenOption.CREATE,
@@ -343,7 +263,6 @@ public class CoreToolBox implements ToolBox {
                 .checksum(checksum)
                 .build();
     }
-
 
     //@Tool("Search and replace text in a file. Use this for precise text substitutions.")
     public ToolIO.SearchReplaceResponse searchReplace(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
@@ -440,12 +359,90 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
+
     @Tool("Create or completely rewrite a file with the specified content.")
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                           @JsonPropertyDescription("The content to write to the file.") String content,
                                           @JsonPropertyDescription("Reason for writing the file.") String requestReason,
                                           @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
         return FileIO.write(filePath, content, expectedChecksum);
+    }
+
+    // Patch-based edit - kept for internal use but not exposed to LLM due to formatting issues
+    @SuppressWarnings("java:S3776")
+    private ToolIO.EditResponse edit(ToolIO.EditRequest request) {
+        log.info("Editing file: {}", request.getPath());
+        try {
+            final var path = Path.of(request.getPath());
+            if (!Files.exists(path)) {
+                return ToolIO.EditResponse.builder()
+                        .success(false)
+                        .error("File not found: " + request.getPath())
+                        .build();
+            }
+
+            final var content = Files.readString(path, StandardCharsets.UTF_8);
+            final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
+
+            if (!currentChecksum.equals(request.getExpectedChecksum())) {
+                return ToolIO.EditResponse.builder()
+                        .success(false)
+                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum()
+                                + ", Actual: " + currentChecksum)
+                        .build();
+            }
+
+            // Validate patch format before applying
+            final var validationError = validatePatchFormat(request.getPatchContent());
+            if (validationError.isPresent()) {
+                return ToolIO.EditResponse.builder()
+                        .success(false)
+                        .error("Invalid patch format: " + validationError.get())
+                        .build();
+            }
+
+            // Create temporary patch file
+            final var patchFile = Files.createTempFile("sai-patch-", ".diff");
+            Files.writeString(patchFile,
+                              request.getPatchContent(),
+                              StandardOpenOption.CREATE,
+                              StandardOpenOption.TRUNCATE_EXISTING);
+
+            try {
+                final var command = String.format("patch %s %s", path.toAbsolutePath(), patchFile.toAbsolutePath());
+                final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30), line -> line).call();
+
+                if (commandOutput.getStatusCode() != 0) {
+                    return ToolIO.EditResponse.builder()
+                            .success(false)
+                            .error("Patch failed: " + commandOutput.getStderr() + "\nStdout: " + commandOutput
+                                    .getStdout())
+                            .build();
+                }
+
+                // Verify and return new checksum
+                final var newContent = Files.readString(path, StandardCharsets.UTF_8);
+                final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
+
+                return ToolIO.EditResponse.builder()
+                        .success(true)
+                        .newChecksum(newChecksum)
+                        .build();
+
+            }
+            finally {
+                Files.deleteIfExists(patchFile);
+            }
+
+        }
+        catch (Exception e) {
+            final var errorMessage = "Error editing file: " + AgentUtils.rootCause(e).getMessage();
+            log.error(errorMessage, e);
+            return ToolIO.EditResponse.builder()
+                    .success(false)
+                    .error(errorMessage)
+                    .build();
+        }
     }
 
     /**

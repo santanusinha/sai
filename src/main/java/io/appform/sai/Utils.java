@@ -25,11 +25,11 @@ import lombok.experimental.UtilityClass;
 public class Utils {
 
     public static float elapsedTimeInSeconds(final Stopwatch stopwatch) {
-        return toMillis(stopwatch.elapsed(TimeUnit.MILLISECONDS));
+        return toSeconds(stopwatch.elapsed(TimeUnit.MILLISECONDS));
     }
 
-    public static float toMillis(long seconds) {
-        return seconds / 1000.0f;
+    public static float toSeconds(long millis) {
+        return millis / 1000.0f;
     }
 
 }

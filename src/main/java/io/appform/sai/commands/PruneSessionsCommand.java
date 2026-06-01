@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,12 @@
  */
 package io.appform.sai.commands;
 
-import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.SaiCommand;
-import io.appform.sai.Settings;
 
 import org.apache.commons.io.FileUtils;
 
@@ -38,6 +36,12 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
+/**
+ * {@code prune-sessions <duration>} — deletes sessions older than the given duration.
+ *
+ * <p>Accepts ISO-8601 durations (e.g. {@code PT1H30M}) or shorthand strings:
+ * {@code 1d} (1 day), {@code 3h} (3 hours), {@code 30m} (30 minutes).
+ */
 @Slf4j
 @Command(name = "prune-sessions", description = "Prune older sessions. Provide a duration string like '1d', '3h', '30m'")
 @SuppressWarnings("java:S106")
@@ -60,11 +64,7 @@ public class PruneSessionsCommand implements Callable<Integer> {
 
         final var cutoffEpochMicros = Instant.now().minus(durationOpt).toEpochMilli() * 1000L;
 
-        final var settingsBuilder = Settings.builder();
-        if (!Strings.isNullOrEmpty(parent.getDataDir())) {
-            settingsBuilder.dataDir(parent.getDataDir());
-        }
-        final var settings = settingsBuilder.build();
+        final var settings = SaiCommand.resolveSettings(parent);
 
         final var dataDirPath = Paths.get(settings.getDataDir(), "sessions");
         if (!Files.exists(dataDirPath)) {
@@ -107,19 +107,24 @@ public class PruneSessionsCommand implements Callable<Integer> {
 
     private Duration parseDuration(String s) {
         if (s == null || s.isEmpty()) return null;
-        s = s.trim().toLowerCase();
+        s = s.trim();
         try {
-            if (s.endsWith("d")) {
-                return Duration.ofDays(Long.parseLong(s.substring(0, s.length() - 1)));
+            // Support both ISO-8601 (e.g. PT1H30M) and shorthand (1d, 3h, 30m)
+            if (s.toUpperCase().startsWith("P")) {
+                return Duration.parse(s);
             }
-            else if (s.endsWith("h")) {
-                return Duration.ofHours(Long.parseLong(s.substring(0, s.length() - 1)));
+            final var lower = s.toLowerCase();
+            if (lower.endsWith("d")) {
+                return Duration.ofDays(Long.parseLong(lower.substring(0, lower.length() - 1)));
             }
-            else if (s.endsWith("m")) {
-                return Duration.ofMinutes(Long.parseLong(s.substring(0, s.length() - 1)));
+            else if (lower.endsWith("h")) {
+                return Duration.ofHours(Long.parseLong(lower.substring(0, lower.length() - 1)));
+            }
+            else if (lower.endsWith("m")) {
+                return Duration.ofMinutes(Long.parseLong(lower.substring(0, lower.length() - 1)));
             }
         }
-        catch (NumberFormatException e) {
+        catch (Exception e) {
             return null;
         }
         return null;

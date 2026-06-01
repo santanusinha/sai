@@ -275,7 +275,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                             .formatted(Severity.SUCCESS.getEmoji(),
                                        ErrorType.SUCCESS.getMessage());
                     infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
-                            .formatted(Utils.toMillis(elapsedTimeMs),
+                            .formatted(Utils.toSeconds(elapsedTimeMs),
                                        stats.getTotalTokens());
                     messages.add(Printer.empty());
                     messages.add(Printer.assistantMessage(infoMessage));

@@ -25,6 +25,19 @@ import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.With;
 
+/**
+ * Immutable runtime configuration for a Sai session, built by {@link SaiCommand} from CLI flags
+ * and environment defaults.
+ *
+ * <p>All directory paths default to conventional XDG-style locations under the user's home
+ * directory ({@code ~/.local/state/sai} for data, {@code ~/.config/sai} for config) and can be
+ * overridden via the {@code --data-dir} and {@code --config-dir} CLI options.
+ *
+ * <p>The {@code headless} flag suppresses interactive prompts and welcome banners; it is set
+ * automatically when a one-shot {@code --input} or piped stdin input is detected.
+ * The {@code noSession} flag causes session data to be stored in a temporary directory and
+ * deleted after the run completes.
+ */
 @Value
 @Builder
 @With

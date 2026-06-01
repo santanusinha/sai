@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Original Author(s)
+ * Copyright (c) 2025 Original Author(s)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,14 @@ import okhttp3.OkHttpClient;
 
 @Slf4j
 @AllArgsConstructor
+/**
+ * Factory responsible for constructing and configuring {@link SaiAgent} instances.
+ *
+ * <p>Each call to {@link #createAgent(String, AgentConfig)} creates a fresh agent bound to the
+ * provided model name and {@link AgentConfig}, wires all session and skill extensions, registers
+ * any configured MCP or HTTP toolboxes, and injects a sanitised current-working-directory hint
+ * into the system prompt.
+ */
 public class AgentFactory {
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
@@ -65,6 +73,18 @@ public class AgentFactory {
     private final EventBus eventBus;
     private final OkHttpClient httpClient;
 
+    /**
+     * Creates a new {@link SaiAgent} configured for the given model and agent config.
+     *
+     * <p>The system prompt is taken from {@link AgentConfig#getPrompt()} (falling back to a
+     * built-in default) and is augmented with the sanitised name of the current working directory
+     * so the agent has implicit path context. Control characters and path separators in the
+     * directory name are replaced with {@code _} to prevent prompt-injection via malicious paths.
+     *
+     * @param modelName the bare model name (without provider prefix, e.g. {@code "claude-haiku-4.5"})
+     * @param config    the agent configuration containing prompt, skills, tools, and model settings
+     * @return a fully initialised {@link SaiAgent} ready to receive tool registrations and queries
+     */
     public SaiAgent createAgent(String modelName, AgentConfig config) {
         final var modelSettings = Objects.requireNonNullElseGet(config.getModelSettings(),
                                                                 this::defaultModelSettings)
@@ -87,8 +107,11 @@ public class AgentFactory {
                         .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);
-        final var cwdName = Paths.get("").toAbsolutePath().getFileName();
-        final var cwd = "\nCurrent working directory: " + (cwdName != null ? cwdName.toString() : "/tmp") + "\n";
+        final var rawCwdName = Paths.get("").toAbsolutePath().getFileName();
+        final var safeCwdName = rawCwdName != null
+                ? rawCwdName.toString().replaceAll("[\\p{Cntrl}/\\\\]", "_")
+                : "_tmp";
+        final var cwd = "\nCurrent working directory: " + safeCwdName + "\n";
         final var saiAgent = new SaiAgent(config.getName(),
                                           config,
                                           settings,
