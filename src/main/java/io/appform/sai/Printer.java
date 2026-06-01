@@ -18,10 +18,13 @@ package io.appform.sai;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 
+import org.jline.keymap.KeyMap;
+import org.jline.reader.Binding;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.Reference;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.reader.impl.LineReaderImpl;
 import org.jline.reader.impl.completer.AggregateCompleter;
@@ -168,6 +171,7 @@ public class Printer implements AutoCloseable {
                                                                     .build();
                                                         });
         this.status = Status.getStatus(terminal);
+        bindAltEnter(this.lineReader);
     }
 
     public Printer start() {
@@ -189,6 +193,34 @@ public class Printer implements AutoCloseable {
     public Printer unregisterSignalHandler(Signal signal) {
         signalHandlers.remove(signal);
         return this;
+    }
+
+    /**
+     * Prepend {@code completer} to the active JLine completer chain. The supplied completer is
+     * wrapped together with the existing completer in an {@link AggregateCompleter} so that both
+     * participate in TAB-completion. A no-op when the underlying {@link LineReader} is not a
+     * {@link LineReaderImpl} (e.g. in headless / test mode where a stub reader is injected).
+     *
+     * @param completer the {@link Completer} to prepend
+     */
+    /**
+     * Binds Alt+Enter to {@code self-insert-unmeta} in the emacs and viins keymaps so that
+     * pressing Alt+Enter inserts a literal newline into the input buffer instead of submitting
+     * the line. This complements the existing backslash-continuation support.
+     */
+    private static void bindAltEnter(LineReader lineReader) {
+        if (!(lineReader instanceof LineReaderImpl impl)) {
+            return;
+        }
+        final Map<String, KeyMap<Binding>> keyMaps = impl.getKeyMaps();
+        final var altEnter = KeyMap.alt('\r');
+        final var insertNewline = new Reference(LineReader.SELF_INSERT_UNMETA);
+        for (final var keyMapName : List.of(LineReader.EMACS, LineReader.VIINS)) {
+            final var keyMap = keyMaps.get(keyMapName);
+            if (keyMap != null) {
+                keyMap.bind(insertNewline, altEnter);
+            }
+        }
     }
 
     /**

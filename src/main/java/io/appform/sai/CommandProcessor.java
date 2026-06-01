@@ -134,10 +134,11 @@ public class CommandProcessor implements AutoCloseable {
                                                                              response.getError()
                                                                                      .getMessage());
                 final var runUsage = response.getUsage();
-                infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
-                        .formatted(elapsedTimeInSeconds(elapsedTimeCoounter),
-                                   runUsage.getTotalTokens());
+                infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds)"
+                        .formatted(elapsedTimeInSeconds(elapsedTimeCoounter));
                 messages.add(Printer.assistantMessage(infoMessage));
+                messages.add(Printer.assistantMessage(Printer.Colours.GRAY
+                        + Utils.tokenSummary(runUsage)));
                 currentUsage.merge(runUsage);
             }
             else {

@@ -274,11 +274,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     var infoMessage = Printer.Colours.WHITE + "%s %s."
                             .formatted(Severity.SUCCESS.getEmoji(),
                                        ErrorType.SUCCESS.getMessage());
-                    infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds, Tokens used: %d)"
-                            .formatted(Utils.toSeconds(elapsedTimeMs),
-                                       stats.getTotalTokens());
+                    infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds)"
+                            .formatted(Utils.toSeconds(elapsedTimeMs));
                     messages.add(Printer.empty());
                     messages.add(Printer.assistantMessage(infoMessage));
+                    messages.add(Printer.assistantMessage(Printer.Colours.GRAY
+                            + Utils.tokenSummary(stats)));
                 }
                 return messages;
             }
