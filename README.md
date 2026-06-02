@@ -92,6 +92,47 @@ This creates a shaded JAR at:
 ```text
 target/sai-1.0-SNAPSHOT.jar
 ```
+## Authentication
+
+### Authenticate with GitHub Copilot
+
+SAI includes a built-in authentication command for GitHub Copilot:
+
+```bash
+sai auth
+```
+
+This will:
+1. Initiate a GitHub OAuth Device Flow
+2. Display a code and URL for you to authorize
+3. Save your token to `~/.config/sai/copilot_token`
+
+**Options:**
+- `-f, --force`: Force re-authentication even if token exists
+- `--show-token`: Display the token after authentication
+
+**Examples:**
+
+```bash
+# First-time authentication
+sai auth
+
+# Force re-authentication
+sai auth --force
+
+# Show the token (for debugging)
+sai auth --show-token
+```
+
+**Token location:**
+- Default: `~/.config/sai/copilot_token`
+- Override: Set `COPILOT_TOKEN_PATH` environment variable
+
+After authentication, use the `copilot` provider:
+
+```bash
+sai --model copilot/claude-haiku-4.5
+```
 
 ## Quick Start
 
@@ -139,10 +180,10 @@ Provider-specific variables:
 - AZURE_API_KEY: required
 - AZURE_API_VERSION: optional, default `2024-10-21`
 
-**GitHub Copilot (direct)**
-- COPILOT_GITHUB_TOKEN_PATH: optional, overrides the default GitHub token file path (`~/.local/share/copilot-api/github_token`)
+- **GitHub Copilot (direct)**
+- COPILOT_TOKEN_PATH: optional, overrides the default token file path (`~/.config/sai/copilot_token`)
 
-> **Prerequisites**: You must authenticate once with `npx copilot-api auth` to create the GitHub OAuth token file. SAI will handle all token exchange and refresh operations automatically.
+> **Prerequisites**: Run `sai auth` once to authenticate with GitHub. SAI will handle all token exchange and refresh operations automatically.
 
 **GitHub Copilot Proxy**
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
@@ -425,6 +466,7 @@ Sai AI Agent
                              Resume a specific session
   -V, --version              Print version information and exit.
 Commands:
+  auth             Authenticate with GitHub Copilot
   list-sessions    List available sessions
   delete-sessions  Delete a session
   prune-sessions   Prune older sessions. Provide a duration string like '1d',
@@ -434,6 +476,13 @@ Commands:
 ```
 
 Subcommands:
+
+- auth
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar auth
+  ```
+  Authenticates with GitHub Copilot using OAuth Device Flow. Saves token to `~/.config/sai/copilot_token`.
+  Options: `-f, --force` to re-authenticate, `--show-token` to display the token.
 
 - list-sessions
   ```bash

@@ -67,7 +67,7 @@ class CopilotDirectProviderTest {
         final var resolved = CopilotDirectProvider.resolveTokenPath();
         final var home = System.getProperty("user.home",
                                             System.getenv().getOrDefault("HOME", ""));
-        assertTrue(resolved.endsWith("/.local/share/copilot-api/github_token"),
+        assertTrue(resolved.endsWith("/.config/sai/copilot_token"),
                    "Default path should end with known suffix, got: " + resolved);
         assertTrue(resolved.startsWith(home),
                    "Default path should start with home dir, got: " + resolved);

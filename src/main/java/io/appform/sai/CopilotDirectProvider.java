@@ -46,9 +46,9 @@ import okhttp3.Response;
  *
  * <p>On construction it:
  * <ol>
- * <li>Reads the GitHub OAuth token from the same file location used by {@code copilot-api}
- * ({@code ~/.local/share/copilot-api/github_token}), overridable via the
- * {@code COPILOT_GITHUB_TOKEN_PATH} environment variable.</li>
+ * <li>Reads the GitHub OAuth token from SAI's config directory
+ * ({@code ~/.config/sai/copilot_token}), overridable via the
+ * {@code COPILOT_TOKEN_PATH} environment variable.</li>
  * <li>Exchanges the GitHub token for a short-lived Copilot bearer token by calling
  * {@code GET https://api.github.com/copilot_internal/v2/token}.</li>
  * <li>Schedules automatic token refresh 60 s before the reported expiry.</li>
@@ -170,13 +170,13 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
 
     @VisibleForTesting
     static String resolveTokenPath() {
-        final var envOverride = System.getenv("COPILOT_GITHUB_TOKEN_PATH");
+        final var envOverride = System.getenv("COPILOT_TOKEN_PATH");
         if (envOverride != null && !envOverride.isBlank()) {
             return envOverride;
         }
         final var home = System.getProperty("user.home",
                                             System.getenv().getOrDefault("HOME", ""));
-        return home + "/.local/share/copilot-api/github_token";
+        return home + "/.config/sai/copilot_token";
     }
 
     private String readGithubToken() throws IOException {
@@ -186,7 +186,7 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
         if (token.isEmpty()) {
             throw new IllegalStateException(
                                             "GitHub token file is empty: " + tokenPath +
-                                                    ". Run `npx copilot-api auth` first to authenticate.");
+                                                    ". Run `sai auth` first to authenticate.");
         }
         return token;
     }
