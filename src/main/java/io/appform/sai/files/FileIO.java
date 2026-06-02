@@ -224,22 +224,8 @@ public class FileIO {
                 .build();
     }
 
-    /**
-     * Resolves a file path safely, ensuring it doesn't escape the current working directory
-     * or the system's temporary directory (/tmp).
-     *
-     * @param filePath The file path to resolve.
-     * @return The resolved, normalized absolute path.
-     * @throws IllegalArgumentException if the path escapes both the working directory and /tmp.
-     */
     private static Path safePath(final String filePath) {
-        final var resolved = Path.of(filePath).toAbsolutePath().normalize();
-        final var cwd = Path.of("").toAbsolutePath();
-        final var tmp = Path.of("/tmp").toAbsolutePath().normalize();
-        if (!resolved.startsWith(cwd) && !resolved.startsWith(tmp)) {
-            throw new IllegalArgumentException("Path escapes working directory: " + resolved);
-        }
-        return resolved;
+        return Path.of(filePath).toAbsolutePath().normalize();
     }
 
     public String calculateChecksum(byte[] content) {

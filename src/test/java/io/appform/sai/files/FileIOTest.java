@@ -20,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.appform.sai.tools.ToolIO;
@@ -432,14 +431,6 @@ class FileIOTest {
         }
     }
 
-    @Test
-    void safePathRejectsPathOutsideCwdAndTmp() {
-        final var outsidePath = "/etc/hosts";
-        final var readResult = FileIO.readFile(outsidePath, 1, -1, false);
-        assertNotNull(readResult.getError());
-        assertTrue(readResult.getError().contains("Path escapes"), readResult.getError());
-        assertThrows(IllegalArgumentException.class, () -> FileIO.write(outsidePath, "data", ""));
-    }
 
     @BeforeEach
     void setUp() throws IOException {
