@@ -54,9 +54,9 @@ class SlashCommandDispatcherTest {
     void tokenizeMultipleSpacesBetweenTokens() {
         assertArrayEquals(
                           new String[]{
-                                  "model", "copilot-proxy/gpt-4o"
+                                  "model", "copilot/gpt-4o"
                           },
-                          SlashCommandDispatcher.tokenize("model   copilot-proxy/gpt-4o"));
+                          SlashCommandDispatcher.tokenize("model   copilot/gpt-4o"));
     }
 
     @Test
@@ -68,9 +68,9 @@ class SlashCommandDispatcherTest {
     void tokenizeSimpleArgs() {
         assertArrayEquals(
                           new String[]{
-                                  "model", "copilot-proxy/claude-haiku-4.5"
+                                  "model", "copilot/claude-haiku-4.5"
                           },
-                          SlashCommandDispatcher.tokenize("model copilot-proxy/claude-haiku-4.5"));
+                          SlashCommandDispatcher.tokenize("model copilot/claude-haiku-4.5"));
     }
 
     @Test

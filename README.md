@@ -18,7 +18,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 
 - Java 17+
 - Maven build producing a single shaded JAR
-- Model providers: openai, azure, copilot-proxy, copilot
+- Model providers: openai, azure, copilot, copilot-proxy
 - Local session storage with simple session management commands
 - Clean terminal UX with streaming output and event printing
 
@@ -158,10 +158,10 @@ Format: `<provider>/<model name>`
 
 For example:
 - `--model=openai/gpt-5.4` - Command line
-- `-m copilot-proxy/claude-sonnet4.6` - Command line
+- `-m copilot/claude-sonnet4.6` - Command line
 - `model: azure/gpt-4.1` - In the Persona YAML file
 
-If no model is passed anywhere, it defaults to `copilot-proxy/claude-haiku-4.5`.
+If no model is passed anywhere, it defaults to `copilot/claude-haiku-4.5`.
 
 ### Providers
 SAI supports the following provider types:
@@ -327,7 +327,7 @@ Slash commands give you live control over the session without leaving SAI. Type 
 ```text
 # Check which model is active
 > /model
-Current model: copilot-proxy/claude-haiku-4.5
+Current model: copilot/claude-haiku-4.5
 
 # Switch model for the rest of the session
 > /model openai/gpt-4
@@ -335,7 +335,7 @@ Model switched to: openai/gpt-4
 
 # Switch persona
 > /persona reviewer
-Persona loaded: Code Reviewer (model: copilot-proxy/claude-sonnet-4.6)
+Persona loaded: Code Reviewer (model: copilot/claude-sonnet-4.6)
 
 # List loaded skills
 > /skills
@@ -464,7 +464,7 @@ Sai AI Agent
                                starts with '@', read input from the specified
                                file.
   -m, --model[=<model>]      Model to use, in the format 'provider/model' (e.g.
-                               'copilot-proxy/claude-haiku-4.5'). Overrides
+                               'copilot/claude-haiku-4.5'). Overrides
                                model specified in persona file.
   -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>

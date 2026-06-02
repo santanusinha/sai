@@ -15,7 +15,7 @@ description: >
   structural understanding; and spawns up to 3 parallel tmux subagents for large PRs to
   review different areas concurrently. Produces a comprehensive, severity-annotated review report.
 
-model: copilot-proxy/claude-sonnet-4.6
+model: copilot/claude-sonnet-4.6
 
 modelSettings:
   temperature: 0.3

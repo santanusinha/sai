@@ -54,7 +54,7 @@ public class ModelCommand implements Runnable {
         if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
             printer.print(Printer.systemMessage(
                                                 Printer.Colours.RED + "Invalid model format '" + model
-                                                        + "'. Expected 'provider/model' (e.g. copilot-proxy/claude-haiku-4.5)."
+                                                        + "'. Expected 'provider/model' (e.g. copilot/claude-haiku-4.5)."
                                                         + Printer.Colours.RESET));
             return;
         }

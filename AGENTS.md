@@ -40,7 +40,7 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 
 ## Key Concepts
 
-- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot-proxy`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot-proxy` routes through an external proxy server.
+- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot` routes through an external proxy server.
 - **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
 - **Session storage**: File-system backed in user's local state directory
 - **Personas**: YAML/JSON config files loaded by `AgentConfigLoader`

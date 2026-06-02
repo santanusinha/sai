@@ -126,7 +126,7 @@ public class SaiCommand implements Callable<Integer> {
 
     @Option(names = {
             "-m", "--model"
-    }, description = "Model to use, in the format 'provider/model' (e.g. 'copilot-proxy/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
+    }, description = "Model to use, in the format 'provider/model' (e.g. 'copilot/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
     private String model;
 
     /**
@@ -462,7 +462,7 @@ public class SaiCommand implements Callable<Integer> {
                     .agentId("sai-agent")
                     .name("Sai Agent")
                     .description("An AI agent that can execute tasks and answer questions.")
-                    .model("copilot-proxy/claude-haiku-4.5")
+                    .model("copilot/claude-haiku-4.5")
                     .build();
         }
         final var resolvedPath = AgentConfigLoader.resolvePersonaPath(persona, configDir);

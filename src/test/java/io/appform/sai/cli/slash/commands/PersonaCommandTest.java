@@ -51,7 +51,7 @@ class PersonaCommandTest {
 
     private static final String INITIAL_PERSONA = "Default Persona";
 
-    private static final String INITIAL_MODEL = "copilot-proxy/claude-haiku-4.5";
+    private static final String INITIAL_MODEL = "copilot/claude-haiku-4.5";
 
     private static class CapturingPrinter extends Printer {
 
@@ -104,14 +104,14 @@ class PersonaCommandTest {
                 .agentId("new-agent")
                 .name("New Persona")
                 .description("A different persona")
-                .model("copilot-proxy/gpt-4o")
+                .model("copilot/gpt-4o")
                 .build();
         Files.writeString(personaFile, mapper.writeValueAsString(newConfig));
 
         dispatcher.dispatch("persona " + personaFile.toAbsolutePath(), printer);
 
         assertEquals("New Persona", context.getCurrentAgentConfig().get().getName());
-        assertEquals("copilot-proxy/gpt-4o", context.getCurrentModel().get());
+        assertEquals("copilot/gpt-4o", context.getCurrentModel().get());
         verify(agentFactory).createAgent(any(), any());
         assertTrue(capturedContains("loaded"));
     }

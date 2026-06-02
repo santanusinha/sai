@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
  * <p>Examples:
  * <pre>
  * /help
- * /model copilot-proxy/claude-haiku-4.5
+ * /model copilot/claude-haiku-4.5
  * /persona my-persona
  * </pre>
  */

@@ -7,7 +7,7 @@ agentId: sai-webdev
 name: Sai Web Developer
 description: Expert web development agent with codebase knowledge graph capabilities and live Chrome browser control for frontend debugging, performance analysis, and full-stack web development.
 # model: gemini-3.1-pro-preview
-model: copilot-proxy/claude-sonnet-4.6
+model: copilot/claude-sonnet-4.6
 
 modelSettings:
   temperature: 0.5

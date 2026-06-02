@@ -46,7 +46,7 @@ import lombok.SneakyThrows;
 
 class SkillsCommandTest {
 
-    private static final String INITIAL_MODEL = "copilot-proxy/claude-haiku-4.5";
+    private static final String INITIAL_MODEL = "copilot/claude-haiku-4.5";
 
     private static class CapturingPrinter extends Printer {
 

@@ -50,7 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 @Builder
 public class SlashCommandContext {
 
-    /** Current {@code provider/model} string (e.g., {@code copilot-proxy/claude-haiku-4.5}). */
+    /** Current {@code provider/model} string (e.g., {@code copilot/claude-haiku-4.5}). */
     @NonNull
     private final AtomicReference<String> currentModel;
 

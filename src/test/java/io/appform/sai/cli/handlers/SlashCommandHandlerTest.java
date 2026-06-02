@@ -116,8 +116,8 @@ class SlashCommandHandlerTest {
 
     @Test
     void handleStripsLeadingSlashFromModelCommand() {
-        handler.handle("/model copilot-proxy/gpt-4o", printer);
-        verify(dispatcher).dispatch("model copilot-proxy/gpt-4o", printer);
+        handler.handle("/model copilot/gpt-4o", printer);
+        verify(dispatcher).dispatch("model copilot/gpt-4o", printer);
     }
 
     @Test
