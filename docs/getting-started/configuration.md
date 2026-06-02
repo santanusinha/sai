@@ -4,14 +4,14 @@ SAI requires configuration to connect to your AI model provider. This guide cove
 
 ## Model Providers
 
-SAI supports three types of model providers:
+SAI supports four types of model providers:
 
 | Provider | Description | Use Case |
 |----------|-------------|----------|
 | **openai** | OpenAI API and compatible endpoints | OpenAI, Cerebras, OpenRouter, etc. |
 | **azure** | Azure OpenAI Service | Enterprise Azure deployments |
 | **copilot** | GitHub Copilot direct integration | Using GitHub Copilot with your subscription |
-
+| **copilot-proxy** | GitHub Copilot via external proxy | Using a running copilot-api proxy server |
 ## Model Selection
 
 Models are specified in the format: `<provider>/<model-name>`
@@ -129,12 +129,12 @@ For direct GitHub Copilot integration (no proxy server required).
 
 1. Authenticate with GitHub Copilot:
    ```bash
-   npx copilot-api auth
+   sai copilot --auth
    ```
 
 2. This stores your GitHub OAuth token at:
    ```
-   ~/.local/share/copilot-api/github_token
+   ~/.config/sai/copilot_token
    ```
 
 3. **No server needed** - SAI connects directly to GitHub Copilot API
@@ -143,7 +143,7 @@ For direct GitHub Copilot integration (no proxy server required).
 
 No environment variables required! Authentication token is read automatically from:
 ```
-~/.local/share/copilot-api/github_token
+~/.config/sai/copilot_token
 ```
 
 ### Usage
@@ -178,7 +178,7 @@ For GitHub Copilot Business or Enterprise:
 
 2. Token location remains the same:
    ```
-   ~/.local/share/copilot-api/github_token
+   ~/.config/sai/copilot_token
    ```
 
 ### Troubleshooting
@@ -187,15 +187,15 @@ For GitHub Copilot Business or Enterprise:
 
 Run authentication:
 ```bash
-npx copilot-api auth
+sai copilot --auth
 ```
 
 **Error: 401 Unauthorized**
 
 Token may have expired. Re-authenticate:
 ```bash
-rm ~/.local/share/copilot-api/github_token
-npx copilot-api auth
+rm ~/.config/sai/copilot_token
+sai copilot --auth
 ```
 
 ## Directory Structure
@@ -307,8 +307,9 @@ If configured correctly, you should get a response from the AI model.
 **Problem:** `Connection refused` or `Timeout`
 
 !!! tip "Solution"
-    - For copilot: Ensure the proxy is running (`copilot-api`)
+    - For copilot: No proxy required — SAI connects directly to GitHub Copilot API
     - For custom endpoints: Verify the OPENAI_ENDPOINT URL is correct
+    - Check your firewall/network settings
     - Check your firewall/network settings
 
 ### Model Not Found

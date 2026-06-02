@@ -228,14 +228,13 @@ Configuration for GitHub Copilot via direct API integration.
 
 ### Authentication
 
-**Setup**: Authenticate once using copilot-api CLI:
+**Setup**: Authenticate once using the `sai` CLI:
 
 ```bash
-npx copilot-api auth
+sai copilot --auth
 ```
 
-This stores your GitHub OAuth token at `~/.local/share/copilot-api/github_token`.
-
+This stores your GitHub OAuth token at `~/.config/sai/copilot_token`.
 **No environment variables required** - SAI reads the token automatically from the file.
 
 ### COPILOT_ENDPOINT (optional)
@@ -273,12 +272,12 @@ export COPILOT_ENDPOINT=https://your-enterprise-copilot-endpoint
 **Troubleshooting**:
 
 ```bash
+```bash
 # Check if token exists
-ls -la ~/.local/share/copilot-api/github_token
+ls -la ~/.config/sai/copilot_token
 
 # Re-authenticate if needed
-npx copilot-api auth
-
+sai copilot --auth
 # Test connection
 java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-haiku-4.5 -i "test"
 ```
@@ -301,7 +300,7 @@ export MODEL=copilot/claude-sonnet-4.6
 
 - `openai/` - OpenAI models (requires OPENAI_API_KEY)
 - `azure/` - Azure OpenAI models (requires AZURE_ENDPOINT and AZURE_API_KEY)
-- `copilot/` - GitHub Copilot direct (requires GitHub token via `npx copilot-api auth`)
+- `copilot/` - GitHub Copilot direct (requires GitHub token via `sai copilot --auth`)
 
 **Examples**:
 
@@ -372,8 +371,8 @@ Create `~/.config/sai/.env`:
 
 ```bash
 # GitHub Copilot Configuration
-# Authentication: Run `npx copilot-api auth` (one-time setup)
-# Token is stored at ~/.local/share/copilot-api/github_token
+# Authentication: Run `sai copilot --auth` (one-time setup)
+# Token is stored at ~/.config/sai/copilot_token
 
 # Optional: Custom endpoint (for Business/Enterprise)
 # COPILOT_ENDPOINT=https://api.githubcopilot.com
@@ -397,7 +396,7 @@ OPENAI_API_KEY=sk-proj-your_openai_key
 AZURE_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_API_KEY=your_azure_key
 
-# GitHub Copilot (requires `npx copilot-api auth` one-time setup)
+# GitHub Copilot (requires `sai copilot --auth` one-time setup)
 # COPILOT_ENDPOINT=https://api.githubcopilot.com
 
 # Default model (can be switched with --model flag)
@@ -552,20 +551,21 @@ sai --debug "Test message"
 1. Authenticate with GitHub Copilot:
 
 ```bash
-npx copilot-api auth
+sai copilot --auth
 ```
 
 2. Verify token file exists:
 
 ```bash
-ls -la ~/.local/share/copilot-api/github_token
+ls -la ~/.config/sai/copilot_token
 ```
 
 3. If token expired, re-authenticate:
 
 ```bash
-rm ~/.local/share/copilot-api/github_token
-npx copilot-api auth
+rm ~/.config/sai/copilot_token
+sai copilot --auth
+```
 ```
 
 4. Test connection:

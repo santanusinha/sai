@@ -99,7 +99,7 @@ target/sai-1.0-SNAPSHOT.jar
 SAI includes a built-in authentication command for GitHub Copilot:
 
 ```bash
-sai auth
+sai copilot-auth
 ```
 
 This will:
@@ -110,18 +110,22 @@ This will:
 **Options:**
 - `-f, --force`: Force re-authentication even if token exists
 - `--show-token`: Display the token after authentication
+- `--remove`: Remove the stored authentication token
 
 **Examples:**
 
 ```bash
 # First-time authentication
-sai auth
+sai copilot-auth
 
 # Force re-authentication
-sai auth --force
+sai copilot-auth --force
 
 # Show the token (for debugging)
-sai auth --show-token
+sai copilot-auth --show-token
+
+# Remove the stored token
+sai copilot-auth --remove
 ```
 
 **Token location:**
@@ -163,7 +167,7 @@ If no model is passed anywhere, it defaults to `copilot-proxy/claude-haiku-4.5`.
 SAI supports the following provider types:
 - **openai** - For all openai compliant endpoints including openai, cerebras, openrouter and so on
 - **azure** - For azure hosted models
-- **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI automatically reads the GitHub OAuth token from `~/.local/share/copilot-api/github_token` (the same file used by [copilot-api](https://github.com/ericc-ch/copilot-api)), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
+- **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI reads the GitHub OAuth token from `~/.config/sai/copilot_token` (written by `sai copilot-auth`), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
 - **copilot-proxy** — Routes requests through an external Copilot proxy server such as [copilot-api](https://github.com/ericc-ch/copilot-api) running on `localhost:4141`.
 
 Provider-specific variables:
@@ -183,7 +187,7 @@ Provider-specific variables:
 - **GitHub Copilot (direct)**
 - COPILOT_TOKEN_PATH: optional, overrides the default token file path (`~/.config/sai/copilot_token`)
 
-> **Prerequisites**: Run `sai auth` once to authenticate with GitHub. SAI will handle all token exchange and refresh operations automatically.
+> **Prerequisites**: Run `sai copilot-auth` once to authenticate with GitHub. SAI will handle all token exchange and refresh operations automatically.
 
 **GitHub Copilot Proxy**
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
@@ -208,15 +212,17 @@ AZURE_API_KEY=your_azure_key
 
 Using GitHub Copilot directly (no proxy server required):
 
+Using GitHub Copilot directly (no proxy server required):
+
 ```env
 # No environment variables required by default.
-# SAI reads the token from ~/.local/share/copilot-api/github_token
+# SAI reads the token from ~/.config/sai/copilot_token
 #
 # To override the token file location:
-# COPILOT_GITHUB_TOKEN_PATH=/custom/path/to/github_token
+# COPILOT_TOKEN_PATH=/custom/path/to/copilot_token
 ```
 
-> **First-time setup**: Run `npx copilot-api auth` once to authenticate and create the token file. After that, use `--model copilot/<model-name>` with no external server.
+> **First-time setup**: Run `sai copilot-auth` once to authenticate and create the token file. After that, use `--model copilot/<model-name>` with no external server.
 
 Using a Copilot proxy:
 
@@ -443,11 +449,10 @@ See the [Agent Skills specification](https://agentskills.io/specification) for c
 ## CLI Reference
 
 Help output:
-
 ```text
 Usage: sai [-dhV] [--headless] [-m[=<model>]] [--config-dir=<configDir>]
            [--data-dir=<dataDir>] [-i=<input>] [-p=<persona>] [-s=<sessionId>]
-           [COMMAND]
+           [--skill=<skill>] [COMMAND]
 Sai AI Agent
       --config-dir=<configDir>
                              Override config directory
@@ -464,23 +469,28 @@ Sai AI Agent
   -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>
                              Resume a specific session
+      --skill=<skill>        Path to a single skill directory to load. When
+                               specified, only this skill is loaded and skill
+                               discovery is disabled.
   -V, --version              Print version information and exit.
 Commands:
-  auth             Authenticate with GitHub Copilot
   list-sessions    List available sessions
   delete-sessions  Delete a session
   prune-sessions   Prune older sessions. Provide a duration string like '1d',
                      '3h', '30m'
   export-session   Export a session to a markdown file
   summary          Show detailed summary of a specific session
+  copilot-auth     Authenticate with GitHub Copilot
+```
+  summary          Show detailed summary of a specific session
 ```
 
-Subcommands:
-
-- auth
+- copilot-auth
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar auth
+  java -jar target/sai-1.0-SNAPSHOT.jar copilot-auth
   ```
+  Authenticates with GitHub Copilot using OAuth Device Flow. Saves token to `~/.config/sai/copilot_token`.
+  Options: `-f, --force` to re-authenticate, `--show-token` to display the token, `--remove` to delete the stored token.
   Authenticates with GitHub Copilot using OAuth Device Flow. Saves token to `~/.config/sai/copilot_token`.
   Options: `-f, --force` to re-authenticate, `--show-token` to display the token.
 

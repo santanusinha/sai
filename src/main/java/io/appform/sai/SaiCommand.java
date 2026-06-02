@@ -36,7 +36,7 @@ import io.appform.sai.cli.handlers.ShellCommandHandler;
 import io.appform.sai.cli.handlers.SlashCommandHandler;
 import io.appform.sai.cli.slash.SlashCommandContext;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
-import io.appform.sai.commands.CopilotAuthCommand;
+import io.appform.sai.commands.CopilotCommand;
 import io.appform.sai.commands.DeleteSessionsCommand;
 import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListSessionsCommand;
@@ -81,7 +81,7 @@ import picocli.CommandLine.Option;
         PruneSessionsCommand.class,
         ExportSessionCommand.class,
         io.appform.sai.commands.SummaryCommand.class,
-        CopilotAuthCommand.class
+        CopilotCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
     @Option(names = {
