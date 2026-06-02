@@ -131,7 +131,7 @@
         </dependency>
         <dependency>
             <groupId>org.commonmark</groupId>
-            <artifactId>commonmark</artifactId>
+            <artifactId>commonmark-ext-gfm-tables</artifactId>
             <version>0.24.0</version>
         </dependency>
         <dependency>

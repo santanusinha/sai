@@ -126,7 +126,7 @@ public class CommandProcessor implements AutoCloseable {
             final var response = responseF.get();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
-                messages.add(Printer.assistantMessage(response.getData())
+                messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(response.getData()))
                         .withImportant(true));
                 var infoMessage = Printer.Colours.WHITE + "%s %s.".formatted(
                                                                              Severity.SUCCESS

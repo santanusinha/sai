@@ -270,7 +270,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 if (historical) {
                     final var node = mapper.readTree(content);
                     final var output = node.get(Agent.OUTPUT_VARIABLE_NAME).asText();
-                    messages.add(Printer.assistantMessage(output).withImportant(true));
+                    messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(output)).withImportant(true));
                     var infoMessage = Printer.Colours.WHITE + "%s %s."
                             .formatted(Severity.SUCCESS.getEmoji(),
                                        ErrorType.SUCCESS.getMessage());
