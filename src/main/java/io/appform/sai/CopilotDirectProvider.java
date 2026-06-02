@@ -28,7 +28,9 @@ import io.github.sashirestela.openai.service.ChatCompletionServices;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,8 +51,13 @@ import okhttp3.Response;
  * <li>Reads the GitHub OAuth token from SAI's config directory
  * ({@code ~/.config/sai/copilot_token}), overridable via the
  * {@code COPILOT_TOKEN_PATH} environment variable.</li>
- * <li>Exchanges the GitHub token for a short-lived Copilot bearer token by calling
- * {@code GET https://api.github.com/copilot_internal/v2/token}.</li>
+ * <li>Attempts to load a previously cached Copilot bearer token from
+ * {@code ~/.config/sai/copilot_access_token.json}. If the cached token is still valid
+ * (not expiring within {@value #REFRESH_BUFFER_SECONDS} seconds) it is used directly,
+ * avoiding a network round-trip on startup.</li>
+ * <li>If no valid cached token exists, exchanges the GitHub token for a short-lived Copilot
+ * bearer token by calling {@code GET https://api.github.com/copilot_internal/v2/token} and
+ * persists the result to the cache file.</li>
  * <li>Schedules automatic token refresh 60 s before the reported expiry.</li>
  * </ol>
  *
@@ -62,7 +69,8 @@ import okhttp3.Response;
  * {@code /v1/chat/completions}.</li>
  * <li>A header interceptor that injects all Copilot-required request headers (editor version,
  * plugin version, integration id, etc.) and replaces the {@code Authorization} header with
- * the current Copilot bearer token.</li>
+ * the current Copilot bearer token. On a {@code 401} or {@code 404} response the token is
+ * refreshed inline and the request is retried once.</li>
  * </ul>
  *
  * <p>Call {@link #close()} when the provider is no longer needed to release the background
@@ -84,7 +92,7 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
      * Minimum number of seconds before token expiry at which a refresh is triggered.
      * Mirrors the behaviour of copilot-api (refresh_in - 60 seconds).
      */
-    private static final int REFRESH_BUFFER_SECONDS = 60;
+    static final int REFRESH_BUFFER_SECONDS = 60;
 
     private final ObjectMapper mapper;
     private final OkHttpClient baseHttpClient;
@@ -113,9 +121,19 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
         this.baseHttpClient = baseHttpClient;
         this.retryConfig = retryConfig;
         this.githubToken = readGithubToken();
-        final var tokenResponse = fetchCopilotToken();
-        copilotToken.set(tokenResponse.token());
-        scheduleRefresh(tokenResponse.refreshIn());
+
+        final var cachePath = Path.of(resolveCachedTokenPath());
+        final var cached = loadCachedToken(cachePath, mapper);
+        if (cached != null) {
+            log.info("Loaded Copilot token from cache (expires at {})", Instant.ofEpochSecond(cached.expiresAt()));
+            copilotToken.set(cached.token());
+            scheduleRefresh(cached.refreshIn());
+        }
+        else {
+            final var tokenResponse = fetchAndPersistToken(cachePath);
+            copilotToken.set(tokenResponse.token());
+            scheduleRefresh(tokenResponse.refreshIn());
+        }
         log.info("Copilot direct provider initialised");
     }
 
@@ -134,23 +152,15 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
                 })
                 .addInterceptor(chain -> {
                     final var original = chain.request();
-                    final var requestId = UUID.randomUUID().toString();
-                    final var isAgentCall = original.header(INITIATOR_HEADER) != null;
-                    final var initiator = isAgentCall ? original.header(INITIATOR_HEADER) : "user";
-                    final var withHeaders = original.newBuilder()
-                            .header("Authorization", "Bearer " + copilotToken.get())
-                            .header("content-type", MediaType.JSON_UTF_8.toString())
-                            .header("copilot-integration-id", "vscode-chat")
-                            .header("editor-version", "vscode/1.104.3")
-                            .header("editor-plugin-version", EDITOR_PLUGIN_VERSION)
-                            .header("user-agent", USER_AGENT)
-                            .header("openai-intent", "conversation-panel")
-                            .header("x-github-api-version", API_VERSION)
-                            .header("x-request-id", requestId)
-                            .header("x-vscode-user-agent-library-version", "electron-fetch")
-                            .header(INITIATOR_HEADER, initiator)
-                            .build();
-                    return chain.proceed(withHeaders);
+                    final var response = chain.proceed(buildCopilotRequest(original));
+                    if (response.code() == 401 || response.code() == 404) {
+                        response.close();
+                        log.warn("Copilot token rejected (HTTP {}), refreshing token and retrying...",
+                                 response.code());
+                        forceRefreshToken();
+                        return chain.proceed(buildCopilotRequest(original));
+                    }
+                    return response;
                 })
                 .build();
 
@@ -177,6 +187,52 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
         final var home = System.getProperty("user.home",
                                             System.getenv().getOrDefault("HOME", ""));
         return home + "/.config/sai/copilot_token";
+    }
+
+    @VisibleForTesting
+    static String resolveCachedTokenPath() {
+        final var home = System.getProperty("user.home",
+                                            System.getenv().getOrDefault("HOME", ""));
+        return home + "/.config/sai/copilot_access_token.json";
+    }
+
+    /**
+     * Attempts to load a previously cached {@link CopilotTokenResponse} from {@code cachePath}.
+     * Returns {@code null} if the file does not exist, cannot be parsed, or the token would
+     * expire within {@value #REFRESH_BUFFER_SECONDS} seconds.
+     */
+    @VisibleForTesting
+    static CopilotTokenResponse loadCachedToken(Path cachePath, ObjectMapper mapper) {
+        if (!Files.exists(cachePath)) {
+            log.debug("No cached Copilot token found at {}", cachePath);
+            return null;
+        }
+        try {
+            final var cached = mapper.readValue(cachePath.toFile(), CopilotTokenResponse.class);
+            final var nowSeconds = Instant.now().getEpochSecond();
+            if (cached.expiresAt() - nowSeconds > REFRESH_BUFFER_SECONDS) {
+                return cached;
+            }
+            log.debug("Cached Copilot token is expired or about to expire, ignoring cache");
+            return null;
+        }
+        catch (IOException e) {
+            log.warn("Failed to read cached Copilot token, will fetch fresh: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @VisibleForTesting
+    static void persistToken(CopilotTokenResponse tokenResponse, Path cachePath, ObjectMapper mapper) {
+        try {
+            Files.createDirectories(cachePath.getParent());
+            mapper.writeValue(cachePath.toFile(), tokenResponse);
+            log.debug("Persisted Copilot token to cache (expires at {})",
+                      Instant.ofEpochSecond(tokenResponse.expiresAt()));
+        }
+        catch (IOException e) {
+            log.warn("Failed to persist Copilot token cache: {}", e.getMessage());
+        }
     }
 
     private String readGithubToken() throws IOException {
@@ -215,6 +271,42 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
         }
     }
 
+    private CopilotTokenResponse fetchAndPersistToken(Path cachePath) {
+        final var tokenResponse = fetchCopilotToken();
+        persistToken(tokenResponse, cachePath, mapper);
+        return tokenResponse;
+    }
+
+    private void forceRefreshToken() {
+        try {
+            final var tokenResponse = fetchAndPersistToken(Path.of(resolveCachedTokenPath()));
+            copilotToken.set(tokenResponse.token());
+            log.info("Copilot token refreshed successfully");
+        }
+        catch (Exception e) {
+            log.error("Failed to force-refresh Copilot token", e);
+        }
+    }
+
+    private Request buildCopilotRequest(Request original) {
+        final var requestId = UUID.randomUUID().toString();
+        final var isAgentCall = original.header(INITIATOR_HEADER) != null;
+        final var initiator = isAgentCall ? original.header(INITIATOR_HEADER) : "user";
+        return original.newBuilder()
+                .header("Authorization", "Bearer " + copilotToken.get())
+                .header("content-type", MediaType.JSON_UTF_8.toString())
+                .header("copilot-integration-id", "vscode-chat")
+                .header("editor-version", "vscode/1.104.3")
+                .header("editor-plugin-version", EDITOR_PLUGIN_VERSION)
+                .header("user-agent", USER_AGENT)
+                .header("openai-intent", "conversation-panel")
+                .header("x-github-api-version", API_VERSION)
+                .header("x-request-id", requestId)
+                .header("x-vscode-user-agent-library-version", "electron-fetch")
+                .header(INITIATOR_HEADER, initiator)
+                .build();
+    }
+
     private void scheduleRefresh(int refreshInSeconds) {
         final var delaySeconds = Math.max(1L, (long) refreshInSeconds - REFRESH_BUFFER_SECONDS);
         log.debug("Scheduling Copilot token refresh in {} s", delaySeconds);
@@ -224,7 +316,7 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
     private void refreshToken() {
         log.debug("Refreshing Copilot token");
         try {
-            final var tokenResponse = fetchCopilotToken();
+            final var tokenResponse = fetchAndPersistToken(Path.of(resolveCachedTokenPath()));
             copilotToken.set(tokenResponse.token());
             log.debug("Copilot token refreshed successfully");
             scheduleRefresh(tokenResponse.refreshIn());
