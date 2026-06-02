@@ -31,8 +31,6 @@ public class InterruptMonitor implements AutoCloseable {
         this.commandProcessor = commandProcessor;
         this.printer = printer.registerSignalHandler(Signal.INT, this::handleCtrlC);
         log.info("Interrupt monitor initialized");
-        printer.print(Printer.systemMessage(Printer.Colours.YELLOW +
-                "\n⚠️  Set handler..." + Printer.Colours.RESET));
     }
 
     @Override

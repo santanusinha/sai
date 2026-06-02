@@ -22,7 +22,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum Actor {
     USER("User", "👤"),
-    SYSTEM("System", "⚙️"),
+    SYSTEM("System", "⚙️ "),
     ASSISTANT("Assistant", "🤖");
 
     private final String displayName;

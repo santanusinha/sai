@@ -251,7 +251,7 @@ public class SaiCommand implements Callable<Integer> {
                     printer.print(Update.builder()
                             .actor(Actor.SYSTEM)
                             .severity(Severity.INFO)
-                            .colour(Printer.Colours.YELLOW)
+                            .colour(Printer.Colours.BOLD_YELLOW)
                             .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
                                     .formatted(effectiveSessionId))
                             .build());
