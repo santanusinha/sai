@@ -1,10 +1,10 @@
 # SAI (Sentinel AI) - CLI Agent
 
-SAI is a command-line AI agent built on the Sentinel AI framework. It connects to model providers like OpenAI, Azure OpenAI, or a GitHub Copilot proxy, supports interactive and headless modes, and persists local sessions so you can resume where you left off.
+SAI is a command-line AI agent built on the Sentinel AI framework. It connects to model providers like OpenAI, Azure OpenAI, GitHub Copilot proxy, or directly to the GitHub Copilot API, supports interactive and headless modes, and persists local sessions so you can resume where you left off.
 
 ## Key Features
 
-- **Multiple Model Providers**: OpenAI, Azure OpenAI, GitHub Copilot proxy
+- **Multiple Model Providers**: OpenAI, Azure OpenAI, GitHub Copilot (direct or via proxy)
 - **Interactive & Headless Modes**: Conversational sessions or batch processing
 - **Session Persistence**: Resume previous conversations
 - **Interrupt Handling**: Press Ctrl-C to cancel running agent tasks and return to prompt
@@ -18,7 +18,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 
 - Java 17+
 - Maven build producing a single shaded JAR
-- Model providers: openai, azure, copilot-proxy
+- Model providers: openai, azure, copilot-proxy, copilot
 - Local session storage with simple session management commands
 - Clean terminal UX with streaming output and event printing
 
@@ -122,7 +122,8 @@ If no model is passed anywhere, it defaults to `copilot-proxy/claude-haiku-4.5`.
 SAI supports the following provider types:
 - **openai** - For all openai compliant endpoints including openai, cerebras, openrouter and so on
 - **azure** - For azure hosted models
-- **copilot-proxy** - If you are ruting your requests through copilot using something like [copilot-api](https://github.com/ericc-ch/copilot-api).
+- **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI automatically reads the GitHub OAuth token from `~/.local/share/copilot-api/github_token` (the same file used by [copilot-api](https://github.com/ericc-ch/copilot-api)), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
+- **copilot-proxy** — Routes requests through an external Copilot proxy server such as [copilot-api](https://github.com/ericc-ch/copilot-api) running on `localhost:4141`.
 
 Provider-specific variables:
 
@@ -137,6 +138,11 @@ Provider-specific variables:
 - AZURE_ENDPOINT: required (base URL)
 - AZURE_API_KEY: required
 - AZURE_API_VERSION: optional, default `2024-10-21`
+
+**GitHub Copilot (direct)**
+- COPILOT_GITHUB_TOKEN_PATH: optional, overrides the default GitHub token file path (`~/.local/share/copilot-api/github_token`)
+
+> **Prerequisites**: You must authenticate once with `npx copilot-api auth` to create the GitHub OAuth token file. SAI will handle all token exchange and refresh operations automatically.
 
 **GitHub Copilot Proxy**
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
@@ -158,6 +164,18 @@ AZURE_ENDPOINT=https://your-azure-openai-endpoint
 AZURE_API_KEY=your_azure_key
 # AZURE_API_VERSION=2024-10-21
 ```
+
+Using GitHub Copilot directly (no proxy server required):
+
+```env
+# No environment variables required by default.
+# SAI reads the token from ~/.local/share/copilot-api/github_token
+#
+# To override the token file location:
+# COPILOT_GITHUB_TOKEN_PATH=/custom/path/to/github_token
+```
+
+> **First-time setup**: Run `npx copilot-api auth` once to authenticate and create the token file. After that, use `--model copilot/<model-name>` with no external server.
 
 Using a Copilot proxy:
 

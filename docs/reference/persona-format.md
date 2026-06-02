@@ -177,19 +177,17 @@ description: Expert coding agent with codebase knowledge graph capabilities for 
 **Type**: String  
 **Description**: LLM model to use for this persona  
 **Format**: `<provider>/<model-name>`  
-**Default**: Falls back to `MODEL` environment variable or `copilot-proxy/claude-haiku-4.5`
+**Default**: Falls back to `MODEL` environment variable or `copilot/claude-haiku-4.5`
 
 ```yaml
-model: copilot-proxy/claude-sonnet-4.6
+model: copilot/claude-sonnet-4.6
 ```
-
-**Provider prefixes**:
 
 | Provider | Prefix | Example |
 |----------|--------|---------|
 | OpenAI | `openai/` | `openai/gpt-4o` |
 | Azure OpenAI | `azure/` | `azure/gpt-4o-deployment` |
-| Copilot Proxy | `copilot-proxy/` | `copilot-proxy/claude-sonnet-4.6` |
+| GitHub Copilot | `copilot/` | `copilot/claude-sonnet-4.6` |
 
 **Common models**:
 
@@ -202,11 +200,11 @@ model: openai/o1-preview
 # Azure (use deployment name)
 model: azure/my-gpt4-deployment
 
-# Copilot Proxy
-model: copilot-proxy/claude-sonnet-4.6
-model: copilot-proxy/claude-haiku-4.5
-model: copilot-proxy/gpt-4o
-model: copilot-proxy/gemini-3.1-pro-preview
+# Copilot
+model: copilot/claude-sonnet-4.6
+model: copilot/claude-haiku-4.5
+model: copilot/gpt-4o
+model: copilot/gemini-2.0-flash-exp
 ```
 
 **Override priority**:
@@ -214,7 +212,7 @@ model: copilot-proxy/gemini-3.1-pro-preview
 1. CLI flag: `--model` / `-m`
 2. Persona file: `model` field
 3. Environment: `MODEL` variable
-4. Default: `copilot-proxy/claude-haiku-4.5`
+4. Default: `copilot/claude-haiku-4.5`
 
 ---
 
@@ -455,7 +453,7 @@ Minimal persona with just required fields.
 agentId: sai-agent
 name: Sai Agent
 description: Default helpful CLI assistant persona for SAI.
-model: copilot-proxy/claude-haiku-4.5
+model: copilot/claude-haiku-4.5
 modelSettings:
   temperature: 1
 prompt: |
@@ -475,7 +473,7 @@ Advanced persona with codebase analysis capabilities.
 agentId: sai-coder
 name: Sai Coder
 description: Expert coding agent with codebase knowledge graph capabilities for intelligent code exploration and development.
-model: copilot-proxy/claude-sonnet-4.6
+model: copilot/claude-sonnet-4.6
 
 modelSettings:
   temperature: 0.5
@@ -544,7 +542,7 @@ Research-oriented persona with web search capabilities.
 agentId: sai-planner
 name: Sai Planner
 description: Strategic planning agent that researches documentation and creates detailed implementation plans.
-model: copilot-proxy/gemini-3.1-pro-preview
+model: copilot/gemini-2.0-flash-exp
 
 mcp:
   mcpServers:
@@ -627,7 +625,7 @@ description: ...   # Required
 **Solution**: Use correct provider prefix:
 
 ```yaml
-model: copilot-proxy/claude-sonnet-4.6  # ✓ Correct
+model: copilot/claude-sonnet-4.6  # ✓ Correct
 model: claude-sonnet-4.6                # ✗ Wrong (missing provider)
 ```
 

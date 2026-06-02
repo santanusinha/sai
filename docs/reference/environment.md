@@ -222,48 +222,66 @@ export AZURE_API_VERSION=2024-10-21
 
 ---
 
-## Copilot Proxy Provider
+## Copilot Provider
 
-Configuration for GitHub Copilot via [copilot-proxy](https://github.com/your-org/copilot-proxy).
+Configuration for GitHub Copilot via direct API integration.
 
-### COPILOT_PROXY_ENDPOINT
+### Authentication
 
-**Description**: URL for copilot-proxy server  
+**Setup**: Authenticate once using copilot-api CLI:
+
+```bash
+npx copilot-api auth
+```
+
+This stores your GitHub OAuth token at `~/.local/share/copilot-api/github_token`.
+
+**No environment variables required** - SAI reads the token automatically from the file.
+
+### COPILOT_ENDPOINT (optional)
+
+**Description**: Custom endpoint for GitHub Copilot API (for Business/Enterprise)  
 **Required**: No  
-**Default**: `http://localhost:4141`  
+**Default**: `https://api.githubcopilot.com`  
 
 ```bash
-export COPILOT_PROXY_ENDPOINT=http://localhost:4141
+export COPILOT_ENDPOINT=https://your-enterprise-copilot-endpoint
 ```
 
-**Setup**:
+**When to use**:
 
-1. Install and run [copilot-proxy](https://github.com/your-org/copilot-proxy)
-2. Authenticate with GitHub Copilot
-3. Start the proxy server (defaults to port 4141)
-4. SAI will automatically connect to the proxy
+- GitHub Copilot Business or Enterprise with custom endpoints
+- On-premises GitHub Enterprise Server deployments
+- Custom proxy configurations
 
-**Custom configurations**:
+**Models available via Copilot**:
 
-```bash
-# Custom port
-export COPILOT_PROXY_ENDPOINT=http://localhost:8080
-
-# Remote proxy server
-export COPILOT_PROXY_ENDPOINT=https://copilot-proxy.internal.company.com
-```
-
-**Models available via Copilot Proxy**:
-
-- `copilot-proxy/claude-sonnet-4.6` (Anthropic Claude Sonnet)
-- `copilot-proxy/claude-haiku-4.5` (Anthropic Claude Haiku, default)
-- `copilot-proxy/gpt-4o` (OpenAI GPT-4o)
-- `copilot-proxy/gpt-4o-mini` (OpenAI GPT-4o Mini)
-- `copilot-proxy/gemini-3.1-pro-preview` (Google Gemini Pro)
+- `copilot/claude-sonnet-4.6` (Anthropic Claude Sonnet, most capable)
+- `copilot/claude-haiku-4.5` (Anthropic Claude Haiku, fast, default)
+- `copilot/gpt-4o` (OpenAI GPT-4o)
+- `copilot/gpt-4o-mini` (OpenAI GPT-4o Mini)
+- `copilot/o1-mini` (OpenAI o1-mini)
+- `copilot/o1-preview` (OpenAI o1-preview)
+- `copilot/gemini-2.0-flash-exp` (Google Gemini 2.0 Flash)
 
 !!! tip "GitHub Copilot Subscription"
-    Using copilot-proxy requires an active GitHub Copilot subscription. This provides cost-effective access to multiple frontier models.
+    Requires an active GitHub Copilot subscription. This provides cost-effective access to multiple frontier models through a single subscription.
 
+!!! info "No Proxy Server Required"
+    SAI connects directly to GitHub Copilot API. No need to run a separate proxy server.
+
+**Troubleshooting**:
+
+```bash
+# Check if token exists
+ls -la ~/.local/share/copilot-api/github_token
+
+# Re-authenticate if needed
+npx copilot-api auth
+
+# Test connection
+java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-haiku-4.5 -i "test"
+```
 ---
 
 ## General Variables
@@ -272,18 +290,18 @@ export COPILOT_PROXY_ENDPOINT=https://copilot-proxy.internal.company.com
 
 **Description**: Default LLM model to use  
 **Required**: No  
-**Default**: `copilot-proxy/claude-haiku-4.5`  
+**Default**: `copilot/claude-haiku-4.5`  
 **Format**: `<provider>/<model-name>`
 
 ```bash
-export MODEL=copilot-proxy/claude-sonnet-4.6
+export MODEL=copilot/claude-sonnet-4.6
 ```
 
 **Provider prefixes**:
 
 - `openai/` - OpenAI models (requires OPENAI_API_KEY)
 - `azure/` - Azure OpenAI models (requires AZURE_ENDPOINT and AZURE_API_KEY)
-- `copilot-proxy/` - GitHub Copilot via proxy (requires copilot-proxy running)
+- `copilot/` - GitHub Copilot direct (requires GitHub token via `npx copilot-api auth`)
 
 **Examples**:
 
@@ -297,10 +315,10 @@ export MODEL=openai/o1-preview
 export MODEL=azure/gpt-4o-deployment
 export MODEL=azure/my-claude-deployment
 
-# Copilot Proxy
-export MODEL=copilot-proxy/claude-sonnet-4.6
-export MODEL=copilot-proxy/gpt-4o
-export MODEL=copilot-proxy/gemini-3.1-pro-preview
+# Copilot
+export MODEL=copilot/claude-sonnet-4.6
+export MODEL=copilot/gpt-4o
+export MODEL=copilot/gemini-2.0-flash-exp
 ```
 
 !!! note "Override Priority"
@@ -348,19 +366,20 @@ AZURE_API_KEY=your_azure_api_key_here
 MODEL=azure/gpt-4o-deployment
 ```
 
-### .env Template for GitHub Copilot Proxy
+### .env Template for GitHub Copilot
 
 Create `~/.config/sai/.env`:
 
 ```bash
-# Copilot Proxy Configuration (requires copilot-proxy running)
-# Default endpoint is http://localhost:4141
+# GitHub Copilot Configuration
+# Authentication: Run `npx copilot-api auth` (one-time setup)
+# Token is stored at ~/.local/share/copilot-api/github_token
 
-# Optional: Custom proxy endpoint
-# COPILOT_PROXY_ENDPOINT=http://localhost:4141
+# Optional: Custom endpoint (for Business/Enterprise)
+# COPILOT_ENDPOINT=https://api.githubcopilot.com
 
 # Default model
-MODEL=copilot-proxy/claude-sonnet-4.6
+MODEL=copilot/claude-sonnet-4.6
 ```
 
 ### .env Template for Multi-Provider Setup
@@ -378,11 +397,11 @@ OPENAI_API_KEY=sk-proj-your_openai_key
 AZURE_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_API_KEY=your_azure_key
 
-# Copilot Proxy (requires copilot-proxy running)
-COPILOT_PROXY_ENDPOINT=http://localhost:4141
+# GitHub Copilot (requires `npx copilot-api auth` one-time setup)
+# COPILOT_ENDPOINT=https://api.githubcopilot.com
 
 # Default model (can be switched with --model flag)
-MODEL=copilot-proxy/claude-haiku-4.5
+MODEL=copilot/claude-haiku-4.5
 
 # Optional: Helicone observability for OpenAI
 # OPENAI_EXTRA_HEADERS=Helicone-Auth:Bearer sk-helicone-xyz
@@ -407,12 +426,13 @@ Later sources override earlier ones, and command-line flags override all environ
 export MODEL=openai/gpt-4
 
 # ~/.config/sai/.env
-MODEL=copilot-proxy/claude-haiku-4.5
+# ~/.config/sai/.env
+MODEL=copilot/claude-haiku-4.5
 
 # Command line
-sai --model=copilot-proxy/claude-sonnet-4.6 "Hello"
+sai --model=copilot/claude-sonnet-4.6 "Hello"
 
-# Result: Uses copilot-proxy/claude-sonnet-4.6 (CLI flag wins)
+# Result: Uses copilot/claude-sonnet-4.6 (CLI flag wins)
 ```
 
 ---
@@ -523,22 +543,36 @@ cat ~/.config/sai/.env
 sai --debug "Test message"
 ```
 
-### Copilot Proxy Connection Failed
+### Copilot Authentication Failed
 
-**Error**: `Connection refused to http://localhost:4141`
+**Error**: `Could not find GitHub token` or `401 Unauthorized`
 
 **Solution**:
 
-1. Verify copilot-proxy is running:
+1. Authenticate with GitHub Copilot:
 
 ```bash
-curl http://localhost:4141/health
+npx copilot-api auth
 ```
 
-2. Check proxy logs for errors
-3. Restart copilot-proxy if needed
-4. Verify COPILOT_PROXY_ENDPOINT matches actual port
+2. Verify token file exists:
 
+```bash
+ls -la ~/.local/share/copilot-api/github_token
+```
+
+3. If token expired, re-authenticate:
+
+```bash
+rm ~/.local/share/copilot-api/github_token
+npx copilot-api auth
+```
+
+4. Test connection:
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-haiku-4.5 "test"
+```
 ---
 
 ## See Also

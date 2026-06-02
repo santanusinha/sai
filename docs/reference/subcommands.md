@@ -46,9 +46,9 @@ sai list-sessions --data-dir=/custom/path/to/data
 ```
 Session ID              Created              Last Modified        Messages  Persona      Model
 ----------------------------------------------------------------------------------------------
-docs-2024-01-15        2024-01-15 09:30:15  2024-01-15 14:22:30  42        sai-coder    copilot-proxy/claude-sonnet-4.6
-review-abc123          2024-01-14 16:45:00  2024-01-15 10:15:20  15        sai-reviewer copilot-proxy/gpt-4o
-testing-session        2024-01-13 11:20:10  2024-01-14 08:30:45  8         sai-agent    copilot-proxy/claude-haiku-4.5
+docs-2024-01-15        2024-01-15 09:30:15  2024-01-15 14:22:30  42        sai-coder    copilot/claude-sonnet-4.6
+review-abc123          2024-01-14 16:45:00  2024-01-15 10:15:20  15        sai-reviewer copilot/gpt-4o
+testing-session        2024-01-13 11:20:10  2024-01-14 08:30:45  8         sai-agent    copilot/claude-haiku-4.5
 ```
 
 ---
@@ -99,7 +99,7 @@ Created:        2024-01-15 09:30:15
 Last Modified:  2024-01-15 14:22:30
 Messages:       42 (21 user, 21 assistant)
 Persona:        sai-coder
-Model:          copilot-proxy/claude-sonnet-4.6
+Model:          copilot/claude-sonnet-4.6
 
 First Message (user, 2024-01-15 09:30:15):
 -----------------------------------------
@@ -312,7 +312,7 @@ Size: 124.5 KB (42 messages)
   "persona": {
     "agentId": "sai-coder",
     "name": "Sai Coder",
-    "model": "copilot-proxy/claude-sonnet-4.6"
+    "model": "copilot/claude-sonnet-4.6"
   },
   "messages": [
     {

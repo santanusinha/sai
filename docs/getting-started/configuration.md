@@ -10,7 +10,7 @@ SAI supports three types of model providers:
 |----------|-------------|----------|
 | **openai** | OpenAI API and compatible endpoints | OpenAI, Cerebras, OpenRouter, etc. |
 | **azure** | Azure OpenAI Service | Enterprise Azure deployments |
-| **copilot-proxy** | GitHub Copilot via proxy | Using Copilot through [copilot-api](https://github.com/ericc-ch/copilot-api) |
+| **copilot** | GitHub Copilot direct integration | Using GitHub Copilot with your subscription |
 
 ## Model Selection
 
@@ -23,7 +23,7 @@ Models are specified in the format: `<provider>/<model-name>`
 java -jar target/sai-1.0-SNAPSHOT.jar --model openai/gpt-4o
 
 # Short form
-java -jar target/sai-1.0-SNAPSHOT.jar -m copilot-proxy/claude-sonnet-4.6
+java -jar target/sai-1.0-SNAPSHOT.jar -m copilot/claude-sonnet-4.6
 ```
 
 ### Persona File
@@ -37,7 +37,7 @@ model: azure/gpt-4.1
 
 ### Default
 
-If no model is specified, SAI defaults to: **`copilot-proxy/claude-haiku-4.5`**
+If no model is specified, SAI defaults to: **`copilot/claude-haiku-4.5`**
 
 ## OpenAI Configuration
 
@@ -121,35 +121,81 @@ AZURE_API_VERSION=2024-10-21
 java -jar target/sai-1.0-SNAPSHOT.jar --model azure/gpt-4o
 ```
 
-## Copilot Proxy Configuration
+## Copilot Configuration
 
-For GitHub Copilot via [copilot-api](https://github.com/ericc-ch/copilot-api) proxy.
+For direct GitHub Copilot integration (no proxy server required).
 
 ### Prerequisites
 
-1. Install and run copilot-api proxy:
+1. Authenticate with GitHub Copilot:
    ```bash
-   npm install -g copilot-api
-   copilot-api
+   npx copilot-api auth
    ```
 
-2. The proxy runs on `http://localhost:4141` by default
+2. This stores your GitHub OAuth token at:
+   ```
+   ~/.local/share/copilot-api/github_token
+   ```
 
-### Optional Environment Variables
+3. **No server needed** - SAI connects directly to GitHub Copilot API
 
-```bash
-# Only needed if proxy runs on different endpoint
-export COPILOT_PROXY_ENDPOINT=http://localhost:4141
+### Environment Variables
+
+No environment variables required! Authentication token is read automatically from:
+```
+~/.local/share/copilot-api/github_token
 ```
 
 ### Usage
 
 ```bash
-# Default (uses copilot-proxy/claude-haiku-4.5)
+# Default (uses copilot/claude-haiku-4.5)
 java -jar target/sai-1.0-SNAPSHOT.jar
 
 # Or specify model explicitly
-java -jar target/sai-1.0-SNAPSHOT.jar --model copilot-proxy/gpt-4o
+java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/gpt-4o
+java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-sonnet-4.6
+```
+
+### Available Models
+
+- `copilot/claude-sonnet-4.6` - Anthropic Claude Sonnet (most capable)
+- `copilot/claude-haiku-4.5` - Anthropic Claude Haiku (fast, default)
+- `copilot/gpt-4o` - OpenAI GPT-4o
+- `copilot/gpt-4o-mini` - OpenAI GPT-4o Mini
+- `copilot/o1-mini` - OpenAI o1-mini
+- `copilot/o1-preview` - OpenAI o1-preview
+- `copilot/gemini-2.0-flash-exp` - Google Gemini 2.0 Flash
+
+### Enterprise/Business Setup
+
+For GitHub Copilot Business or Enterprise:
+
+1. Set custom endpoint (if required):
+   ```bash
+   export COPILOT_ENDPOINT=https://your-enterprise-endpoint
+   ```
+
+2. Token location remains the same:
+   ```
+   ~/.local/share/copilot-api/github_token
+   ```
+
+### Troubleshooting
+
+**Error: Could not find GitHub token**
+
+Run authentication:
+```bash
+npx copilot-api auth
+```
+
+**Error: 401 Unauthorized**
+
+Token may have expired. Re-authenticate:
+```bash
+rm ~/.local/share/copilot-api/github_token
+npx copilot-api auth
 ```
 
 ## Directory Structure
@@ -225,7 +271,7 @@ When the same setting is configured in multiple places, SAI uses this priority (
 1. **Command-line flags** (--model, --config-dir, etc.)
 2. **Environment variables** (OPENAI_API_KEY, etc.)
 3. **Persona file** (model, skills, etc.)
-4. **Defaults** (copilot-proxy/claude-haiku-4.5)
+4. **Defaults** (copilot/claude-haiku-4.5)
 
 ## Verify Configuration
 
@@ -254,14 +300,14 @@ If configured correctly, you should get a response from the AI model.
 !!! tip "Solution"
     - Verify your API key is correct and active
     - Check for leading/trailing spaces in environment variables
-    - Ensure you're using the right provider (openai vs azure vs copilot-proxy)
+    - Ensure you're using the right provider (openai vs azure vs copilot)
 
 ### Connection Errors
 
 **Problem:** `Connection refused` or `Timeout`
 
 !!! tip "Solution"
-    - For copilot-proxy: Ensure the proxy is running (`copilot-api`)
+    - For copilot: Ensure the proxy is running (`copilot-api`)
     - For custom endpoints: Verify the OPENAI_ENDPOINT URL is correct
     - Check your firewall/network settings
 

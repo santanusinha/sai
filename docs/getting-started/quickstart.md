@@ -94,7 +94,7 @@ SAI > /help
 SAI > /model
 
 # Switch model mid-session
-SAI > /model copilot-proxy/claude-sonnet-4.6
+SAI > /model copilot/claude-sonnet-4.6
 
 # Load a different persona
 SAI > /persona reviewer
@@ -231,7 +231,7 @@ SAI > Write a README section explaining the configuration options
 1. `~/.config/sai/.env` has the right credentials
 2. API key is valid and has credits
 3. Network connection is working
-4. For copilot-proxy: the proxy is running
+4. For copilot: the proxy is running
 
 **Debug:**
 

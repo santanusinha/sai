@@ -26,15 +26,13 @@ import io.github.sashirestela.openai.SimpleOpenAI;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
 import io.github.sashirestela.openai.service.ChatCompletionServices;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 
 @Slf4j
-@AllArgsConstructor(access = AccessLevel.PUBLIC)
 public class ConfigurableProviderFactory implements ChatCompletionServiceFactory {
+
     private static final RetryConfig RETRY_CONFIG = RetryConfig.builder()
             .maxAttempts(1) // disabling implicit retries by default for tests
             .build();
@@ -44,11 +42,32 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         public static final String AZURE = "azure";
         public static final String OPENAI = "openai";
         public static final String COPILOT_PROXY = "copilot-proxy";
+        public static final String COPILOT = "copilot";
     }
 
     private final String provider;
     private final ObjectMapper mapper;
     private final OkHttpClient okHttpClient;
+
+    /**
+     * Lazily initialised when provider == "copilot"; held for token-refresh lifetime.
+     */
+    private CopilotDirectProvider copilotDirectProvider;
+
+    public ConfigurableProviderFactory(String provider, ObjectMapper mapper, OkHttpClient okHttpClient) {
+        this.provider = provider;
+        this.mapper = mapper;
+        this.okHttpClient = okHttpClient;
+
+        if (Providers.COPILOT.equals(provider)) {
+            try {
+                this.copilotDirectProvider = new CopilotDirectProvider(mapper, okHttpClient, RETRY_CONFIG);
+            }
+            catch (java.io.IOException e) {
+                throw new IllegalStateException("Failed to initialise Copilot direct provider", e);
+            }
+        }
+    }
 
     @Override
     public ChatCompletionServices get(String modelName) {
@@ -57,6 +76,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
             case Providers.AZURE -> azureModel(modelName);
             case Providers.OPENAI -> openAIModel(modelName);
             case Providers.COPILOT_PROXY -> copilotProxyModel(modelName);
+            case Providers.COPILOT -> copilotDirectProvider.get(modelName);
             default -> throw new IllegalArgumentException("Unsupported provider: " + provider);
         };
     }

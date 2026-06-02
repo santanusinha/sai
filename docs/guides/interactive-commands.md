@@ -48,15 +48,15 @@ Get or set the active model for the current session.
 ```
 # Show the current model
 SAI > /model
-Current model: copilot-proxy/claude-haiku-4.5
+Current model: copilot/claude-haiku-4.5
 
 # Switch to a different model
 SAI > /model openai/gpt-4
 Model switched to: openai/gpt-4
 
 # Another example
-SAI > /model copilot-proxy/claude-sonnet-4.6
-Model switched to: copilot-proxy/claude-sonnet-4.6
+SAI > /model copilot/claude-sonnet-4.6
+Model switched to: copilot/claude-sonnet-4.6
 ```
 
 The model change takes effect immediately — subsequent queries in the same session use the new model.
@@ -72,11 +72,11 @@ Current persona: Sai Agent
 
 # Load a persona by name (looked up in ~/.config/sai/persona/)
 SAI > /persona reviewer
-Persona loaded: Code Reviewer (model: copilot-proxy/claude-sonnet-4.6)
+Persona loaded: Code Reviewer (model: copilot/claude-sonnet-4.6)
 
 # Load a persona from a relative path
 SAI > /persona examples/personas/basic.yaml
-Persona loaded: Basic Agent (model: copilot-proxy/claude-haiku-4.5)
+Persona loaded: Basic Agent (model: copilot/claude-haiku-4.5)
 ```
 
 Loading a persona also switches the model to whichever model is defined in that persona file (if any).

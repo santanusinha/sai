@@ -6,7 +6,7 @@ This page documents all command-line options available in SAI. Options can be sp
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--model` | `-m` | AI model to use | `copilot-proxy/claude-haiku-4.5` |
+| `--model` | `-m` | AI model to use | `copilot/claude-haiku-4.5` |
 | `--persona` | `-p` | Persona configuration file | - |
 | `--session-id` | `-s` | Session identifier | Auto-generated |
 | `--input` | `-i` | Input file or command | - |
@@ -28,13 +28,13 @@ Specifies the AI model to use for the session.
 
 **Format:** `<provider>/<model-name>`
 
-**Default:** `copilot-proxy/claude-haiku-4.5`
+**Default:** `copilot/claude-haiku-4.5`
 
 **Supported Providers:**
 
 - `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
 - `azure` - Azure OpenAI Service
-- `copilot-proxy` - GitHub Copilot proxy
+- `copilot` - GitHub Copilot direct integration
 
 **Examples:**
 
@@ -50,12 +50,12 @@ Specifies the AI model to use for the session.
 
 === "Copilot Claude"
     ```bash
-    sai -m copilot-proxy/claude-sonnet-3.5
+    sai -m copilot/claude-sonnet-4.6
     ```
 
 === "Default Model"
     ```bash
-    sai  # Uses copilot-proxy/claude-haiku-4.5
+    sai  # Uses copilot/claude-haiku-4.5
     ```
 
 !!! tip "Model Selection Priority"
@@ -63,7 +63,7 @@ Specifies the AI model to use for the session.
     
     1. Command-line `--model` flag
     2. Persona configuration `model` field
-    3. Default: `copilot-proxy/claude-haiku-4.5`
+    3. Default: `copilot/claude-haiku-4.5`
 
 ---
 
@@ -399,7 +399,7 @@ Displays the SAI version number.
 
 === "Quick Query"
     ```bash
-    sai -m copilot-proxy/claude-sonnet-3.5 \
+    sai -m copilot/claude-sonnet-4.6 \
         -i "What's in this directory?"
     ```
 
