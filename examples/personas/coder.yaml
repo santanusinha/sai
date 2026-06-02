@@ -31,6 +31,19 @@ mcp:
       #   - trace_call_path
       #   - detect_changes
       #   - get_code_snippet
+    exa-search:
+      type: http
+      url: https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY}
+      # Timeout in milliseconds (30 seconds for research queries)
+      timeout: 30000
+      # Optional: Headers if needed for authentication
+      # headers:
+      #   Authorization: "Bearer ${EXA_API_KEY}"
+      # Whitelist specific EXA tools for focused research capabilities
+      exposedTools:
+        - web_search_exa
+        - get_code_context_exa
+
 
 # Skills
 # sonar-cli: runs SonarCloud analysis on the current branch and reports issues
