@@ -250,7 +250,34 @@ java -jar target/sai-1.0-SNAPSHOT.jar --persona examples/personas/basic.yaml
 
 # Load from absolute path
 java -jar target/sai-1.0-SNAPSHOT.jar --persona /path/to/custom-persona.yaml
+### Request Transforms
+
+Personas can declare `requestTransforms` to mutate the JSON payload of outgoing `/v1/chat/completions` requests using [Jolt](https://github.com/bazaarvoice/jolt) transforms. This is useful for:
+
+- Injecting provider-specific fields (e.g., `chat_template_kwargs.thinking = false`)
+- Removing unwanted fields from the payload
+- Modifying existing fields
+
+Supported operations: `default`, `add`, `remove`, `modify`, `shift`, `cardinality`, `sort`.
+
+Example in a persona YAML:
+
+```yaml
+agentId: my-agent
+name: My Agent
+model: openai/gpt-4
+requestTransforms:
+  - operation: "default"
+    spec:
+      chat_template_kwargs:
+        thinking: false
+  - operation: "remove"
+    spec:
+      unwanted_field: ""
 ```
+
+The transforms are applied in order by the `RequestTransformInterceptor` before the request is sent to the model provider.
+
 
 Resume an existing session by ID:
 

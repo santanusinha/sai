@@ -45,6 +45,7 @@ import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
+import io.appform.sai.transform.RequestTransformValidator;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
@@ -174,6 +175,16 @@ public class SaiCommand implements Callable<Integer> {
         catch (Exception e) {
             log.error("Error loading persona: {}", persona, e);
             System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
+            return 1;
+        }
+        try {
+            if (agentConfig.getRequestTransforms() != null) {
+                RequestTransformValidator.validate(agentConfig.getRequestTransforms());
+            }
+        }
+        catch (IllegalArgumentException e) {
+            log.error("Invalid requestTransforms in persona: {}", persona, e);
+            System.err.println("Error: Invalid requestTransforms configuration: " + e.getMessage());
             return 1;
         }
         final var modelPointer = Strings.isNullOrEmpty(model)

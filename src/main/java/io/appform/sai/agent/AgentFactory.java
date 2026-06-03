@@ -26,7 +26,6 @@ import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
-import com.phonepe.sentinelai.models.TokenCountingConfig;
 import com.phonepe.sentinelai.toolbox.mcp.ComposingMCPToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.HttpToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders.ConfiguredHttpTool;
@@ -34,8 +33,10 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.InMemoryHttpToolSour
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 
 import io.appform.sai.AgentConfig;
+import io.appform.sai.ConfigurableProviderFactory;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
+import io.appform.sai.transform.RequestTransformInterceptor;
 
 import java.nio.file.Paths;
 import java.util.List;
@@ -89,18 +90,19 @@ public class AgentFactory {
         final var modelSettings = Objects.requireNonNullElseGet(config.getModelSettings(),
                                                                 this::defaultModelSettings)
                 .withParallelToolCalls(false); //To keep context usage and console output sane
+        final var modelOptions = Objects.requireNonNullElse(config.getModelOptions(), SimpleOpenAIModelOptions.DEFAULT);
+
+        final var effectiveProviderFactory = resolveProviderFactory(config);
+
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorService)
                 .mapper(mapper)
                 .eventBus(eventBus)
                 .modelSettings(modelSettings)
                 .model(new SimpleOpenAIModel<>(modelName,
-                                               modelProviderFactory,
+                                               effectiveProviderFactory,
                                                mapper,
-                                               SimpleOpenAIModelOptions
-                                                       .builder()
-                                                       .tokenCountingConfig(TokenCountingConfig.DEFAULT)
-                                                       .build()))
+                                               modelOptions))
                 .outputGenerationMode(config.getOutputGenerationMode())
                 .autoCompactionSetup(AutoCompactionSetup.builder()
                         .compactionTriggerThresholdPercentage(50)
@@ -166,5 +168,33 @@ public class AgentFactory {
             return;
         }
         agent.registerToolbox(new ComposingMCPToolBox(mapper, config.getMcp(), "mcp"));
+    }
+
+    /**
+     * Resolves the {@link ChatCompletionServiceFactory} to use for this agent.
+     *
+     * <p>If the agent config contains {@code requestTransforms}, a new {@link OkHttpClient}
+     * is built with a {@link RequestTransformInterceptor} and a fresh
+     * {@link ConfigurableProviderFactory} is created. Otherwise the shared factory is reused.
+     */
+    private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config) {
+        if (config.getRequestTransforms() == null || config.getRequestTransforms().isEmpty()) {
+            return modelProviderFactory;
+        }
+
+        log.info("Applying {} request transform(s) for agent {}",
+                 config.getRequestTransforms().size(),
+                 config.getAgentId());
+
+        var clientWithTransforms = httpClient.newBuilder()
+                .addInterceptor(new RequestTransformInterceptor(mapper, config.getRequestTransforms()))
+                .build();
+
+        if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
+            return new ConfigurableProviderFactory(factory.getProvider(), mapper, clientWithTransforms);
+        }
+
+        log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
+        return modelProviderFactory;
     }
 }

@@ -11,21 +11,23 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 ├── pom.xml                # Maven build configuration
 ├── java-format.xml        # Eclipse formatter rules for Spotless
 ├── license.header         # Apache 2.0 license header template
-├── examples/
-│   └── personas/          # Example persona YAML files
-└── src/
-    ├── main/
-    │   ├── java/io/appform/sai/
-    │   │   ├── agent/     # Agent instantiation and MCP configuration
-    │   │   ├── cli/       # Client-side CLI command handlers (e.g. ! for shell)
-    │   │   │   ├── handlers/  # CliCommandHandler implementations (ShellCommandHandler, SlashCommandHandler)
-    │   │   │   └── slash/     # Slash-command subsystem (interactive /cmd routing via Picocli)
-    │   │   │       └── commands/  # Slash sub-commands: /help, /model, /persona
-    │   │   ├── commands/  # CLI subcommands (list, delete sessions)
-    │   │   ├── config/    # Persona/config file loaders
-    │   │   ├── models/    # Data models (Session, Actor, Severity)
-    │   │   ├── skills/    # Agent Skills extension
-    │   │   └── tools/     # Tool implementations (Bash, CoreToolBox)
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/io/appform/sai/
+    │   │   │   ├── agent/     # Agent instantiation and MCP configuration
+    │   │   │   ├── cli/       # Client-side CLI command handlers (e.g. ! for shell)
+    │   │   │   │   ├── handlers/  # CliCommandHandler implementations (ShellCommandHandler, SlashCommandHandler)
+    │   │   │   │   └── slash/     # Slash-command subsystem (interactive /cmd routing via Picocli)
+    │   │   │   │       └── commands/  # Slash sub-commands: /help, /model, /persona
+    │   │   │   ├── commands/  # CLI subcommands (list, delete sessions)
+    │   │   │   ├── config/    # Persona/config file loaders
+    │   │   │   ├── models/    # Data models (Session, Actor, Severity)
+    │   │   │   ├── skills/    # Agent Skills extension
+    │   │   │   ├── transform/ # Jolt-based request payload transforms
+    │   │   │   └── tools/     # Tool implementations (Bash, CoreToolBox)
+    │   │   └── resources/     # Logging config (logback.xml)
+    │   └── test/
+    │       └── java/io/appform/sai/  # Test classes
     │   └── resources/     # Logging config (logback.xml)
     └── test/
         └── java/io/appform/sai/  # Test classes
@@ -40,6 +42,10 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 
 ## Key Concepts
 
+- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot` routes through an external proxy server.
+- **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
+- **Session storage**: File-system backed in user's local state directory
+- **Request Transforms**: `AgentConfig.requestTransforms` applies Jolt transforms to outgoing `/v1/chat/completions` payloads. See `transform/` package.
 - **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot` routes through an external proxy server.
 - **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
 - **Session storage**: File-system backed in user's local state directory

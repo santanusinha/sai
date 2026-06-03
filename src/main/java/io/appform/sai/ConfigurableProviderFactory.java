@@ -26,6 +26,7 @@ import io.github.sashirestela.openai.SimpleOpenAI;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
 import io.github.sashirestela.openai.service.ChatCompletionServices;
 
+import lombok.Getter;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -45,6 +46,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         public static final String COPILOT = "copilot";
     }
 
+    @Getter
     private final String provider;
     private final ObjectMapper mapper;
     private final OkHttpClient okHttpClient;

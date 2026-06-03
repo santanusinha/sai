@@ -18,8 +18,11 @@ package io.appform.sai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.OutputGenerationMode;
+import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.toolbox.mcp.config.MCPConfiguration;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders;
+
+import io.appform.sai.transform.RequestTransform;
 
 import java.util.List;
 import java.util.Map;
@@ -70,10 +73,12 @@ public class AgentConfig {
     @Default
     ModelSettings modelSettings = DEFAULT_MODEL_SETTINGS;
 
+    @Default
+    SimpleOpenAIModelOptions modelOptions = SimpleOpenAIModelOptions.DEFAULT;
+
     MCPConfiguration mcp;
 
     Map<String, HttpToolReaders.ConfiguredUpstream> httpTools;
-
     String singleSkill;
 
     @Nullable
@@ -81,4 +86,7 @@ public class AgentConfig {
 
     @Nullable
     List<String> skillNames;
+
+    @Nullable
+    List<RequestTransform> requestTransforms;
 }

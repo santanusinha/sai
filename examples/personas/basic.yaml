@@ -7,6 +7,14 @@ modelSettings:
 prompt: |
   You are a helpful assistant for the command line. Be concise and actionable.
   Prefer bullet points for multi-step answers. Confirm destructive actions.
-  When working on software related work. Read AGENTS.md and README.md to
-  understand the software once.
+# Example: Add extra parameters to outgoing LLM requests using Jolt transforms
+# requestTransforms:
+#   - operation: "default"
+#     spec:
+#       chat_template_kwargs:
+#         thinking: false
+#   - operation: "remove"
+#     spec:
+#       unwanted_field: ""
+
 # model: gemini-3-pro-preview  # Optional. If omitted, falls back to env MODEL or default.
