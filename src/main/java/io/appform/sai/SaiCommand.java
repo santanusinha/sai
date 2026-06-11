@@ -24,6 +24,7 @@ import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.QueryDirection;
+import com.phonepe.sentinelai.session.SessionExtraDataOperator;
 import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.CommandProcessor.CommandType;
@@ -58,6 +59,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -198,7 +200,12 @@ public class SaiCommand implements Callable<Integer> {
         log.info("Using model provider: {}, model name: {}", provider, modelName);
         final var modelProviderFactory = new ConfigurableProviderFactory(provider, mapper, okHttpClient);
 
-        final var sessionStore = new FileSystemSessionStore(sessionDataPath.toString(), mapper, 1);
+        final var sessionStore = FileSystemSessionStore.builder()
+                .baseDir(sessionDataPath.toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .extraDataOperator(SessionExtraDataOperator.fixed(Map.of("workDir", settings.getWorkDir())))
+                .build();
         if (settings.isNoSession()) {
             sessionStore.saveSession(SessionSummary.builder()
                     .sessionId(effectiveSessionId)

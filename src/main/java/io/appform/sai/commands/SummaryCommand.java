@@ -73,9 +73,11 @@ public class SummaryCommand implements Callable<Integer> {
         }
 
         final var mapper = JsonUtils.createMapper();
-        final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
-                                                            mapper,
-                                                            1);
+        final var sessionStore = FileSystemSessionStore.builder()
+                .baseDir(dataDirPath.toAbsolutePath().normalize().toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build();
 
         final var sessionSummaryOpt = sessionStore.session(sessionId);
 

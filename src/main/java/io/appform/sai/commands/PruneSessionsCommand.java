@@ -73,9 +73,11 @@ public class PruneSessionsCommand implements Callable<Integer> {
         }
 
         final var mapper = JsonUtils.createMapper();
-        final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
-                                                            mapper,
-                                                            1);
+        final var sessionStore = FileSystemSessionStore.builder()
+                .baseDir(dataDirPath.toAbsolutePath().normalize().toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build();
 
         final var sessionsScrollable = sessionStore.sessions(1000, null, QueryDirection.NEWER);
         final var sessions = sessionsScrollable.getItems();

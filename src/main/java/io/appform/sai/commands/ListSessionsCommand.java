@@ -61,9 +61,11 @@ public class ListSessionsCommand implements Callable<Integer> {
         }
 
         final var mapper = JsonUtils.createMapper();
-        final var sessionStore = new FileSystemSessionStore(dataDirPath.toAbsolutePath().normalize().toString(),
-                                                            mapper,
-                                                            1);
+        final var sessionStore = FileSystemSessionStore.builder()
+                .baseDir(dataDirPath.toAbsolutePath().normalize().toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build();
 
         // Fetch all sessions, oldest first
         final var sessionsScrollable = sessionStore.sessions(Integer.MAX_VALUE, null, QueryDirection.NEWER);

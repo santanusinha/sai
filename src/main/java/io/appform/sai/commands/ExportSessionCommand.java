@@ -142,11 +142,11 @@ public class ExportSessionCommand implements Callable<Integer> {
         }
 
         final var mapper = JsonUtils.createMapper();
-        final var sessionPath = dataDirPath.toAbsolutePath().normalize().toString();
-        final var sessionStore = new FileSystemSessionStore(
-                                                            sessionPath,
-                                                            mapper,
-                                                            1);
+        final var sessionStore = FileSystemSessionStore.builder()
+                .baseDir(dataDirPath.toAbsolutePath().normalize().toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build();
 
         final var sessionSummaryOpt = sessionStore.session(sessionId);
 
