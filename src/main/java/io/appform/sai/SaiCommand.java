@@ -170,6 +170,46 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
+        // On resume: restore model and persona from the saved session extra data.
+        // CLI flags (--model / --persona) always take priority over saved values.
+        if (sessionIdProvided) {
+            final var probeStore = FileSystemSessionStore.builder()
+                    .baseDir(sessionDataPath.toString())
+                    .mapper(mapper)
+                    .cacheSize(1)
+                    .build(); // no extraDataOperator — read-only probe
+            probeStore.session(effectiveSessionId).ifPresent(saved -> {
+                final var savedExtra = saved.getExtra();
+                if (savedExtra == null) {
+                    return; // older session with no extra data — backwards compat
+                }
+                // Restore model only when --model was not supplied on the CLI
+                if (Strings.isNullOrEmpty(model)) {
+                    final var savedModel = (String) savedExtra.get("model");
+                    if (!Strings.isNullOrEmpty(savedModel)) {
+                        model = savedModel;
+                    }
+                }
+                // Restore persona only when --persona was not supplied on the CLI,
+                // and only if the persona file is still resolvable/readable.
+                if (Strings.isNullOrEmpty(persona)) {
+                    final var savedPersona = (String) savedExtra.get("persona");
+                    if (!Strings.isNullOrEmpty(savedPersona)) {
+                        try {
+                            AgentConfigLoader.resolvePersonaPath(savedPersona, settings.getConfigDir());
+                            persona = savedPersona; // file still exists → restore
+                        }
+                        catch (Exception e) {
+                            log.warn("Saved persona '{}' is no longer accessible, using default: {}",
+                                     savedPersona,
+                                     e.getMessage());
+                            // persona stays null → resolveAgentConfig falls back to built-in default
+                        }
+                    }
+                }
+            });
+        }
+
         AgentConfig agentConfig;
         try {
             agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
@@ -204,7 +244,13 @@ public class SaiCommand implements Callable<Integer> {
                 .baseDir(sessionDataPath.toString())
                 .mapper(mapper)
                 .cacheSize(1)
-                .extraDataOperator(SessionExtraDataOperator.fixed(Map.of("workDir", settings.getWorkDir())))
+                .extraDataOperator(SessionExtraDataOperator.fixed(Map.of(
+                                                                         "workDir",
+                                                                         settings.getWorkDir(),
+                                                                         "model",
+                                                                         modelPointer,
+                                                                         "persona",
+                                                                         Objects.requireNonNullElse(persona, ""))))
                 .build();
         if (settings.isNoSession()) {
             sessionStore.saveSession(SessionSummary.builder()
@@ -275,6 +321,16 @@ public class SaiCommand implements Callable<Integer> {
                             .build());
                 }
                 if (sessionIdProvided) {
+                    if (!settings.isHeadless()) {
+                        printer.print(Update.builder()
+                                .actor(Actor.SYSTEM)
+                                .severity(Severity.INFO)
+                                .colour(Printer.Colours.BOLD_YELLOW)
+                                .data("Resumed with \u2014 model: %s, persona: %s"
+                                        .formatted(modelPointer,
+                                                   Strings.isNullOrEmpty(persona) ? "(default)" : persona))
+                                .build());
+                    }
                     final var response = sessionStore.readMessages(effectiveSessionId,
                                                                    Integer.MAX_VALUE,
                                                                    true,

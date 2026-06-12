@@ -94,12 +94,12 @@ public final class AgentConfigLoader {
 
         // 1. Absolute path - use directly
         if (persona.startsWith("/")) {
-            return Paths.get(persona);
+            return resolveWithExtensionFallback(Paths.get(persona).normalize());
         }
 
         // 2. Relative path (contains path separator) - resolve from PWD
         if (persona.contains("/")) {
-            return Paths.get(persona).toAbsolutePath().normalize();
+            return resolveWithExtensionFallback(Paths.get(persona).toAbsolutePath().normalize());
         }
 
         // 3. Simple name - look in {configDir}/persona/
@@ -119,6 +119,33 @@ public final class AgentConfigLoader {
 
         throw new IllegalArgumentException("Persona '" + persona + "' not found. Looked in: " + personaDir
                 + " with extensions: " + SUPPORTED_EXTENSIONS);
+    }
+
+    /**
+     * Returns {@code base} if it exists on disk; otherwise probes each supported extension
+     * (stripping any existing extension first) until a match is found.
+     *
+     * @param base the fully-resolved candidate path (may or may not have an extension)
+     * @return the resolved, existing path
+     * @throws IllegalArgumentException if no variant exists on disk
+     */
+    private static Path resolveWithExtensionFallback(Path base) {
+        if (Files.exists(base)) {
+            return base;
+        }
+        // Strip any extension already on the stem so we can try alternatives
+        final var fileName = base.getFileName().toString();
+        final var dotIndex = fileName.lastIndexOf('.');
+        final var stem = dotIndex >= 0 ? fileName.substring(0, dotIndex) : fileName;
+        final var parent = base.getParent() != null ? base.getParent() : Paths.get(".");
+        for (String ext : SUPPORTED_EXTENSIONS) {
+            final var candidate = parent.resolve(stem + ext);
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalArgumentException("Persona file not found: " + base
+                + ". Tried extensions: " + SUPPORTED_EXTENSIONS);
     }
 
     private static String substituteEnvVars(String content) {
