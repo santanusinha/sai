@@ -22,8 +22,8 @@ mcp:
       # Alternative: specify full path if not on PATH
       # command: /usr/local/bin/codebase-memory-mcp
       # args: []  # No additional arguments needed for MCP server mode
-      # env:      # Optional environment variables
-      #   LOG_LEVEL: debug
+      env:      # Optional environment variables
+        CBM_LOG_LEVEL: none
       # exposedTools:  # Optional: whitelist specific tools (if omitted, all 12 tools are available)
       #   - index_repository
       #   - get_architecture
