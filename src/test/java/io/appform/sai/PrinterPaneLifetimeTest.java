@@ -24,9 +24,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.SneakyThrows;
 
@@ -155,5 +157,24 @@ class PrinterPaneLifetimeTest {
     @AfterEach
     void tearDown() throws IOException {
         printer.close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateContextInfoSetsPersonaAndModelInContextInfo()
+            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        printer.updateContextInfo("myPersona", "claude-opus-4");
+        printer.print(Printer.markIdleStatus());
+        awaitQueueDrain();
+
+        final Field contextInfoField = Printer.class.getDeclaredField("contextInfo");
+        contextInfoField.setAccessible(true);
+        final var ref = (AtomicReference<String>) contextInfoField.get(printer);
+        final var stored = ref.get();
+        assertTrue(stored.contains("myPersona"), "contextInfo should contain persona name");
+        assertTrue(stored.contains("claude-opus-4"), "contextInfo should contain model name");
+
+        assertTrue(printer.getCapture().stream().anyMatch(Printer.Update::isStatusUpdate),
+                   "markIdleStatus should enqueue a status update");
     }
 }

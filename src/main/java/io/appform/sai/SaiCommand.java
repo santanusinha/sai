@@ -282,6 +282,7 @@ public class SaiCommand implements Callable<Integer> {
                 .start()) {
             // Setup rest of the connections
             agent.registerToolbox(new CoreToolBox(printer));
+            printer.updateContextInfo(agentConfig.getName(), modelPointer);
             sessionExtension.onSessionSummarized()
                     .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
                             + "Session compacted with summary: " + Colours.WHITE
@@ -306,7 +307,12 @@ public class SaiCommand implements Callable<Integer> {
                     .mapper(mapper)
                     .agentSkillsExtension(agentSkillsExtension)
                     .build();
-            slashContext.setOnAgentRebuilt(newAgent -> newAgent.registerToolbox(new CoreToolBox(printer)));
+            slashContext.setOnAgentRebuilt(newAgent -> {
+                newAgent.registerToolbox(new CoreToolBox(printer));
+                printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
+                                          slashContext.getCurrentModel().get());
+                printer.print(Printer.markIdleStatus());
+            });
 
             var commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
             final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
