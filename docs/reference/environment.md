@@ -2,6 +2,9 @@
 
 SAI supports configuration through environment variables for LLM provider authentication and settings. Variables can be set in your shell environment or in a `.env` file in the config directory (`~/.config/sai/.env`).
 
+!!! tip "Prefer `settings.yaml` for multi-provider setups"
+    Environment variables are the **fallback** configuration mechanism. For multiple providers, per-model tuning, or modes, use [`settings.yaml`](settings.md) instead — it supports hierarchical provider → model → mode settings with `${ENV}` interpolation. When a provider is defined in both `settings.yaml` and environment variables, the config entry wins.
+
 ## Overview
 
 SAI reads environment variables in the following order (later sources override earlier ones):
@@ -577,6 +580,7 @@ java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-haiku-4.5 "test"
 
 ## See Also
 
+- [Settings Configuration](settings.md) - `settings.yaml` hierarchical provider/model/mode configuration (preferred over env vars)
 - [CLI Options](cli-options.md) - Command-line flags and options
 - [Subcommands](subcommands.md) - Session management commands
 - [Configuration Guide](../getting-started/configuration.md) - Detailed provider setup

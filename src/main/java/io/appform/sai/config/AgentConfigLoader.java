@@ -22,8 +22,6 @@ import com.google.common.base.Strings;
 
 import io.appform.sai.AgentConfig;
 
-import org.apache.commons.text.StringSubstitutor;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -149,6 +147,6 @@ public final class AgentConfigLoader {
     }
 
     private static String substituteEnvVars(String content) {
-        return StringSubstitutor.replace(content, System.getenv());
+        return SettingsConfigLoader.substituteEnvVars(content);
     }
 }

@@ -20,11 +20,15 @@ import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.utils.EnvLoader;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 
+import io.appform.sai.config.ProviderEntry;
+import io.appform.sai.config.SettingsConfig;
 import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
 import io.github.sashirestela.cleverclient.retry.RetryConfig;
 import io.github.sashirestela.openai.SimpleOpenAI;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
 import io.github.sashirestela.openai.service.ChatCompletionServices;
+
+import java.util.Map;
 
 import lombok.Getter;
 import lombok.experimental.UtilityClass;
@@ -50,16 +54,45 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
     private final String provider;
     private final ObjectMapper mapper;
     private final OkHttpClient okHttpClient;
+    private final SettingsConfig settingsConfig;
 
     /**
      * Lazily initialised when provider == "copilot"; held for token-refresh lifetime.
      */
     private CopilotDirectProvider copilotDirectProvider;
 
+    /**
+     * Constructs a factory without a settings config (env-var fallback only).
+     *
+     * <p>This constructor is retained for backward compatibility and for call sites that
+     * do not yet have a loaded {@link SettingsConfig} (e.g.
+     * {@link io.appform.sai.agent.AgentFactory#resolveProviderFactory}
+     * when creating a transform-injected factory).
+     *
+     * @param provider     the provider name
+     * @param mapper       the shared Jackson {@link ObjectMapper}
+     * @param okHttpClient the shared {@link OkHttpClient}
+     */
     public ConfigurableProviderFactory(String provider, ObjectMapper mapper, OkHttpClient okHttpClient) {
+        this(provider, mapper, okHttpClient, null);
+    }
+
+    /**
+     * Constructs a factory with a loaded {@link SettingsConfig} for config-driven providers.
+     *
+     * @param provider       the provider name (e.g. "openai", "azure", "copilot")
+     * @param mapper         the shared Jackson {@link ObjectMapper}
+     * @param okHttpClient   the shared {@link OkHttpClient}
+     * @param settingsConfig the loaded settings.yaml configuration (may be empty for env-var fallback)
+     */
+    public ConfigurableProviderFactory(String provider,
+                                       ObjectMapper mapper,
+                                       OkHttpClient okHttpClient,
+                                       SettingsConfig settingsConfig) {
         this.provider = provider;
         this.mapper = mapper;
         this.okHttpClient = okHttpClient;
+        this.settingsConfig = settingsConfig != null ? settingsConfig : SettingsConfig.builder().build();
 
         if (Providers.COPILOT.equals(provider)) {
             try {
@@ -79,8 +112,57 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
             case Providers.OPENAI -> openAIModel(modelName);
             case Providers.COPILOT_PROXY -> copilotProxyModel(modelName);
             case Providers.COPILOT -> copilotDirectProvider.get(modelName);
-            default -> throw new IllegalArgumentException("Unsupported provider: " + provider);
+            default -> configDrivenProvider(modelName);
         };
+    }
+
+    /**
+     * Applies extra headers from a comma-delimited env-var string (legacy format).
+     *
+     * @param client       the base OkHttpClient
+     * @param extraHeaders comma-delimited "Key:Value,Key2:Value2" string, or null
+     * @return the client with headers injected, or the original client if no headers
+     */
+    private OkHttpClient applyExtraHeaders(OkHttpClient client, String extraHeaders) {
+        if (Strings.isNullOrEmpty(extraHeaders)) {
+            return client;
+        }
+        return client.newBuilder()
+                .addInterceptor(chain -> {
+                    var requestBuilder = chain.request().newBuilder();
+                    for (String header : extraHeaders.split(",")) {
+                        String[] parts = header.split(":", 2);
+                        if (parts.length == 2) {
+                            requestBuilder.addHeader(parts[0].trim(), parts[1].trim());
+                            log.debug("Adding extra header to OpenAI request: {}", header);
+                        }
+                    }
+                    return chain.proceed(requestBuilder.build());
+                })
+                .build();
+    }
+
+    /**
+     * Applies extra headers from a Map (config-driven format).
+     *
+     * @param client       the base OkHttpClient
+     * @param extraHeaders map of header name to value, or null
+     * @return the client with headers injected, or the original client if no headers
+     */
+    private OkHttpClient applyExtraHeadersFromMap(OkHttpClient client, Map<String, String> extraHeaders) {
+        if (extraHeaders == null || extraHeaders.isEmpty()) {
+            return client;
+        }
+        return client.newBuilder()
+                .addInterceptor(chain -> {
+                    var requestBuilder = chain.request().newBuilder();
+                    extraHeaders.forEach((key, value) -> {
+                        requestBuilder.addHeader(key, value);
+                        log.debug("Adding extra header from config: {}:{}", key, value);
+                    });
+                    return chain.proceed(requestBuilder.build());
+                })
+                .build();
     }
 
     private ChatCompletionServices azureModel(String modelName) {
@@ -99,8 +181,82 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                 .build();
     }
 
+    private ChatCompletionServices azureModelFromConfig(ProviderEntry entry, String modelName) {
+        log.debug("Creating Azure ChatCompletionServices from config for provider: {}, model: {}", provider, modelName);
+        final var endpoint = resolveValue(entry.getEndpoint(),
+                                          "AZURE_ENDPOINT",
+                                          "Azure endpoint must be set in settings.yaml or AZURE_ENDPOINT env var");
+        final var apiKey = resolveValue(entry.getApiKey(),
+                                        "AZURE_API_KEY",
+                                        "Azure API key must be set in settings.yaml or AZURE_API_KEY env var");
+        final var apiVersion = resolveValueWithDefault(entry.getApiVersion(), "AZURE_API_VERSION", "2024-10-21");
+        return SimpleOpenAIAzure.builder()
+                .baseUrl(endpoint)
+                .apiKey(apiKey)
+                .apiVersion(apiVersion)
+                .objectMapper(mapper)
+                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
+                .retryConfig(RETRY_CONFIG)
+                .build();
+    }
+
+    /**
+     * Builds {@link ChatCompletionServices} from a {@link ProviderEntry} in settings.yaml.
+     *
+     * @param entry     the provider configuration entry
+     * @param modelName the model name
+     * @return the built {@link ChatCompletionServices}
+     * @throws IllegalArgumentException if the provider type is unsupported
+     */
+    private ChatCompletionServices buildFromConfig(ProviderEntry entry, String modelName) {
+        final var type = entry.getType();
+        if (type == null) {
+            throw new IllegalArgumentException("Provider '" + provider + "' in settings.yaml has no 'type' field. "
+                    + "Set type to 'openai' or 'azure'.");
+        }
+        return switch (type.toLowerCase()) {
+            case Providers.OPENAI -> openAIModelFromConfig(entry, modelName);
+            case Providers.AZURE -> azureModelFromConfig(entry, modelName);
+            default -> throw new IllegalArgumentException(
+                                                          "Unsupported provider type '" + type + "' for provider '"
+                                                                  + provider + "'. Use 'openai' or 'azure'.");
+        };
+    }
+
+    /**
+     * Resolves a provider that is not one of the built-in names (azure/openai/copilot/copilot-proxy).
+     *
+     * <p>Looks up the provider in the loaded {@link SettingsConfig}. If found, builds the
+     * appropriate {@link ChatCompletionServices} based on the provider's {@code type} field.
+     * If not found, falls back to env-var behavior for "openai" and "azure" as a
+     * backward-compatibility measure, or throws for truly unknown providers.
+     *
+     * @param modelName the model name (without provider prefix)
+     * @return the resolved {@link ChatCompletionServices}
+     * @throws IllegalArgumentException if the provider is not found in config and has no env-var fallback
+     */
+    private ChatCompletionServices configDrivenProvider(String modelName) {
+        final var providerEntry = settingsConfig.getProvider(provider);
+        if (providerEntry != null) {
+            return buildFromConfig(providerEntry, modelName);
+        }
+        // Fall back to env-var behavior for known built-in provider types
+        if (Providers.OPENAI.equals(provider)) {
+            return openAIModel(modelName);
+        }
+        if (Providers.AZURE.equals(provider)) {
+            return azureModel(modelName);
+        }
+        throw new IllegalArgumentException("Unsupported provider: " + provider
+                + ". Add it to settings.yaml or use a built-in provider (openai, azure, copilot, copilot-proxy).");
+    }
+
     private ChatCompletionServices copilotProxyModel(String modelName) {
         log.debug("Creating Copilot Proxy ChatCompletionServices for model: {}", modelName);
+        final var providerEntry = settingsConfig.getProvider(Providers.COPILOT_PROXY);
+        if (providerEntry != null) {
+            return openAIModelFromConfig(providerEntry, modelName);
+        }
         final var endpoint = EnvLoader.readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
         return GithubCopilot.builder()
                 .objectMapper(mapper)
@@ -119,22 +275,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         final var projectId = EnvLoader.readEnv("OPENAI_PROJECT_ID", null);
         final var extraHeaders = EnvLoader.readEnv("OPENAI_EXTRA_HEADERS", null);
         log.debug("Using OpenAI endpoint: {}", endpoint);
-        var httpClient = okHttpClient;
-        if (!Strings.isNullOrEmpty(extraHeaders)) {
-            httpClient = okHttpClient.newBuilder()
-                    .addInterceptor(chain -> {
-                        var requestBuilder = chain.request().newBuilder();
-                        for (String header : extraHeaders.split(",")) {
-                            String[] parts = header.split(":", 2);
-                            if (parts.length == 2) {
-                                requestBuilder.addHeader(parts[0].trim(), parts[1].trim());
-                                log.debug("Adding extra header to OpenAI request: {}", header);
-                            }
-                        }
-                        return chain.proceed(requestBuilder.build());
-                    })
-                    .build();
-        }
+        var httpClient = applyExtraHeaders(okHttpClient, extraHeaders);
         return SimpleOpenAI.builder()
                 .baseUrl(endpoint)
                 .apiKey(apiKey)
@@ -146,10 +287,80 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                 .build();
     }
 
+    private ChatCompletionServices openAIModelFromConfig(ProviderEntry entry, String modelName) {
+        log.debug("Creating OpenAI-compatible ChatCompletionServices from config for provider: {}, model: {}",
+                  provider,
+                  modelName);
+        final var endpoint = resolveValue(entry.getEndpoint(),
+                                          "OPENAI_ENDPOINT",
+                                          "OpenAI endpoint must be set in settings.yaml or OPENAI_ENDPOINT env var");
+        final var apiKey = resolveValue(entry.getApiKey(),
+                                        "OPENAI_API_KEY",
+                                        "API key must be set in settings.yaml or OPENAI_API_KEY env var");
+        final var organizationId = resolveValueOrNull(entry.getOrganizationId(), "OPENAI_ORGANIZATION");
+        final var projectId = resolveValueOrNull(entry.getProjectId(), "OPENAI_PROJECT_ID");
+        var httpClient = applyExtraHeadersFromMap(okHttpClient, entry.getExtraHeaders());
+        return SimpleOpenAI.builder()
+                .baseUrl(endpoint)
+                .apiKey(apiKey)
+                .objectMapper(mapper)
+                .organizationId(organizationId)
+                .projectId(projectId)
+                .clientAdapter(new OkHttpClientAdapter(httpClient))
+                .retryConfig(RETRY_CONFIG)
+                .build();
+    }
 
     private String readEnv(String key, String errorMessage) {
         return EnvLoader.readEnv(key)
                 .orElseThrow(() -> new IllegalArgumentException(errorMessage));
+    }
+
+    /**
+     * Resolves a config value: use the config entry if non-null/non-empty, otherwise fall back
+     * to the env var. If the env var is also missing and no default is provided, throws.
+     *
+     * @param configValue  the value from settings.yaml (may be null)
+     * @param envVar       the env var name for fallback
+     * @param errorMessage the error message if both config and env var are missing
+     * @return the resolved value
+     */
+    private String resolveValue(String configValue, String envVar, String errorMessage) {
+        if (!Strings.isNullOrEmpty(configValue)) {
+            return configValue;
+        }
+        return readEnv(envVar, errorMessage);
+    }
+
+    /**
+     * Resolves a config value that may be null: use the config entry if non-null/non-empty,
+     * otherwise fall back to the env var, otherwise return null.
+     *
+     * @param configValue the value from settings.yaml (may be null)
+     * @param envVar      the env var name for fallback
+     * @return the resolved value, or null
+     */
+    private String resolveValueOrNull(String configValue, String envVar) {
+        if (!Strings.isNullOrEmpty(configValue)) {
+            return configValue;
+        }
+        return EnvLoader.readEnv(envVar, null);
+    }
+
+    /**
+     * Resolves a config value with a default: use the config entry if non-null/non-empty,
+     * otherwise fall back to the env var, otherwise use the default.
+     *
+     * @param configValue  the value from settings.yaml (may be null)
+     * @param envVar       the env var name for fallback
+     * @param defaultValue the default value if both are missing
+     * @return the resolved value
+     */
+    private String resolveValueWithDefault(String configValue, String envVar, String defaultValue) {
+        if (!Strings.isNullOrEmpty(configValue)) {
+            return configValue;
+        }
+        return EnvLoader.readEnv(envVar, defaultValue);
     }
 
 }

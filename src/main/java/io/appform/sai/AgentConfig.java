@@ -22,6 +22,7 @@ import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 import com.phonepe.sentinelai.toolbox.mcp.config.MCPConfiguration;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders;
 
+import io.appform.sai.config.ModelTuning;
 import io.appform.sai.transform.RequestTransform;
 
 import java.util.List;
@@ -58,25 +59,32 @@ public class AgentConfig {
     @Nullable
     String prompt;
 
-    @Nullable
-    String model;
-
-    @Nullable
-    JsonNode inputSchema;
-
-    @Nullable
-    JsonNode outputSchema;
-
-    @Default
-    OutputGenerationMode outputGenerationMode = OutputGenerationMode.TOOL_BASED;
-
     @Default
     ModelSettings modelSettings = DEFAULT_MODEL_SETTINGS;
 
     @Default
     SimpleOpenAIModelOptions modelOptions = SimpleOpenAIModelOptions.DEFAULT;
 
+    /**
+     * Unified tuning section — preferred over {@code modelSettings} / {@code modelOptions}.
+     * Uses the same {@link ModelTuning} class as {@code settings.yaml}.
+     * If non-null, takes precedence over the legacy fields.
+     */
+    @Nullable
+    ModelTuning tuning;
+
     MCPConfiguration mcp;
+    JsonNode outputSchema;
+
+    @Default
+    OutputGenerationMode outputGenerationMode = OutputGenerationMode.TOOL_BASED;
+
+    /**
+     * Default model string in {@code provider/model[/mode]} format.
+     * Used when no {@code --model} CLI flag is provided.
+     */
+    @Nullable
+    String model;
 
     Map<String, HttpToolReaders.ConfiguredUpstream> httpTools;
     String singleSkill;

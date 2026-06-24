@@ -16,8 +16,10 @@
 package io.appform.sai.cli.slash.commands;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -78,7 +80,7 @@ class ModelCommandTest {
         dispatcher.dispatch("model /badformat", printer);
 
         assertEquals(originalModel, context.getCurrentModel().get());
-        verify(agentFactory, never()).createAgent(any(), any());
+        verify(agentFactory, never()).createAgent(any(), any(), any(), any());
     }
 
     @Test
@@ -87,7 +89,7 @@ class ModelCommandTest {
         dispatcher.dispatch("model not-valid-no-slash", printer);
 
         assertEquals(originalModel, context.getCurrentModel().get());
-        verify(agentFactory, never()).createAgent(any(), any());
+        verify(agentFactory, never()).createAgent(any(), any(), any(), any());
         assertTrue(capturedContains("Invalid"));
     }
 
@@ -103,8 +105,30 @@ class ModelCommandTest {
         dispatcher.dispatch("model " + newModel, printer);
 
         assertEquals(newModel, context.getCurrentModel().get());
-        verify(agentFactory).createAgent(any(), any());
+        verify(agentFactory).createAgent(eq("copilot"), eq("gpt-4o"), eq(null), any());
         assertTrue(capturedContains("switched"));
+    }
+
+    @Test
+    void modelWithModeSwitchesModelAndMode() {
+        final var newModel = "copilot/gpt-4o/coding";
+        dispatcher.dispatch("model " + newModel, printer);
+
+        assertEquals(newModel, context.getCurrentModel().get());
+        assertEquals("coding", context.getCurrentMode().get());
+        verify(agentFactory).createAgent(eq("copilot"), eq("gpt-4o"), eq("coding"), any());
+        assertTrue(capturedContains("switched"));
+    }
+
+    @Test
+    void modelWithoutModeClearsCurrentMode() {
+        context.getCurrentMode().set("coding");
+        final var newModel = "copilot/gpt-4o";
+        dispatcher.dispatch("model " + newModel, printer);
+
+        assertEquals(newModel, context.getCurrentModel().get());
+        assertNull(context.getCurrentMode().get());
+        verify(agentFactory).createAgent(eq("copilot"), eq("gpt-4o"), eq(null), any());
     }
 
     @BeforeEach
@@ -112,7 +136,7 @@ class ModelCommandTest {
     void setUp() {
         agentFactory = mock(AgentFactory.class);
         mockAgent = mock(SaiAgent.class);
-        when(agentFactory.createAgent(any(), any())).thenReturn(mockAgent);
+        when(agentFactory.createAgent(any(), any(), any(), any())).thenReturn(mockAgent);
 
         printer = new CapturingPrinter();
         printer.start();
@@ -126,6 +150,7 @@ class ModelCommandTest {
 
         context = SlashCommandContext.builder()
                 .currentModel(new AtomicReference<>(INITIAL_MODEL))
+                .currentMode(new AtomicReference<>(null))
                 .currentAgentConfig(new AtomicReference<>(agentConfig))
                 .currentAgent(new AtomicReference<>(mockAgent))
                 .agentFactory(agentFactory)

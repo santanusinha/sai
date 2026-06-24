@@ -43,6 +43,7 @@ import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
+import io.appform.sai.config.SettingsConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
@@ -129,7 +130,7 @@ public class SaiCommand implements Callable<Integer> {
 
     @Option(names = {
             "-m", "--model"
-    }, description = "Model to use, in the format 'provider/model' (e.g. 'copilot/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
+    }, description = "Model to use, in the format 'provider/model[/mode]' (e.g. 'copilot/claude-haiku-4.5'). Overrides model specified in persona file.", arity = "0..1")
     private String model;
 
     /**
@@ -170,7 +171,7 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
-        // On resume: restore model and persona from the saved session extra data.
+        // On resume: restore model, mode, and persona from the saved session extra data.
         // CLI flags (--model / --persona) always take priority over saved values.
         if (sessionIdProvided) {
             final var probeStore = FileSystemSessionStore.builder()
@@ -232,13 +233,19 @@ public class SaiCommand implements Callable<Integer> {
         final var modelPointer = Strings.isNullOrEmpty(model)
                 ? agentConfig.getModel()
                 : model;
-        final var parts = modelPointer.split("/");
-        Preconditions.checkArgument(parts.length == 2,
-                                    "Model name must be in the format 'provider/model'. Provided: " + modelPointer);
+        final var parts = modelPointer.split("/", 3);
+        Preconditions.checkArgument(parts.length >= 2,
+                                    "Model name must be in the format 'provider/model[/mode]'. Provided: "
+                                            + modelPointer);
         final var provider = parts[0].toLowerCase();
         final var modelName = parts[1];
-        log.info("Using model provider: {}, model name: {}", provider, modelName);
-        final var modelProviderFactory = new ConfigurableProviderFactory(provider, mapper, okHttpClient);
+        final var mode = parts.length == 3 ? parts[2] : null;
+        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
+        final var settingsConfig = SettingsConfigLoader.load(settings.getConfigDir());
+        final var modelProviderFactory = new ConfigurableProviderFactory(provider,
+                                                                         mapper,
+                                                                         okHttpClient,
+                                                                         settingsConfig);
 
         final var sessionStore = FileSystemSessionStore.builder()
                 .baseDir(sessionDataPath.toString())
@@ -249,6 +256,8 @@ public class SaiCommand implements Callable<Integer> {
                                                                          settings.getWorkDir(),
                                                                          "model",
                                                                          modelPointer,
+                                                                         "mode",
+                                                                         Objects.requireNonNullElse(mode, ""),
                                                                          "persona",
                                                                          Objects.requireNonNullElse(persona, ""))))
                 .build();
@@ -270,9 +279,10 @@ public class SaiCommand implements Callable<Integer> {
                                                   modelProviderFactory,
                                                   mapper,
                                                   eventBus,
-                                                  okHttpClient);
+                                                  okHttpClient,
+                                                  settingsConfig);
 
-        final var agent = agentFactory.createAgent(modelName, agentConfig);
+        final var agent = agentFactory.createAgent(provider, modelName, mode, agentConfig);
         final var agentRef = new AtomicReference<>(agent);
 
         try (final var printer = Printer.builder()
@@ -299,6 +309,7 @@ public class SaiCommand implements Callable<Integer> {
 
             final var slashContext = SlashCommandContext.builder()
                     .currentModel(new AtomicReference<>(modelPointer))
+                    .currentMode(new AtomicReference<>(mode))
                     .currentAgentConfig(new AtomicReference<>(agentConfig))
                     .currentAgent(agentRef)
                     .agentFactory(agentFactory)

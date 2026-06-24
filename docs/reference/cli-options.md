@@ -109,7 +109,7 @@ Loads a persona configuration file (YAML or JSON) to customize the agent's behav
 
 === "Load Persona"
     ```bash
-    sai --persona ~/.config/sai/personas/developer.yaml
+    sai --persona ~/.config/sai/persona/developer.yaml
     ```
 
 === "Custom Location"
@@ -260,7 +260,7 @@ Specifies the directory for configuration files, personas, and skills.
     
     ```
     config-dir/
-    ├── personas/          # Persona YAML/JSON files
+    ├── persona/           # Persona YAML/JSON files
     ├── skills/            # Agent Skills directories
     └── config.yaml        # Global configuration
     ```

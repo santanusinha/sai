@@ -24,7 +24,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.phonepe.sentinelai.core.utils.JsonUtils;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.Printer;
@@ -36,10 +35,7 @@ import io.appform.sai.cli.slash.SlashCommandDispatcher;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -47,9 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.SneakyThrows;
 
-class PersonaCommandTest {
-
-    private static final String INITIAL_PERSONA = "Default Persona";
+class ModeCommandTest {
 
     private static final String INITIAL_MODEL = "copilot/claude-haiku-4.5";
 
@@ -72,48 +66,47 @@ class PersonaCommandTest {
         }
     }
 
-    @TempDir
-    Path tempDir;
-
     private AgentFactory agentFactory;
     private SaiAgent mockAgent;
     private CapturingPrinter printer;
     private SlashCommandContext context;
     private SlashCommandDispatcher dispatcher;
-    private ObjectMapper mapper;
 
     @Test
-    void personaNoArgsPrintsCurrentPersonaName() {
-        dispatcher.dispatch("persona", printer);
-        assertTrue(capturedContains(INITIAL_PERSONA));
+    void modeNoArgsPrintsCurrentMode() {
+        context.getCurrentMode().set("coding");
+        dispatcher.dispatch("mode", printer);
+        assertTrue(capturedContains("coding"));
     }
 
     @Test
-    void personaNonexistentPathPrintsError() {
-        dispatcher.dispatch("persona /does/not/exist/file.yaml", printer);
-
-        verify(agentFactory, never()).createAgent(any(), any(), any(), any());
-        assertTrue(capturedContains("Failed"));
+    void modeNoArgsPrintsNoneWhenNoMode() {
+        dispatcher.dispatch("mode", printer);
+        assertTrue(capturedContains("(none)"));
     }
 
     @Test
-    @SneakyThrows
-    void personaValidPathLoadsConfig() {
-        final var personaFile = tempDir.resolve("my-persona.json");
-        final var newConfig = AgentConfig.builder()
-                .agentId("new-agent")
-                .name("New Persona")
-                .description("A different persona")
-                .model("copilot/gpt-4o")
-                .build();
-        Files.writeString(personaFile, mapper.writeValueAsString(newConfig));
+    void modeWithArgDoesNotChangeModel() {
+        final var originalModel = context.getCurrentModel().get();
+        dispatcher.dispatch("mode planning", printer);
 
-        dispatcher.dispatch("persona " + personaFile.toAbsolutePath(), printer);
+        assertEquals(originalModel, context.getCurrentModel().get());
+        assertEquals("planning", context.getCurrentMode().get());
+    }
 
-        assertEquals("New Persona", context.getCurrentAgentConfig().get().getName());
-        assertEquals("copilot/gpt-4o", context.getCurrentModel().get());
+    @Test
+    void modeWithArgSetsModeAndRebuilds() {
+        dispatcher.dispatch("mode coding", printer);
+
+        assertEquals("coding", context.getCurrentMode().get());
         verify(agentFactory).createAgent(any(), any(), any(), any());
-        assertTrue(capturedContains("loaded"));
+        assertTrue(capturedContains("switched"));
+    }
+
+    @Test
+    void modeWithBlankArgDoesNothing() {
+        dispatcher.dispatch("mode ", printer);
+        verify(agentFactory, never()).createAgent(any(), any(), any(), any());
     }
 
     @BeforeEach
@@ -126,18 +119,11 @@ class PersonaCommandTest {
         printer = new CapturingPrinter();
         printer.start();
 
-        mapper = JsonUtils.createMapper();
-
         final var agentConfig = AgentConfig.builder()
                 .agentId("test")
-                .name(INITIAL_PERSONA)
+                .name("Test")
                 .description("Test agent")
                 .model(INITIAL_MODEL)
-                .build();
-
-        final var settings = Settings.builder()
-                .headless(true)
-                .configDir(tempDir.toString())
                 .build();
 
         context = SlashCommandContext.builder()
@@ -147,8 +133,8 @@ class PersonaCommandTest {
                 .currentAgent(new AtomicReference<>(mockAgent))
                 .agentFactory(agentFactory)
                 .printer(printer)
-                .settings(settings)
-                .mapper(mapper)
+                .settings(Settings.builder().headless(true).build())
+                .mapper(new ObjectMapper())
                 .build();
 
         dispatcher = new SlashCommandDispatcher(context);

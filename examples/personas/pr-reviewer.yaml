@@ -17,7 +17,7 @@ description: >
 
 model: copilot/claude-sonnet-4.6
 
-modelSettings:
+tuning:
   temperature: 0.3
 
 # MCP Server Configuration — codebase-memory-mcp for structural code analysis

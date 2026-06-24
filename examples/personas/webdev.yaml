@@ -9,7 +9,7 @@ description: Expert web development agent with codebase knowledge graph capabili
 # model: gemini-3.1-pro-preview
 model: copilot/claude-sonnet-4.6
 
-modelSettings:
+tuning:
   temperature: 0.5
 
 # MCP Server Configuration

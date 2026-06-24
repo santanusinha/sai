@@ -36,6 +36,8 @@ import io.appform.sai.AgentConfig;
 import io.appform.sai.ConfigurableProviderFactory;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
+import io.appform.sai.config.SettingsConfig;
+import io.appform.sai.config.SettingsResolver;
 import io.appform.sai.transform.RequestTransformInterceptor;
 
 import java.nio.file.Paths;
@@ -43,6 +45,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
+
+import javax.annotation.Nullable;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,24 +77,42 @@ public class AgentFactory {
     private final ObjectMapper mapper;
     private final EventBus eventBus;
     private final OkHttpClient httpClient;
+    private final SettingsConfig settingsConfig;
 
     /**
-     * Creates a new {@link SaiAgent} configured for the given model and agent config.
+     * Creates a new {@link SaiAgent} configured for the given provider/model/mode and agent config.
      *
      * <p>The system prompt is taken from {@link AgentConfig#getPrompt()} (falling back to a
      * built-in default) and is augmented with the sanitised name of the current working directory
      * so the agent has implicit path context. Control characters and path separators in the
      * directory name are replaced with {@code _} to prevent prompt-injection via malicious paths.
      *
+     * <p>Effective model settings are resolved through {@link SettingsResolver} using the
+     * provider → model → mode hierarchy from {@code settings.yaml}, merged with the persona's
+     * inline tuning. If the resolver returns no settings, the agent config's
+     * {@code modelSettings}/{@code modelOptions} (or framework defaults) are used.
+     *
+     * @param provider  the provider name (e.g. {@code "copilot"}, {@code "openai"})
      * @param modelName the bare model name (without provider prefix, e.g. {@code "claude-haiku-4.5"})
+     * @param mode      the mode name (may be {@code null})
      * @param config    the agent configuration containing prompt, skills, tools, and model settings
      * @return a fully initialised {@link SaiAgent} ready to receive tool registrations and queries
      */
-    public SaiAgent createAgent(String modelName, AgentConfig config) {
-        final var modelSettings = Objects.requireNonNullElseGet(config.getModelSettings(),
-                                                                this::defaultModelSettings)
+    public SaiAgent createAgent(String provider, String modelName, @Nullable String mode, AgentConfig config) {
+        final var resolved = SettingsResolver.resolve(provider,
+                                                      modelName,
+                                                      mode,
+                                                      settingsConfig,
+                                                      config.getTuning());
+
+        final var modelSettings = Objects.requireNonNullElseGet(resolved.getModelSettings(),
+                                                                () -> Objects.requireNonNullElseGet(
+                                                                                                    config.getModelSettings(),
+                                                                                                    this::defaultModelSettings))
                 .withParallelToolCalls(false); //To keep context usage and console output sane
-        final var modelOptions = Objects.requireNonNullElse(config.getModelOptions(), SimpleOpenAIModelOptions.DEFAULT);
+        final var modelOptions = Objects.requireNonNullElse(resolved.getModelOptions(),
+                                                            Objects.requireNonNullElse(config.getModelOptions(),
+                                                                                       SimpleOpenAIModelOptions.DEFAULT));
 
         final var effectiveProviderFactory = resolveProviderFactory(config);
 
@@ -191,7 +213,7 @@ public class AgentFactory {
                 .build();
 
         if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
-            return new ConfigurableProviderFactory(factory.getProvider(), mapper, clientWithTransforms);
+            return new ConfigurableProviderFactory(factory.getProvider(), mapper, clientWithTransforms, settingsConfig);
         }
 
         log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");

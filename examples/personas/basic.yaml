@@ -2,7 +2,7 @@ agentId: sai-agent
 name: Sai Agent
 description: Default helpful CLI assistant persona for SAI.
 model: copilot/gemini-3.1-pro-preview
-modelSettings:
+tuning:
   temperature: 1
 prompt: |
   You are a helpful assistant for the command line. Be concise and actionable.

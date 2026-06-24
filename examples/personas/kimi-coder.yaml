@@ -6,10 +6,14 @@ agentId: sai-coder
 name: Sai Coder
 description: Expert coding agent with codebase knowledge graph capabilities for intelligent code exploration and development.
 # model: gemini-3.1-pro-preview
-model: copilot/claude-sonnet-4.6
+# model: copilot/claude-sonnet-4.6
+model: openai/global:LLM_GLOBAL_MOONSHOTAI_KIMI_K2_6_PRD
 
 tuning:
-  temperature: 0.5
+  temperature: 0.6
+  topP: 0.95
+  presencePenalty: 0
+  toolChoice: AUTO
 
 # MCP Server Configuration
 # Provides tools from codebase-memory-mcp for structural code analysis
@@ -22,9 +26,9 @@ mcp:
       # Alternative: specify full path if not on PATH
       # command: /usr/local/bin/codebase-memory-mcp
       # args: []  # No additional arguments needed for MCP server mode
-      env:      # Optional environment variables
-        CBM_LOG_LEVEL: none
-      # exposedTools:  # Optional: whitelist specific tools (if omitted, all 12 tools are available)
+      # env:      # Optional environment variables
+      #   LOG_LEVEL: debug
+      exposedTools:  # Optional: whitelist specific tools (if omitted, all 12 tools are available)
       #   - index_repository
       #   - get_architecture
       #   - search_graph
@@ -44,20 +48,22 @@ mcp:
         - web_search_exa
         - get_code_context_exa
 
-
 # Request Transforms
 # Apply Jolt transforms to outgoing /v1/chat/completions request payloads.
 # Supported operations: default, add, remove, modify, shift, cardinality, sort
-# requestTransforms:
-#   - operation: "default"
-#     spec:
-#       chat_template_kwargs:
-#         thinking: false
-#   - operation: "remove"
-#     spec:
-#       unwanted_field: ""
+requestTransforms:
+  - operation: "default"
+    spec:
+      chat_template_kwargs:
+        thinking: false
 
 # Skills
+# sonar-cli: runs SonarCloud analysis on the current branch and reports issues
+skillDirectories:
+  - ${HOME}/.config/sai/skills
+skillNames:
+  - sonar-cli
+
 prompt: |
   # Role
   You are an Expert Software Engineer with deep knowledge of multiple programming languages and frameworks. You leverage a powerful codebase knowledge graph (via codebase-memory-mcp) for efficient code exploration, impact analysis, and intelligent development.

@@ -3,7 +3,7 @@ name: Sai Reviewer
 description:  Code review agent for java services
 model: copilot/gemini-3.1-pro-preview
 # model: claude-opus-4.5
-modelSettings:
+tuning:
   temperature: 0.3
 prompt: |
   # Role

@@ -21,8 +21,8 @@ Personas allow you to create specialized agents for different tasks (coding, pla
 SAI searches for persona files in the following locations (in order):
 
 1. **Exact path**: If `-p` specifies a file path (`.yaml`, `.yml`, or `.json`)
-2. **Config directory**: `~/.config/sai/personas/<name>.yaml`
-3. **Config directory** (JSON): `~/.config/sai/personas/<name>.json`
+2. **Config directory**: `~/.config/sai/persona/<name>.yaml`
+3. **Config directory** (JSON): `~/.config/sai/persona/<name>.json`
 4. **Built-in examples**: `examples/personas/<name>.yaml` (in SAI repository)
 
 **Examples**:
@@ -32,7 +32,7 @@ SAI searches for persona files in the following locations (in order):
 sai -p /path/to/my-persona.yaml
 
 # Load from config directory by name
-sai -p coder  # Looks for ~/.config/sai/personas/coder.yaml
+sai -p coder  # Looks for ~/.config/sai/persona/coder.yaml
 
 # Load from built-in examples
 sai -p reviewer  # Looks for examples/personas/reviewer.yaml

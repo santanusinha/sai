@@ -50,9 +50,16 @@ import lombok.extern.slf4j.Slf4j;
 @Builder
 public class SlashCommandContext {
 
-    /** Current {@code provider/model} string (e.g., {@code copilot/claude-haiku-4.5}). */
+    /** Current {@code provider/model[/mode]} string (e.g., {@code copilot/claude-haiku-4.5}). */
     @NonNull
     private final AtomicReference<String> currentModel;
+
+    /**
+     * Current mode name (may be {@code null}). Updated by {@code /mode} and embedded in the
+     * model string when present.
+     */
+    @Nullable
+    private final AtomicReference<String> currentMode;
 
     /** Active agent configuration. Updated when a new persona is loaded. */
     @NonNull
@@ -109,16 +116,20 @@ public class SlashCommandContext {
      */
     public void rebuildAgent() {
         final var modelStr = currentModel.get();
-        final var parts = modelStr.split("/", 2);
-        if (parts.length != 2) {
+        final var parts = modelStr.split("/", 3);
+        if (parts.length < 2 || parts[0].isBlank() || parts[1].isBlank()) {
             log.warn("Cannot rebuild agent: invalid model string '{}'", modelStr);
             printer.print(Printer.systemMessage(
                                                 Printer.Colours.RED + "Invalid model format '" + modelStr
-                                                        + "'. Expected 'provider/model'." + Printer.Colours.RESET));
+                                                        + "'. Expected 'provider/model[/mode]'"
+                                                        + Printer.Colours.RESET));
             return;
         }
+        final var provider = parts[0];
         final var modelName = parts[1];
-        final var newAgent = agentFactory.createAgent(modelName, currentAgentConfig.get());
+        final var mode = parts.length == 3 ? parts[2] : currentMode.get();
+        currentMode.set(mode);
+        final var newAgent = agentFactory.createAgent(provider, modelName, mode, currentAgentConfig.get());
         currentAgent.set(newAgent);
         agentChanged.set(true);
         if (onAgentRebuilt != null) {

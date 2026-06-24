@@ -79,7 +79,7 @@ class SkillsCommandTest {
     void setUp() {
         final var agentFactory = mock(AgentFactory.class);
         final var mockAgent = mock(SaiAgent.class);
-        when(agentFactory.createAgent(any(), any())).thenReturn(mockAgent);
+        when(agentFactory.createAgent(any(), any(), any(), any())).thenReturn(mockAgent);
 
         printer = new CapturingPrinter();
         printer.start();
@@ -104,6 +104,7 @@ class SkillsCommandTest {
 
         final var contextWithSkills = SlashCommandContext.builder()
                 .currentModel(new AtomicReference<>(INITIAL_MODEL))
+                .currentMode(new AtomicReference<>(null))
                 .currentAgentConfig(new AtomicReference<>(agentConfig))
                 .currentAgent(new AtomicReference<>(mockAgent))
                 .agentFactory(agentFactory)
@@ -116,6 +117,7 @@ class SkillsCommandTest {
 
         final var contextNoSkills = SlashCommandContext.builder()
                 .currentModel(new AtomicReference<>(INITIAL_MODEL))
+                .currentMode(new AtomicReference<>(null))
                 .currentAgentConfig(new AtomicReference<>(agentConfig))
                 .currentAgent(new AtomicReference<>(mockAgent))
                 .agentFactory(agentFactory)
