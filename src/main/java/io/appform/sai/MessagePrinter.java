@@ -224,39 +224,48 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             }
 
             @Override
-            @SneakyThrows
             public List<Update> visit(ToolCall toolCall) {
                 final var messages = new ArrayList<Update>();
-                switch (toolCall.getToolName()) {
-                    case KnownToolNames.PRINT_TOOL -> {
-                        // Do nothing
-                    }
-                    case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
-                    case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
-                    case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
-                    case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolRequest(toolCall, messages);
-                    case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
-                    case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
-                    case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
-                    case Agent.OUTPUT_GENERATOR_ID -> {
-                        messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
-                    }
-                    default -> {
-                        final var toolMessage = Printer.Colours.YELLOW + "Tool call:" + Printer.Colours.WHITE
-                                + " %s".formatted(toolCall.getToolName()) + Printer.Colours.RESET;
-                        messages.add(Printer.systemMessage(toolMessage));
-                        messages.add(Printer.empty());
-                        try {
-                            final var node = mapper.readTree(toolCall.getArguments());
-                            final var content = mapper.writerWithDefaultPrettyPrinter()
-                                    .writeValueAsString(node);
-                            messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                try {
+                    switch (toolCall.getToolName()) {
+                        case KnownToolNames.PRINT_TOOL -> {
+                            // Do nothing
                         }
-                        catch (JsonProcessingException e) {
-                            messages.add(Printer.raw(Printer.Colours.GRAY + toolCall.getArguments()
-                                    + Printer.Colours.RESET));
+                        case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
+                        case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
+                        case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
+                        case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolRequest(toolCall, messages);
+                        case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
+                        case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
+                        case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
+                        case Agent.OUTPUT_GENERATOR_ID -> {
+                            messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
+                        }
+                        default -> {
+                            final var toolMessage = Printer.Colours.YELLOW + "Tool call:" + Printer.Colours.WHITE
+                                    + " %s".formatted(toolCall.getToolName()) + Printer.Colours.RESET;
+                            messages.add(Printer.systemMessage(toolMessage));
+                            messages.add(Printer.empty());
+                            try {
+                                final var node = mapper.readTree(toolCall.getArguments());
+                                final var content = mapper.writerWithDefaultPrettyPrinter()
+                                        .writeValueAsString(node);
+                                messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                            }
+                            catch (JsonProcessingException e) {
+                                messages.add(Printer.raw(Printer.Colours.GRAY + toolCall.getArguments()
+                                        + Printer.Colours.RESET));
+                            }
                         }
                     }
+                }
+                catch (Exception e) {
+                    log.error("Failed to process tool call for tool '{}'. Error: {}",
+                              toolCall.getToolName(),
+                              e.getMessage());
+                    messages.add(Printer.systemMessage("Error processing tool call '%s': %s"
+                            .formatted(toolCall.getToolName(), e.getMessage()))
+                            .withSeverity(Severity.ERROR));
                 }
                 messages.add(Printer.empty());
                 return messages;
@@ -268,8 +277,17 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                                                 long elapsedTimeMs) {
                 final var messages = new ArrayList<Update>();
                 if (historical) {
-                    final var node = mapper.readTree(content);
-                    final var output = node.get(Agent.OUTPUT_VARIABLE_NAME).asText();
+                    String output;
+                    try {
+                        final var node = mapper.readTree(content);
+                        final var outputNode = node.get(Agent.OUTPUT_VARIABLE_NAME);
+                        output = outputNode != null ? outputNode.asText() : content;
+                    }
+                    catch (JsonProcessingException e) {
+                        log.error("Failed to parse response content as JSON. Printing raw content. Error: {}",
+                                  e.getMessage());
+                        output = content;
+                    }
                     messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(output)).withImportant(true));
                     var infoMessage = Printer.Colours.WHITE + "%s %s."
                             .formatted(Severity.SUCCESS.getEmoji(),
