@@ -1,0 +1,283 @@
+# ~/.config/sai/settings.yaml
+#
+# Example settings file for GitHub Copilot and OpenCode Go providers.
+# Copy to ~/.config/sai/settings.yaml and fill in your API keys.
+# 
+# For copilot provider, the type is optional,
+# if you want to use it, set it to coplilot
+#
+# Model string formats used in personas / --model flag:
+#   copilot/<model>              e.g. copilot/claude-sonnet-4.6
+#   copilot/<model>/<mode>       e.g. copilot/claude-sonnet-4.6/coding
+#   opencode-go/<model>          e.g. opencode-go/kimi-k2.7
+#   opencode-go/<model>/<mode>   e.g. opencode-go/deepseek-v4-pro/coding
+#
+# Full model list for OpenCode Go: https://opencode.ai/zen/go/v1/models
+# Docs: https://opencode.ai/docs/go/
+#
+# Tuning enums supported by SAI:
+#   reasoning:   HIGH | MEDIUM | LOW | MINIMAL
+#   toolChoice:  AUTO | REQUIRED | DEFAULT
+#   encodingType: O200K_BASE | CL100K_BASE | P50K_BASE | R50K_BASE
+# Tune temperature OR topP — not both at once (provider guidance across the board).
+
+# ─── Copilot model tuning ────────────────────────────────────────────────────
+#
+# The `copilot` provider is always available as a built-in — no endpoint or
+# apiKey required here. Only add it when you want per-model or per-mode tuning
+# overrides on top of the Copilot defaults.
+#
+# NOTE: if you don't need any tuning overrides for Copilot, this whole section
+#       can be omitted.
+
+# ─── Providers ───────────────────────────────────────────────────────────────
+
+providers:
+  copilot:
+    # Provider-level defaults — apply to ALL Copilot models below.
+    tuning:
+      encodingType: O200K_BASE     # Modern Claude/GPT/Gemini all tokenize on o200k
+      parallelToolCalls: false     # SAI always forces this; listed for clarity
+
+    models:
+      # ── Claude Opus 4.8 — most capable, best for deep reasoning ──────────────
+      # Anthropic default temperature is 1.0; intelligence is driven by reasoning
+      # effort, not low temperature. Keep temp high and steer with reasoning.
+      claude-opus-4.8:
+        tuning:
+          temperature: 1.0
+          contextWindowSize: 200000
+          encodingType: O200K_BASE
+          reasoning: HIGH
+          toolChoice: AUTO
+        modes:
+          medium:
+            tuning:
+              reasoning: MEDIUM
+          low:
+            tuning:
+              reasoning: LOW
+
+      # ── Claude Sonnet 4.6 — balanced speed/quality, default coder model ───────
+      claude-sonnet-4.6:
+        tuning:
+          temperature: 1.0
+          contextWindowSize: 200000
+          encodingType: O200K_BASE
+          toolChoice: AUTO
+        modes:
+          coding:
+            tuning:
+              reasoning: HIGH
+          medium:
+            tuning:
+              reasoning: MEDIUM
+          review:
+            tuning:
+              temperature: 0.6
+
+      # ── Claude Haiku 4.5 — fast and lightweight, SAI default ─────────────────
+      claude-haiku-4.5:
+        tuning:
+          temperature: 1.0
+          maxTokens: 8192
+          contextWindowSize: 200000
+          encodingType: O200K_BASE
+        modes:
+          coding:
+            tuning:
+              temperature: 0.6
+              reasoning: LOW
+              toolChoice: AUTO
+
+      # ── Gemini 3.1 Pro Preview — Google's frontier model ─────────────────────
+      # Gemini default + recommended start temperature is 1.0. Tune temp only.
+      gemini-3.1-pro-preview:
+        tuning:
+          temperature: 1.0
+          maxTokens: 8192
+          contextWindowSize: 1000000
+          encodingType: O200K_BASE
+        modes:
+          coding:
+            tuning:
+              temperature: 0.4
+              toolChoice: AUTO
+          planning:
+            tuning:
+              temperature: 0.8
+
+      # ── GPT-4o — OpenAI via Copilot ───────────────────────────────────────────
+      # GPT-4o defaults: temperature 1.0, top_p 1.0. Coding 0.0–0.3 for determinism.
+      gpt-4o:
+        tuning:
+          temperature: 0.7
+          maxTokens: 4096
+          contextWindowSize: 128000
+          encodingType: O200K_BASE
+        modes:
+          coding:
+            tuning:
+              temperature: 0.2
+              toolChoice: AUTO
+
+
+  # ── OpenCode Go ─────────────────────────────────────────────────────────────
+  # Subscription-based aggregator with access to frontier models from Moonshot,
+  # DeepSeek, MiniMax, Zhipu, and others via a single OpenAI-compatible API.
+  # Docs:    https://opencode.ai/docs/go/
+  # Models:  https://opencode.ai/zen/go/v1/models
+  # Sign up: https://opencode.ai — subscribe to Go, then copy your API key.
+  opencode-go:
+    type: openai
+    endpoint: https://opencode.ai/zen/go/v1/chat/completions
+    apiKey: ${OPENCODE_GO_API_KEY}
+
+    # Provider-level defaults. topP 0.95 matches Kimi/Qwen-thinking guidance.
+    tuning:
+      temperature: 0.6
+      topP: 0.95
+
+    models:
+      # ── Kimi K2.7 Code — Moonshot, top-tier agentic coding model ────────────
+      # Moonshot: temperature fixed (not modifiable), top_p 0.95, presence/freq 0,
+      # thinking always-on. Use max_tokens >= 16000 so reasoning isn't truncated.
+      kimi-k2.7-code:
+        tuning:
+          temperature: 0.6
+          topP: 0.95
+          presencePenalty: 0
+          frequencyPenalty: 0
+          maxTokens: 32768
+          contextWindowSize: 131072
+        modes:
+          coding:
+            tuning:
+              toolChoice: AUTO
+
+      # ── Kimi K2.7 — general-purpose Moonshot model ──────────────────────────
+      kimi-k2.7:
+        tuning:
+          temperature: 0.6
+          topP: 0.95
+          presencePenalty: 0
+          frequencyPenalty: 0
+          maxTokens: 16384
+          contextWindowSize: 131072
+        modes:
+          coding:
+            tuning:
+              toolChoice: AUTO
+          planning:
+            tuning:
+              maxTokens: 32768
+
+      # ── Kimi K2.6 — previous generation Moonshot ────────────────────────────
+      # temp fixed at 0.6 (non-thinking) / 1.0 (thinking); top_p fixed 0.95.
+      kimi-k2.6:
+        tuning:
+          temperature: 0.6
+          topP: 0.95
+          presencePenalty: 0
+          frequencyPenalty: 0
+          maxTokens: 16384
+          contextWindowSize: 131072
+
+      # ── DeepSeek V4 Pro — highest-quality DeepSeek model ────────────────────
+      # DeepSeek: coding/math → 0.0; web maps API 1.0 → model 0.3.
+      deepseek-v4-pro:
+        tuning:
+          temperature: 0.3
+          maxTokens: 8192
+          contextWindowSize: 128000
+        modes:
+          coding:
+            tuning:
+              temperature: 0.0
+              toolChoice: AUTO
+          planning:
+            tuning:
+              temperature: 0.5
+              reasoning: HIGH
+
+      # ── DeepSeek V4 Flash — fast, cost-effective DeepSeek ───────────────────
+      deepseek-v4-flash:
+        tuning:
+          temperature: 0.3
+          maxTokens: 4096
+          contextWindowSize: 128000
+        modes:
+          coding:
+            tuning:
+              temperature: 0.0
+              toolChoice: AUTO
+
+      # ── GLM-5.2 — Zhipu AI latest ───────────────────────────────────────────
+      # Z.AI: temp default 1.0, top_p 0.95; tune ONE. Coding favours top_p 0.95.
+      glm-5.2:
+        tuning:
+          temperature: 1.0
+          topP: 0.95
+          maxTokens: 16384
+          contextWindowSize: 200000
+        modes:
+          coding:
+            tuning:
+              temperature: 0.6
+              toolChoice: AUTO
+
+      # ── GLM-5.1 — Zhipu AI previous ─────────────────────────────────────────
+      glm-5.1:
+        tuning:
+          temperature: 1.0
+          topP: 0.95
+          maxTokens: 8192
+          contextWindowSize: 128000
+
+      # ── MiMo-V2.5-Pro — reasoning-focused model ─────────────────────────────
+      mimo-v2.5-pro:
+        tuning:
+          temperature: 0.6
+          topP: 0.95
+          maxTokens: 16384
+          contextWindowSize: 32768
+        modes:
+          coding:
+            tuning:
+              temperature: 0.3
+              toolChoice: AUTO
+
+      # ── MiMo-V2.5 ───────────────────────────────────────────────────────────
+      mimo-v2.5:
+        tuning:
+          temperature: 0.6
+          maxTokens: 4096
+          contextWindowSize: 32768
+
+      # ── Qwen3.7 Max — Alibaba, large reasoning model ────────────────────────
+      # Qwen: non-thinking 0.7/top_p 0.8; thinking 0.6/top_p 0.95. Never greedy.
+      # Note: Qwen models use the /zen/go/v1/messages endpoint (Anthropic-style).
+      # SAI's openai provider type sends to the configured endpoint; if a model
+      # requires the Anthropic messages format, configure it on a separate
+      # opencode-go-anthropic provider entry pointing to the messages endpoint.
+      qwen3.7-max:
+        tuning:
+          temperature: 0.7
+          topP: 0.8
+          maxTokens: 16384
+          contextWindowSize: 128000
+        modes:
+          coding:
+            tuning:
+              temperature: 0.6
+              topP: 0.95
+              toolChoice: AUTO
+
+      # ── Qwen3.7 Plus ────────────────────────────────────────────────────────
+      qwen3.7-plus:
+        tuning:
+          temperature: 0.7
+          topP: 0.8
+          maxTokens: 8192
+          contextWindowSize: 128000
+
