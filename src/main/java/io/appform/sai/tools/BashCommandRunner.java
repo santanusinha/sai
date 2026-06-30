@@ -17,15 +17,20 @@ package io.appform.sai.tools;
 
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
+import jnr.x86asm.SEGMENT;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -80,6 +85,8 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
                         "/bin/bash", "-c", command
                 };
         var statusCode = -1;
+        var readerTask = new AtomicReference<Future<Optional<String>>>();
+        var taskLatch = new CountDownLatch(1);
         try {
             final var process = new ProcessBuilder(processbuilderArgs)
                     .redirectErrorStream(true)
@@ -87,7 +94,7 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
 
             // Collect stdout on a daemon thread so the main thread can use waitFor(timeout),
             // which is interruptible — unlike InputStream.read().
-            final var readerTask = DAEMON_EXECUTOR.submit(() -> {
+            readerTask.set(DAEMON_EXECUTOR.submit(() -> {
                 try (final var stdoutStream = reader(process.getInputStream())) {
                     return Optional.ofNullable(streamToString(stdoutStream));
                 }
@@ -96,18 +103,25 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
                     log.error("Error reading stdout: {}", rootCause.getMessage());
                     return Optional.<String>empty();
                 }
-            });
+                finally {
+                    taskLatch.countDown();
+                }
+            }));
 
+            final var task = readerTask.get();
             final boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
             if (!finished) {
                 process.destroyForcibly();
                 // destroyForcibly closes the write-end of the pipe; the reader sees EOF quickly.
-                readerTask.cancel(true);
+                if (null != task && !task.isDone()) {
+                    task.cancel(true);
+                    taskLatch.await();
+                }
                 return new CommandOutput(-1, "", "Execution timed out after " + timeout.toSeconds() + " seconds");
             }
 
-            final var stdout = readerTask.get(5, TimeUnit.SECONDS).orElse("");
+            final var stdout = task.get(5, TimeUnit.SECONDS).orElse("");
             statusCode = process.exitValue();
             if (statusCode == 0) {
                 return new CommandOutput(statusCode, stdout, "");
@@ -115,6 +129,16 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
             return new CommandOutput(statusCode, "", stdout);
         }
         catch (InterruptedException e) {
+            final var task = readerTask.get();
+            if (null != task && !task.isDone()) {
+                task.cancel(true);
+                try {
+                    taskLatch.await();
+                }
+                catch (InterruptedException interrupted) {
+                    e.addSuppressed(interrupted);
+                }
+            }
             Thread.currentThread().interrupt();
             return new CommandOutput(statusCode, "", "Execution interrupted");
         }

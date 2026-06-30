@@ -33,20 +33,32 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@AllArgsConstructor
 public class CoreToolBox implements ToolBox {
+
 
     private static final Pattern HUNK_PATTERN = Pattern.compile(
                                                                 "^@@\\s+-(\\d+)(?:,(\\d+))?\\s+\\+(\\d+)(?:,(\\d+))?\\s+@@");
 
     private final Printer printer;
+
+    private final UnaryOperator<String> messageConsumer;
+
+    public CoreToolBox(Printer printer) {
+        this.printer = printer;
+        this.messageConsumer = line -> {
+            printer.print(Printer.raw(Printer.Colours.GRAY
+                    + line
+                    + Printer.Colours.RESET));
+            return line;
+        };
+    }
 
     @Tool(value = "Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore", timeoutSeconds = Integer.MAX_VALUE)
     public ToolIO.BashResponse bash(
@@ -55,10 +67,10 @@ public class CoreToolBox implements ToolBox {
                                     @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes.") int timeoutSeconds) {
         log.info("Executing bash command: {}", command);
         try {
-            final var commandOutput = new BashCommandRunner(command,
+            final var commandOutput = new BashCommandRunner(
+                                                            command,
                                                             Duration.ofSeconds(timeoutSeconds),
-                                                            line -> line)
-                    .call();
+                                                            messageConsumer).call();
 
             final var statusCode = commandOutput.getStatusCode();
             log.info("Bash command execution completed with status code: {}", statusCode);
