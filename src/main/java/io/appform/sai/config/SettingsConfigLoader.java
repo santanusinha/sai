@@ -52,7 +52,7 @@ public final class SettingsConfigLoader {
     public static SettingsConfig load(Path settingsPath) {
         if (!Files.exists(settingsPath)) {
             log.debug("Settings file not found at {}; using empty config (env-var fallback)", settingsPath);
-            return SettingsConfig.builder().build();
+            return SettingsConfig.DEFAULT;
         }
         log.debug("Loading settings from {}", settingsPath);
         try {
@@ -64,7 +64,7 @@ public final class SettingsConfigLoader {
         }
         catch (Exception e) {
             log.warn("Failed to load settings from {}: {}. Using empty config.", settingsPath, e.getMessage());
-            return SettingsConfig.builder().build();
+            return SettingsConfig.DEFAULT;
         }
     }
 

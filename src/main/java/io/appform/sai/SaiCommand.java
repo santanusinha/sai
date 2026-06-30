@@ -22,6 +22,7 @@ import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
+import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionExtraDataOperator;
@@ -43,6 +44,9 @@ import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
+import io.appform.sai.config.ModelEntry;
+import io.appform.sai.config.ProviderEntry;
+import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
@@ -56,6 +60,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.List;
@@ -158,11 +163,12 @@ public class SaiCommand implements Callable<Integer> {
         final var executorService = Executors.newCachedThreadPool();
         final var eventBus = new EventBus(executorService);
 
-        final var okHttpClient = buildOkHttpClient();
         final var pipedInput = readPipedInput();
         // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
-        final var effectiveInput = !Strings.isNullOrEmpty(input) ? resolveInput(input)
-                : !Strings.isNullOrEmpty(pipedInput) ? pipedInput
+        final var effectiveInput = !Strings.isNullOrEmpty(input)
+                ? resolveInput(input)
+                : !Strings.isNullOrEmpty(pipedInput)
+                        ? pipedInput
                 : null;
 
         final var settings = buildSettings(effectiveSessionId, effectiveInput);
@@ -173,42 +179,13 @@ public class SaiCommand implements Callable<Integer> {
         // On resume: restore model, mode, and persona from the saved session extra data.
         // CLI flags (--model / --persona) always take priority over saved values.
         if (sessionIdProvided) {
-            final var probeStore = FileSystemSessionStore.builder()
-                    .baseDir(sessionDataPath.toString())
-                    .mapper(mapper)
-                    .cacheSize(1)
-                    .build(); // no extraDataOperator — read-only probe
-            probeStore.session(effectiveSessionId).ifPresent(saved -> {
-                final var savedExtra = saved.getExtra();
-                if (savedExtra == null) {
-                    return; // older session with no extra data — backwards compat
-                }
-                // Restore model only when --model was not supplied on the CLI
-                if (Strings.isNullOrEmpty(model)) {
-                    final var savedModel = (String) savedExtra.get("model");
-                    if (!Strings.isNullOrEmpty(savedModel)) {
-                        model = savedModel;
-                    }
-                }
-                // Restore persona only when --persona was not supplied on the CLI,
-                // and only if the persona file is still resolvable/readable.
-                if (Strings.isNullOrEmpty(persona)) {
-                    final var savedPersona = (String) savedExtra.get("persona");
-                    if (!Strings.isNullOrEmpty(savedPersona)) {
-                        try {
-                            AgentConfigLoader.resolvePersonaPath(savedPersona, settings.getConfigDir());
-                            persona = savedPersona; // file still exists → restore
-                        }
-                        catch (Exception e) {
-                            log.warn("Saved persona '{}' is no longer accessible, using default: {}",
-                                     savedPersona,
-                                     e.getMessage());
-                            // persona stays null → resolveAgentConfig falls back to built-in default
-                        }
-                    }
-                }
-            });
+            populateDataFromSession(effectiveSessionId,
+                                    mapper,
+                                    sessionDataPath,
+                                    settings);
         }
+
+        final var settingsConfig = loadSettings(settings.getConfigDir(), mapper);
 
         AgentConfig agentConfig;
         try {
@@ -219,34 +196,19 @@ public class SaiCommand implements Callable<Integer> {
             System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
             return 1;
         }
+
         final var modelPointer = Strings.isNullOrEmpty(model)
                 ? agentConfig.getModel()
                 : model;
-        final var parts = modelPointer.split("/", 3);
-        Preconditions.checkArgument(parts.length >= 2,
-                                    "Model name must be in the format 'provider/model[/mode]'. Provided: "
-                                            + modelPointer);
-        final var provider = parts[0].toLowerCase();
-        final var modelName = parts[1];
-        final var mode = parts.length == 3 ? parts[2] : null;
-        log.info("Settings path: {}, data path: {}, session ID: {}, persona: {}, model: {}, mode: {}",
+        final var modelDetails = resolveModelFactory(modelPointer,
+                                                     mapper,
+                                                     settingsConfig);
+        log.info("Settings path: {}, data path: {}, persona: {}, model: {}, mode: {}",
                  settings.getConfigDir(),
                  settings.getDataDir(),
-                 effectiveSessionId,
                  persona,
                  modelPointer,
-                 mode);
-        final var settingsConfig = SettingsConfigLoader.load(settings.getConfigDir());
-        log.info("Loaded settings config: {}", settingsConfig);
-        settingsConfig.getProviders()
-                .forEach((key, config) -> config.getModels()
-                        .keySet()
-                        .forEach(m -> log.info("Loaded config for: {}, Model: {}", key, m)));
-        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
-        final var modelProviderFactory = new ConfigurableProviderFactory(provider,
-                                                                         mapper,
-                                                                         okHttpClient,
-                                                                         settingsConfig);
+                 modelDetails.mode());
 
         final var sessionStore = FileSystemSessionStore.builder()
                 .baseDir(sessionDataPath.toString())
@@ -258,7 +220,8 @@ public class SaiCommand implements Callable<Integer> {
                                                                          "model",
                                                                          modelPointer,
                                                                          "mode",
-                                                                         Objects.requireNonNullElse(mode, ""),
+                                                                         Objects.requireNonNullElse(modelDetails.mode(),
+                                                                                                    ""),
                                                                          "persona",
                                                                          Objects.requireNonNullElse(persona, ""))))
                 .build();
@@ -277,13 +240,16 @@ public class SaiCommand implements Callable<Integer> {
         final var agentFactory = new AgentFactory(settings,
                                                   List.of(sessionExtension, agentSkillsExtension),
                                                   executorService,
-                                                  modelProviderFactory,
+                                                  modelDetails.factory(),
                                                   mapper,
                                                   eventBus,
-                                                  okHttpClient,
+                                                  modelDetails.httpClient(),
                                                   settingsConfig);
 
-        final var agent = agentFactory.createAgent(provider, modelName, mode, agentConfig);
+        final var agent = agentFactory.createAgent(modelDetails.provider(),
+                                                   modelDetails.modelName(),
+                                                   modelDetails.modelName(),
+                                                   agentConfig);
         final var agentRef = new AtomicReference<>(agent);
 
         try (final var printer = Printer.builder()
@@ -310,7 +276,7 @@ public class SaiCommand implements Callable<Integer> {
 
             final var slashContext = SlashCommandContext.builder()
                     .currentModel(new AtomicReference<>(modelPointer))
-                    .currentMode(new AtomicReference<>(mode))
+                    .currentMode(new AtomicReference<>(modelDetails.mode()))
                     .currentAgentConfig(new AtomicReference<>(agentConfig))
                     .currentAgent(agentRef)
                     .agentFactory(agentFactory)
@@ -363,8 +329,7 @@ public class SaiCommand implements Callable<Integer> {
 
                 var userInput = effectiveInput;
                 final var dispatcher = new SlashCommandDispatcher(slashContext);
-                final var cliCommandRegistry = new CliCommandRegistry(
-                                                                      List.of(new ShellCommandHandler(),
+                final var cliCommandRegistry = new CliCommandRegistry(List.of(new ShellCommandHandler(),
                                                                               new SlashCommandHandler(dispatcher)));
                 printer.addCompleter(new SlashCommandCompleter(dispatcher.getCommandLine()));
                 while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
@@ -422,6 +387,15 @@ public class SaiCommand implements Callable<Integer> {
             }
         }
         return 0;
+    }
+
+    private record ResolvedModelDetails(
+            String provider,
+            String modelName,
+            String mode,
+            OkHttpClient httpClient,
+            ChatCompletionServiceFactory factory
+    ) {
     }
 
     @SneakyThrows
@@ -511,6 +485,71 @@ public class SaiCommand implements Callable<Integer> {
         return settingsBuilder.build();
     }
 
+    private SettingsConfig loadSettings(final String configDir,
+                                        final ObjectMapper mapper) {
+        final var settingsConfig = SettingsConfigLoader.load(configDir);
+        if (log.isDebugEnabled()) {
+            try {
+                log.debug("Loaded settings config: {}",
+                          mapper.writerWithDefaultPrettyPrinter()
+                                  .writeValueAsString(settingsConfig));
+            }
+            catch (Exception e) {
+                log.warn("Failed to pretty-print settings config: {}. Settings: {}", e.getMessage(), settingsConfig);
+            }
+        }
+        else {
+            log.info("Loaded settings config with {} providers", settingsConfig.getProviders().size());
+        }
+        return settingsConfig;
+    }
+
+    private void populateDataFromSession(final String sessionId,
+                                         final ObjectMapper mapper,
+                                         final Path sessionDataPath,
+                                         final Settings settings) {
+        final var probeStore = FileSystemSessionStore.builder()
+                .baseDir(sessionDataPath.toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build(); // no extraDataOperator — read-only probe
+        final var existingSession = probeStore.session(sessionId)
+                .orElse(null);
+        if (existingSession == null) {
+            log.warn("No existing session found for session ID: {}", sessionId);
+            return;
+        }
+        final var savedExtra = existingSession.getExtra();
+        if (savedExtra == null) {
+            return; // older session with no extra data — backwards compat
+        }
+        // Restore model only when --model was not supplied on the CLI
+        if (Strings.isNullOrEmpty(model)) {
+            final var savedModel = (String) savedExtra.get("model");
+            if (!Strings.isNullOrEmpty(savedModel)) {
+                model = savedModel;
+            }
+        }
+        // Restore persona only when --persona was not supplied on the CLI,
+        // and only if the persona file is still resolvable/readable.
+        if (Strings.isNullOrEmpty(persona)) {
+            final var savedPersona = (String) savedExtra.get("persona");
+            if (!Strings.isNullOrEmpty(savedPersona)) {
+                try {
+                    AgentConfigLoader.resolvePersonaPath(savedPersona, settings.getConfigDir());
+                    persona = savedPersona; // file still exists → restore
+                }
+                catch (Exception e) {
+                    log.warn("Saved persona '{}' is no longer accessible, using default: {}",
+                             savedPersona,
+                             e.getMessage());
+                    // persona stays null → resolveAgentConfig falls back to built-in default
+                }
+            }
+        }
+
+    }
+
     private Optional<String> readInput(final Printer printer) {
         var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
         try {
@@ -571,5 +610,39 @@ public class SaiCommand implements Callable<Integer> {
             return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
         }
         return input.replaceAll("@(\\S+)", "$1");
+    }
+
+    @SneakyThrows
+    private ResolvedModelDetails resolveModelFactory(final String modelPointer,
+                                                     final ObjectMapper mapper,
+                                                     final SettingsConfig settingsConfig) {
+        final var parts = modelPointer.split("/", 3);
+        Preconditions.checkArgument(parts.length >= 2,
+                                    "Model name must be in the format 'provider/model[/mode]'. Provided: "
+                                            + modelPointer);
+        final var provider = parts[0].toLowerCase();
+        final var modelName = parts[1];
+        final var mode = parts.length == 3 ? parts[2] : null;
+        final var providers = Objects.requireNonNullElseGet(settingsConfig.getProviders(),
+                                                            Map::<String, ProviderEntry>of);
+        if (log.isDebugEnabled()) {
+            log.debug("Available model providers: {}", providers);
+            providers
+                    .forEach((key, config) -> Objects.requireNonNullElseGet(config.getModels(),
+                                                                            Map::<String, ModelEntry>of)
+                            .keySet()
+                            .forEach(m -> log.info("Loaded config for: {}, Model: {}", key, m)));
+        }
+        log.debug("Loaded settings config: {}", settingsConfig);
+        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
+        final var okHttpClient = buildOkHttpClient();
+        return new ResolvedModelDetails(provider,
+                                        modelName,
+                                        mode,
+                                        okHttpClient,
+                                        new ConfigurableProviderFactory(provider,
+                                                                        mapper,
+                                                                        okHttpClient,
+                                                                        settingsConfig));
     }
 }

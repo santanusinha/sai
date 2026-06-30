@@ -38,6 +38,8 @@ import lombok.extern.jackson.Jacksonized;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SettingsConfig {
 
+    public static final SettingsConfig DEFAULT = new SettingsConfig(Map.of());
+
     @JsonProperty("providers")
     @Nullable
     Map<String, ProviderEntry> providers;
