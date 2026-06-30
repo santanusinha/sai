@@ -20,7 +20,15 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │   │   │   │   └── slash/     # Slash-command subsystem (interactive /cmd routing via Picocli)
     │   │   │   │       └── commands/  # Slash sub-commands: /help, /model, /persona
     │   │   │   ├── commands/  # CLI subcommands (list, delete sessions)
-    │   │   │   ├── config/    # Persona/config file loaders
+    │   │   │   ├── config/    # Layered settings & config file loaders
+    │   │   │   │   ├── ModelTuning.java          # Shared tuning model (settings.yaml + personas)
+    │   │   │   │   ├── SettingsConfig.java       # Root settings.yaml config class
+    │   │   │   │   ├── SettingsConfigLoader.java # loads settings.yaml with ${ENV} interpolation
+    │   │   │   │   ├── SettingsResolver.java     # Hierarchical provider→model→mode resolution
+    │   │   │   │   ├── ProviderEntry.java        # Provider entry in settings.yaml
+    │   │   │   │   ├── ModelEntry.java           # Model entry (with mode defaults)
+    │   │   │   │   ├── ModeEntry.java            # Mode-level tuning overrides
+    │   │   │   │   └── AgentConfigLoader.java    # Persona file loader
     │   │   │   ├── models/    # Data models (Session, Actor, Severity)
     │   │   │   ├── skills/    # Agent Skills extension
     │   │   │   ├── transform/ # Jolt-based request payload transforms
@@ -42,14 +50,11 @@ This file is intended for AI coding agents working on the SAI codebase. For full
 
 ## Key Concepts
 
-- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot` routes through an external proxy server.
+- **Layered Settings**: `settings.yaml` (loaded by `SettingsConfigLoader`) defines hierarchical provider → model → mode tuning. `SettingsResolver` merges these with persona tuning. See `docs/reference/settings.md`.
+- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations. Built-in providers: `azure`, `openai`, `copilot` (direct), `copilot-proxy`. Custom providers are defined in `settings.yaml` with `type: openai` or `type: azure`. Model string format: `provider/model[/mode]`.
 - **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
 - **Session storage**: File-system backed in user's local state directory
-- **Request Transforms**: `AgentConfig.requestTransforms` applies Jolt transforms to outgoing `/v1/chat/completions` payloads. See `transform/` package.
-- **Provider selection**: `ConfigurableProviderFactory` maps the `<provider>` prefix in the `--model` flag to implementations (`azure`, `openai`, `copilot`, `copilot`). The `copilot` provider talks directly to the GitHub Copilot API; `copilot` routes through an external proxy server.
-- **Tools**: `CoreToolBox` (file ops) and `BashCommandRunner` (shell) are the primary tools available to the agent
-- **Session storage**: File-system backed in user's local state directory
-- **Personas**: YAML/JSON config files loaded by `AgentConfigLoader`
+- **Personas**: YAML/JSON config files loaded by `AgentConfigLoader`. Personas use `tuning` field (preferred) or legacy `modelSettings`/`modelOptions`.
 
 ## Agent Skills
 

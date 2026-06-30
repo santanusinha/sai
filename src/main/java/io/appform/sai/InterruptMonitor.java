@@ -20,7 +20,11 @@ import org.jline.terminal.Terminal.Signal;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Monitors for Ctrl-C interrupts during agent execution.
+ * Monitors for Ctrl-C (SIGINT) and Ctrl-Z (SIGTSTP) during agent execution.
+ *
+ * <p>Ctrl-C cancels any in-flight agent task. Ctrl-Z cancels the task and then
+ * re-raises SIGTSTP so the shell can background the process; on resume (SIGCONT)
+ * the terminal is refreshed back to idle.
  */
 @Slf4j
 public class InterruptMonitor implements AutoCloseable {
@@ -29,19 +33,27 @@ public class InterruptMonitor implements AutoCloseable {
 
     public InterruptMonitor(CommandProcessor commandProcessor, Printer printer) {
         this.commandProcessor = commandProcessor;
-        this.printer = printer.registerSignalHandler(Signal.INT, this::handleCtrlC);
+        this.printer = printer
+                .registerSignalHandler(Signal.INT, this::handleCtrlC)
+                .registerSignalHandler(Signal.CONT, this::handleCont);
         log.info("Interrupt monitor initialized");
     }
 
     @Override
     public void close() {
         printer.unregisterSignalHandler(Signal.INT);
+        printer.unregisterSignalHandler(Signal.CONT);
     }
 
-    public void handleCtrlC(Signal signal) {
+    private void handleCont(Signal signal) {
+        log.info("SIGCONT received \u2014 resumed");
+        printer.print(Printer.markIdleStatus());
+    }
+
+    private void handleCtrlC(Signal signal) {
         log.info("Ctrl-C detected during execution");
-        printer.print(Printer.systemMessage(Printer.Colours.YELLOW +
-                "\n⚠️  Interrupting agent execution..." + Printer.Colours.RESET));
+        printer.print(Printer.systemMessage(Printer.Colours.YELLOW
+                + "\n\u26a0\ufe0f  Interrupting agent execution..." + Printer.Colours.RESET));
         commandProcessor.cancelRunningTask();
     }
 }

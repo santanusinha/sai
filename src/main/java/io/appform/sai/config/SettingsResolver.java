@@ -18,6 +18,8 @@ package io.appform.sai.config;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 
+import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 import lombok.Builder;
@@ -78,11 +80,12 @@ public class SettingsResolver {
                                            @Nullable SettingsConfig settingsConfig,
                                            @Nullable ModelTuning personaTuning) {
 
-        final var config = settingsConfig != null ? settingsConfig : SettingsConfig.builder().build();
+        final var config = Objects.requireNonNullElseGet(settingsConfig,
+                                                         () -> SettingsConfig.builder().build());
         final var providerEntry = config.getProvider(provider);
 
         ModelTuning effectiveTuning = null;
-        boolean foundInSettings = false;
+        var foundInSettings = false;
 
         if (providerEntry != null) {
             // Start with provider-level defaults

@@ -36,6 +36,7 @@ import io.appform.sai.AgentConfig;
 import io.appform.sai.ConfigurableProviderFactory;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
+import io.appform.sai.config.ModelTuning;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
 import io.appform.sai.transform.RequestTransformInterceptor;
@@ -114,7 +115,7 @@ public class AgentFactory {
                                                             Objects.requireNonNullElse(config.getModelOptions(),
                                                                                        SimpleOpenAIModelOptions.DEFAULT));
 
-        final var effectiveProviderFactory = resolveProviderFactory(config);
+        final var effectiveProviderFactory = resolveProviderFactory(config, resolved.getTuning());
 
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorService)
@@ -199,17 +200,19 @@ public class AgentFactory {
      * is built with a {@link RequestTransformInterceptor} and a fresh
      * {@link ConfigurableProviderFactory} is created. Otherwise the shared factory is reused.
      */
-    private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config) {
-        if (config.getRequestTransforms() == null || config.getRequestTransforms().isEmpty()) {
+    private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
+                                                                ModelTuning tuning) {
+        final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
+        if (requestTransforms == null || requestTransforms.isEmpty()) {
             return modelProviderFactory;
         }
 
         log.info("Applying {} request transform(s) for agent {}",
-                 config.getRequestTransforms().size(),
+                 requestTransforms.size(),
                  config.getAgentId());
 
         var clientWithTransforms = httpClient.newBuilder()
-                .addInterceptor(new RequestTransformInterceptor(mapper, config.getRequestTransforms()))
+                .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms))
                 .build();
 
         if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {

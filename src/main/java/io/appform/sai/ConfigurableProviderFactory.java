@@ -56,10 +56,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
     private final OkHttpClient okHttpClient;
     private final SettingsConfig settingsConfig;
 
-    /**
-     * Lazily initialised when provider == "copilot"; held for token-refresh lifetime.
-     */
-    private CopilotDirectProvider copilotDirectProvider;
+    private CopilotDirectProvider copilotDirectProvider = null;
 
     /**
      * Constructs a factory without a settings config (env-var fallback only).
@@ -94,25 +91,42 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         this.okHttpClient = okHttpClient;
         this.settingsConfig = settingsConfig != null ? settingsConfig : SettingsConfig.builder().build();
 
-        if (Providers.COPILOT.equals(provider)) {
+        /* if (Providers.COPILOT.equals(provider)) {
+            if (this.settingsConfig.getProvider(Providers.COPILOT) != null) {
+                log.warn("Provider 'copilot' is listed in settings.yaml but is always handled by the built-in "
+                        + "CopilotDirectProvider. The config entry (connection details) is ignored. "
+                        + "Model/mode tuning entries may still be used by SettingsResolver.");
+            }
             try {
                 this.copilotDirectProvider = new CopilotDirectProvider(mapper, okHttpClient, RETRY_CONFIG);
             }
             catch (java.io.IOException e) {
                 throw new IllegalStateException("Failed to initialise Copilot direct provider", e);
             }
-        }
+        } */
     }
 
     @Override
     public ChatCompletionServices get(String modelName) {
+        // Copilot is always handled by the built-in CopilotDirectProvider — never config-driven.
+        //       if (Providers.COPILOT.equals(provider)) {
+        //           return copilotDirectProvider.get(modelName);
+        //       }
+        // All other providers (including built-in names like openai/azure/copilot-proxy) check
+        // settings.yaml first. If a config entry exists, build from it. If not, fall back to
+        // env-var behavior for backward compatibility.
+        final var providerEntry = settingsConfig.getProvider(provider);
+        if (providerEntry != null) {
+            return buildFromConfig(providerEntry, modelName);
+        }
+        // No config entry — fall back to env-var behavior for known built-in provider types.
         return switch (provider) {
-
+            case Providers.COPILOT -> copilotDirectModel(modelName);
             case Providers.AZURE -> azureModel(modelName);
             case Providers.OPENAI -> openAIModel(modelName);
             case Providers.COPILOT_PROXY -> copilotProxyModel(modelName);
-            case Providers.COPILOT -> copilotDirectProvider.get(modelName);
-            default -> configDrivenProvider(modelName);
+            default -> throw new IllegalArgumentException("Unsupported provider: " + provider
+                    + ". Add it to settings.yaml or use a built-in provider (openai, azure, copilot, copilot-proxy).");
         };
     }
 
@@ -209,12 +223,19 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
      * @throws IllegalArgumentException if the provider type is unsupported
      */
     private ChatCompletionServices buildFromConfig(ProviderEntry entry, String modelName) {
-        final var type = entry.getType();
+        var type = entry.getType() == null && Providers.COPILOT.equals(provider)
+                ? Providers.COPILOT
+                : entry.getType();
         if (type == null) {
             throw new IllegalArgumentException("Provider '" + provider + "' in settings.yaml has no 'type' field. "
                     + "Set type to 'openai' or 'azure'.");
         }
+        log.info("Building ChatCompletionServices for provider '{}' (type: '{}') from settings.yaml for model: {}",
+                 provider,
+                 type,
+                 modelName);
         return switch (type.toLowerCase()) {
+            case Providers.COPILOT -> copilotDirectModel(modelName);
             case Providers.OPENAI -> openAIModelFromConfig(entry, modelName);
             case Providers.AZURE -> azureModelFromConfig(entry, modelName);
             default -> throw new IllegalArgumentException(
@@ -223,40 +244,21 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         };
     }
 
-    /**
-     * Resolves a provider that is not one of the built-in names (azure/openai/copilot/copilot-proxy).
-     *
-     * <p>Looks up the provider in the loaded {@link SettingsConfig}. If found, builds the
-     * appropriate {@link ChatCompletionServices} based on the provider's {@code type} field.
-     * If not found, falls back to env-var behavior for "openai" and "azure" as a
-     * backward-compatibility measure, or throws for truly unknown providers.
-     *
-     * @param modelName the model name (without provider prefix)
-     * @return the resolved {@link ChatCompletionServices}
-     * @throws IllegalArgumentException if the provider is not found in config and has no env-var fallback
-     */
-    private ChatCompletionServices configDrivenProvider(String modelName) {
-        final var providerEntry = settingsConfig.getProvider(provider);
-        if (providerEntry != null) {
-            return buildFromConfig(providerEntry, modelName);
+    private ChatCompletionServices copilotDirectModel(String modelName) {
+        log.debug("Creating Copilot Direct ChatCompletionServices for model: {}", modelName);
+        if (copilotDirectProvider == null) {
+            try {
+                copilotDirectProvider = new CopilotDirectProvider(mapper, okHttpClient, RETRY_CONFIG);
+            }
+            catch (java.io.IOException e) {
+                throw new IllegalStateException("Failed to initialise Copilot direct provider", e);
+            }
         }
-        // Fall back to env-var behavior for known built-in provider types
-        if (Providers.OPENAI.equals(provider)) {
-            return openAIModel(modelName);
-        }
-        if (Providers.AZURE.equals(provider)) {
-            return azureModel(modelName);
-        }
-        throw new IllegalArgumentException("Unsupported provider: " + provider
-                + ". Add it to settings.yaml or use a built-in provider (openai, azure, copilot, copilot-proxy).");
+        return copilotDirectProvider.get(modelName);
     }
 
     private ChatCompletionServices copilotProxyModel(String modelName) {
         log.debug("Creating Copilot Proxy ChatCompletionServices for model: {}", modelName);
-        final var providerEntry = settingsConfig.getProvider(Providers.COPILOT_PROXY);
-        if (providerEntry != null) {
-            return openAIModelFromConfig(providerEntry, modelName);
-        }
         final var endpoint = EnvLoader.readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
         return GithubCopilot.builder()
                 .objectMapper(mapper)
@@ -300,6 +302,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         final var organizationId = resolveValueOrNull(entry.getOrganizationId(), "OPENAI_ORGANIZATION");
         final var projectId = resolveValueOrNull(entry.getProjectId(), "OPENAI_PROJECT_ID");
         var httpClient = applyExtraHeadersFromMap(okHttpClient, entry.getExtraHeaders());
+        log.info("Using OpenAI endpoint: {} for provider: {}. Api key: {}", endpoint, provider, apiKey);
         return SimpleOpenAI.builder()
                 .baseUrl(endpoint)
                 .apiKey(apiKey)

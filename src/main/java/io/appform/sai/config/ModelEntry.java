@@ -86,9 +86,9 @@ public class ModelEntry {
         if (defaultMode != null) {
             return defaultMode;
         }
-        if (modes != null && modes.size() == 1) {
-            return modes.keySet().iterator().next();
-        }
+        //        if (modes != null && modes.size() == 1) {
+        //            return modes.keySet().iterator().next();
+        //        }
         return null;
     }
 }

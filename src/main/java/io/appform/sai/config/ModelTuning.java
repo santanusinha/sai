@@ -23,7 +23,10 @@ import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.Reasoning;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 
+import io.appform.sai.transform.RequestTransform;
+
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -107,6 +110,9 @@ public class ModelTuning {
     @Nullable
     Map<String, String> extraArgs;
 
+    @Nullable
+    List<RequestTransform> requestTransforms;
+
     /**
      * Merges two {@link ModelTuning} instances, chaining the framework merge methods.
      *
@@ -149,6 +155,9 @@ public class ModelTuning {
                         : lhs.getContextWindowSize())
                 .toolChoice(mergedOptions.getToolChoice())
                 .extraArgs(rhs.getExtraArgs() != null ? rhs.getExtraArgs() : lhs.getExtraArgs())
+                .requestTransforms(rhs.getRequestTransforms() != null
+                        ? rhs.getRequestTransforms()
+                        : lhs.getRequestTransforms())
                 .build();
     }
 
@@ -171,7 +180,8 @@ public class ModelTuning {
                 && encodingType == null
                 && contextWindowSize == null
                 && toolChoice == null
-                && (extraArgs == null || extraArgs.isEmpty());
+                && (extraArgs == null || extraArgs.isEmpty())
+                && (requestTransforms == null || requestTransforms.isEmpty());
     }
 
     /**

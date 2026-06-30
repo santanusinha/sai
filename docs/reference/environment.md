@@ -275,7 +275,6 @@ export COPILOT_ENDPOINT=https://your-enterprise-copilot-endpoint
 **Troubleshooting**:
 
 ```bash
-```bash
 # Check if token exists
 ls -la ~/.config/sai/copilot_token
 
@@ -284,7 +283,6 @@ sai copilot --auth
 # Test connection
 java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-haiku-4.5 -i "test"
 ```
----
 
 ## General Variables
 

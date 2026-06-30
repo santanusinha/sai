@@ -28,7 +28,7 @@ import java.util.Map;
 class SettingsResolverTest {
 
     @Test
-    void resolveAutoDefaultSingleMode() {
+    void noAutoDefaultSingleMode() {
         final var modeTuning = ModelTuning.builder()
                 .maxTokens(8192)
                 .build();
@@ -45,8 +45,7 @@ class SettingsResolverTest {
                                           .build()))
                 .build();
         final var result = SettingsResolver.resolve("openai", "gpt-4o", null, config, null);
-        assertNotNull(result.getModelSettings());
-        assertEquals(8192, result.getModelSettings().getMaxTokens());
+        assertNull(result.getModelSettings());
     }
 
     @Test

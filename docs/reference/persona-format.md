@@ -176,11 +176,14 @@ description: Expert coding agent with codebase knowledge graph capabilities for 
 
 **Type**: String  
 **Description**: LLM model to use for this persona  
-**Format**: `<provider>/<model-name>`  
+**Format**: `<provider>/<model-name>[/<mode>]`  
 **Default**: Falls back to `MODEL` environment variable or `copilot/claude-haiku-4.5`
+
+The optional `/<mode>` segment selects a named mode whose tuning overrides are applied on top of the model-level settings (see [Settings Configuration](settings.md) for mode setup).
 
 ```yaml
 model: copilot/claude-sonnet-4.6
+model: copilot/claude-sonnet-4.6/coding    # with mode
 ```
 
 | Provider | Prefix | Example |
@@ -188,6 +191,8 @@ model: copilot/claude-sonnet-4.6
 | OpenAI | `openai/` | `openai/gpt-4o` |
 | Azure OpenAI | `azure/` | `azure/gpt-4o-deployment` |
 | GitHub Copilot | `copilot/` | `copilot/claude-sonnet-4.6` |
+| OpenRouter | `openrouter/` | `openrouter/anthropic/claude-3.5-sonnet` |
+| Custom (via settings.yaml) | `<provider-name>/` | `groq/llama-3.1-70b` |
 
 **Common models**:
 
@@ -205,6 +210,9 @@ model: copilot/claude-sonnet-4.6
 model: copilot/claude-haiku-4.5
 model: copilot/gpt-4o
 model: copilot/gemini-2.0-flash-exp
+
+# OpenRouter (model IDs may contain slashes)
+model: openrouter/anthropic/claude-3.5-sonnet
 ```
 
 **Override priority**:
@@ -213,14 +221,56 @@ model: copilot/gemini-2.0-flash-exp
 2. Persona file: `model` field
 3. Environment: `MODEL` variable
 4. Default: `copilot/claude-haiku-4.5`
+---
+
+### tuning (optional, preferred)
+
+**Type**: Object (`ModelTuning`)  
+**Description**: Unified model tuning parameters — the same `ModelTuning` class used in `settings.yaml`.  
+**Preferred over** the legacy `modelSettings` / `modelOptions` fields. If both `tuning` and legacy fields are present, `tuning` takes precedence.
+
+```yaml
+tuning:
+  temperature: 0.5
+  maxTokens: 4096
+  topP: 0.9
+  toolChoice: AUTO
+  encodingType: O200K_BASE
+  contextWindowSize: 128000
+```
+
+#### All tuning fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `maxTokens` | Integer | Maximum tokens to generate |
+| `temperature` | Float | Sampling temperature (0.0–2.0) |
+| `topP` | Float | Nucleus sampling threshold (0.0–1.0) |
+| `timeout` | Duration | Request timeout (e.g. `PT30S` for 30 seconds) |
+| `parallelToolCalls` | Boolean | Whether to allow parallel tool calls |
+| `seed` | Integer | Random seed for reproducibility |
+| `presencePenalty` | Float | Presence penalty (-2.0 to 2.0) |
+| `frequencyPenalty` | Float | Frequency penalty (-2.0 to 2.0) |
+| `logitBias` | Map<String, Integer> | Token bias map |
+| `reasoning` | String | Reasoning effort: `LOW`, `MEDIUM`, `HIGH` |
+| `encodingType` | String | Tokenizer encoding: `CL100K_BASE`, `O200K_BASE`, etc. |
+| `contextWindowSize` | Integer | Context window size in tokens |
+| `toolChoice` | String | Tool choice: `AUTO` or `REQUIRED` |
+| `extraArgs` | Map<String, String> | Free-form passthrough arguments |
+
+!!! tip "Using tuning with settings.yaml"
+    The `tuning` field in a persona is **merged on top** of the `settings.yaml` resolution.
+    `settings.yaml` provides provider → model → mode hierarchical tuning; persona tuning
+    acts as a final override layer. See [Settings Configuration](settings.md) for details.
 
 ---
 
-### modelSettings (optional)
+### modelSettings (optional, legacy)
 
 **Type**: Object  
 **Description**: LLM sampling parameters and generation settings  
-**Default**: Provider-specific defaults
+**Default**: Provider-specific defaults  
+**Deprecated**: Use `tuning` instead. Kept for backward compatibility.
 
 ```yaml
 modelSettings:
@@ -279,7 +329,6 @@ modelSettings:
 - `1.0` - Consider all tokens (default)
 - `0.9` - Consider top 90% probability mass
 - Lower values make output more focused and deterministic
-
 ---
 
 ### prompt (optional)
@@ -733,6 +782,7 @@ sai -p my-new-persona -i task.md
 
 ## See Also
 
+- [Settings Configuration](settings.md) - `settings.yaml` hierarchical provider/model/mode configuration
 - [CLI Options](cli-options.md) - Using the `--persona` flag
 - [Agent Skills Guide](../guides/skills.md) - Creating and using Agent Skills
 - [Configuration Guide](../getting-started/configuration.md) - Setting up providers and models

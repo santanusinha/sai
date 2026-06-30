@@ -23,7 +23,6 @@ import com.phonepe.sentinelai.toolbox.mcp.config.MCPConfiguration;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders;
 
 import io.appform.sai.config.ModelTuning;
-import io.appform.sai.transform.RequestTransform;
 
 import java.util.List;
 import java.util.Map;
@@ -95,6 +94,4 @@ public class AgentConfig {
     @Nullable
     List<String> skillNames;
 
-    @Nullable
-    List<RequestTransform> requestTransforms;
 }

@@ -16,8 +16,7 @@ mcp:
   mcpServers:
     exa-search:
       type: http
-      #url: https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY}
-      url: https://mcp.exa.ai/mcp?exaApiKey=0777ec6b-8eaa-494c-af02-0714f5f65d31
+      url: https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY}
       # Timeout in milliseconds (30 seconds for research queries)
       timeout: 30000
       # Optional: Headers if needed for authentication

@@ -18,6 +18,7 @@ package io.appform.sai.config;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.phonepe.sentinelai.core.utils.EnvLoader;
 
 import org.apache.commons.text.StringSubstitutor;
 
@@ -53,6 +54,7 @@ public final class SettingsConfigLoader {
             log.debug("Settings file not found at {}; using empty config (env-var fallback)", settingsPath);
             return SettingsConfig.builder().build();
         }
+        log.debug("Loading settings from {}", settingsPath);
         try {
             final var raw = Files.readString(settingsPath, StandardCharsets.UTF_8);
             final var content = substituteEnvVars(raw);
@@ -84,17 +86,7 @@ public final class SettingsConfigLoader {
      * @return the content with all placeholders resolved
      */
     public static String substituteEnvVars(String content) {
-        final var substitutor = new StringSubstitutor(key -> {
-            final var colonDash = key.indexOf(":-");
-            if (colonDash >= 0) {
-                final var varName = key.substring(0, colonDash);
-                final var defaultVal = key.substring(colonDash + 2);
-                final var val = System.getenv(varName);
-                return val != null ? val : defaultVal;
-            }
-            final var val = System.getenv(key);
-            return val != null ? val : null;
-        });
+        final var substitutor = new StringSubstitutor(key -> EnvLoader.readEnv(key).orElse(null));
         substitutor.setEnableSubstitutionInVariables(false);
         substitutor.setPreserveEscapes(true);
         return substitutor.replace(content);

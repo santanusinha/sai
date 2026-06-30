@@ -140,14 +140,9 @@ public class Printer implements AutoCloseable {
             System.setProperty("org.jline.terminal.dumb.color", "false");
             log.info("Running in headless mode with dumb terminal");
         }
-        else {
-            terminalBuilder.signalHandler(signal -> {
-                final var handler = signalHandlers.get(signal);
-                if (null != handler) {
-                    handler.accept(signal);
-                }
-            });
-        }
+        // Do not install a global signalHandler on the TerminalBuilder; leave every signal
+        // at SIG_DFL by default so the OS handles them normally (including TSTP/Ctrl-Z).
+        // Individual handlers are registered after the terminal is built via terminal.handle().
         this.terminal = terminalBuilder.build();
         this.lineReader = Objects.requireNonNullElseGet(lineReader,
                                                         () -> {
@@ -173,6 +168,7 @@ public class Printer implements AutoCloseable {
                                                                     .option(Option.ERASE_LINE_ON_FINISH, true)
                                                                     .build();
                                                         });
+        terminal.handle(Signal.TSTP, Terminal.SignalHandler.SIG_DFL);
         this.status = Status.getStatus(terminal);
         bindAltEnter(this.lineReader);
     }
@@ -190,11 +186,13 @@ public class Printer implements AutoCloseable {
 
     public Printer registerSignalHandler(Signal signal, Consumer<Signal> handler) {
         signalHandlers.put(signal, handler);
+        terminal.handle(signal, handler::accept);
         return this;
     }
 
     public Printer unregisterSignalHandler(Signal signal) {
         signalHandlers.remove(signal);
+        terminal.handle(signal, Terminal.SignalHandler.SIG_DFL);
         return this;
     }
 

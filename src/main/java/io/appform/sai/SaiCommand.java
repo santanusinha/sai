@@ -47,7 +47,6 @@ import io.appform.sai.config.SettingsConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
-import io.appform.sai.transform.RequestTransformValidator;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
@@ -220,16 +219,6 @@ public class SaiCommand implements Callable<Integer> {
             System.err.println("Error: Failed to load persona file: " + persona + " (" + e.getMessage() + ")");
             return 1;
         }
-        try {
-            if (agentConfig.getRequestTransforms() != null) {
-                RequestTransformValidator.validate(agentConfig.getRequestTransforms());
-            }
-        }
-        catch (IllegalArgumentException e) {
-            log.error("Invalid requestTransforms in persona: {}", persona, e);
-            System.err.println("Error: Invalid requestTransforms configuration: " + e.getMessage());
-            return 1;
-        }
         final var modelPointer = Strings.isNullOrEmpty(model)
                 ? agentConfig.getModel()
                 : model;
@@ -240,8 +229,20 @@ public class SaiCommand implements Callable<Integer> {
         final var provider = parts[0].toLowerCase();
         final var modelName = parts[1];
         final var mode = parts.length == 3 ? parts[2] : null;
-        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
+        log.info("Settings path: {}, data path: {}, session ID: {}, persona: {}, model: {}, mode: {}",
+                 settings.getConfigDir(),
+                 settings.getDataDir(),
+                 effectiveSessionId,
+                 persona,
+                 modelPointer,
+                 mode);
         final var settingsConfig = SettingsConfigLoader.load(settings.getConfigDir());
+        log.info("Loaded settings config: {}", settingsConfig);
+        settingsConfig.getProviders()
+                .forEach((key, config) -> config.getModels()
+                        .keySet()
+                        .forEach(m -> log.info("Loaded config for: {}, Model: {}", key, m)));
+        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
         final var modelProviderFactory = new ConfigurableProviderFactory(provider,
                                                                          mapper,
                                                                          okHttpClient,

@@ -154,13 +154,15 @@ sai --model copilot/claude-haiku-4.5
 
 Models are chosen with the model parameter present in the persona file provided and can be overriden using the `--model` command line option.
 
-Format: `<provider>/<model name>`
+Format: `<provider>/<model name>[/<mode>]`
+
+The mode segment is optional. When omitted, the model's default mode (if any) is used.
 
 For example:
 - `--model=openai/gpt-5.4` - Command line
 - `-m copilot/claude-sonnet4.6` - Command line
+- `-m copilot/claude-sonnet4.6/coding` - Command line with mode
 - `model: azure/gpt-4.1` - In the Persona YAML file
-
 If no model is passed anywhere, it defaults to `copilot/claude-haiku-4.5`.
 
 ### Providers
@@ -170,8 +172,48 @@ SAI supports the following provider types:
 - **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI reads the GitHub OAuth token from `~/.config/sai/copilot_token` (written by `sai copilot-auth`), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
 - **copilot-proxy** — Routes requests through an external Copilot proxy server such as [copilot-api](https://github.com/ericc-ch/copilot-api) running on `localhost:4141`.
 
-Provider-specific variables:
+Providers can be configured via environment variables (see below) or via a `settings.yaml` file (see [Settings Configuration](docs/reference/settings.md)). The `settings.yaml` file is the primary mechanism for multi-provider setups, per-model tuning, and modes. Environment variables serve as a fallback when no config entry exists.
 
+#### settings.yaml
+
+For multi-provider setups, per-model tuning, and modes, create `~/.config/sai/settings.yaml`:
+
+```yaml
+providers:
+  openai:
+    type: openai
+    endpoint: ${OPENAI_ENDPOINT:-https://api.openai.com/v1}
+    apiKey: ${OPENAI_API_KEY}
+    tuning:
+      temperature: 0.2
+    models:
+      gpt-4o:
+        tuning:
+          temperature: 0.3
+          contextWindowSize: 128000
+        modes:
+          coding:
+            tuning:
+              temperature: 0.2
+              toolChoice: AUTO
+
+  openrouter:
+    type: openai
+    endpoint: https://openrouter.ai/api/v1
+    apiKey: ${OPENROUTER_API_KEY}
+
+  azure:
+    type: azure
+    endpoint: ${AZURE_ENDPOINT}
+    apiKey: ${AZURE_API_KEY}
+    apiVersion: ${AZURE_API_VERSION:-2024-10-21}
+
+# copilot is NOT listed — it is always available as a built-in provider.
+```
+
+See [Settings Configuration](docs/reference/settings.md) for the full format reference, including `${ENV}` interpolation, `provider/model[/mode]` string format, hierarchical tuning merge, and modes.
+
+Provider-specific environment variables (fallback when no settings.yaml entry exists):
 **OpenAI**
 - OPENAI_API_KEY: required
 - OPENAI_ENDPOINT: optional, default `https://api.openai.com/v1`
@@ -340,15 +382,14 @@ Slash commands give you live control over the session without leaving SAI. Type 
 > /help
 ```
 
-| Command                          | Description                                              |
-|----------------------------------|----------------------------------------------------------|
 | `/help`                          | List all available slash commands                        |
 | `/model`                         | Show the currently active model                          |
-| `/model <provider/model>`        | Switch to a different model mid-session                  |
+| `/model <provider/model[/mode]>`| Switch to a different model (and optionally mode)         |
+| `/mode`                          | Show the currently active mode                           |
+| `/mode <name>`                   | Set the active mode and rebuild the agent                 |
 | `/persona`                       | Show the name of the currently active persona            |
 | `/persona <name-or-path>`        | Load a different persona mid-session                     |
 | `/skills`                        | List all available agent skills                          |
-
 #### Examples
 
 ```text
@@ -359,6 +400,14 @@ Current model: copilot/claude-haiku-4.5
 # Switch model for the rest of the session
 > /model openai/gpt-4
 Model switched to: openai/gpt-4
+
+# Check current mode
+> /mode
+Current mode: (none)
+
+# Switch to coding mode
+> /mode coding
+Mode switched to: coding
 
 # Switch persona
 > /persona reviewer

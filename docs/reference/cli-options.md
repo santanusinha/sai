@@ -26,15 +26,19 @@ This page documents all command-line options available in SAI. Options can be sp
 
 Specifies the AI model to use for the session.
 
-**Format:** `<provider>/<model-name>`
+**Format:** `<provider>/<model-name>[/<mode>]`
+
+The mode segment is optional. When omitted, the model's default mode (if any) is used.
 
 **Default:** `copilot/claude-haiku-4.5`
 
 **Supported Providers:**
 
-- `openai` - OpenAI models (GPT-4, GPT-3.5, etc.)
+- `openai` - OpenAI models (GPT-4, GPT-3.5, etc.) and OpenAI-compatible providers (OpenRouter, Groq, etc.)
 - `azure` - Azure OpenAI Service
 - `copilot` - GitHub Copilot direct integration
+- `copilot-proxy` - GitHub Copilot via external proxy
+- Any custom provider defined in `settings.yaml` (see [Settings Configuration](settings.md))
 
 **Examples:**
 
@@ -53,6 +57,16 @@ Specifies the AI model to use for the session.
     sai -m copilot/claude-sonnet-4.6
     ```
 
+=== "Copilot Claude with mode"
+    ```bash
+    sai -m copilot/claude-sonnet-4.6/coding
+    ```
+
+=== "OpenRouter (slash-delimited model ID)"
+    ```bash
+    sai -m openrouter/anthropic/claude-3.5-sonnet
+    ```
+
 === "Default Model"
     ```bash
     sai  # Uses copilot/claude-haiku-4.5
@@ -65,6 +79,10 @@ Specifies the AI model to use for the session.
     2. Persona configuration `model` field
     3. Default: `copilot/claude-haiku-4.5`
 
+!!! info "Modes"
+    Modes allow per-model tuning overrides (e.g. `coding`, `planning`). Use `/mode` in interactive
+    sessions to switch modes without changing the model. See [Settings Configuration](settings.md)
+    for mode configuration in `settings.yaml`.
 ---
 
 ### Session Management
@@ -404,8 +422,7 @@ Displays the SAI version number.
     ```
 
 ### Environment Integration
-
-SAI options work seamlessly with environment variables. See [Environment Variables Reference](environment.md) for provider configuration.
+SAI options work seamlessly with environment variables. See [Environment Variables Reference](environment.md) for provider configuration and [Settings Configuration](settings.md) for the `settings.yaml` hierarchical provider/model/mode configuration (preferred over env vars for multi-provider setups).
 
 === "OpenAI with Custom Model"
     ```bash
@@ -424,7 +441,8 @@ SAI options work seamlessly with environment variables. See [Environment Variabl
 
 ## See Also
 
+- [Settings Configuration](settings.md) - `settings.yaml` hierarchical provider/model/mode configuration
 - [Subcommands Reference](subcommands.md) - Session management commands
-- [Environment Variables](environment.md) - Provider configuration
+- [Environment Variables](environment.md) - Provider configuration (fallback)
 - [Persona Format](persona-format.md) - Persona configuration schema
 - [Quick Start Guide](../getting-started/quickstart.md) - Getting started with SAI
