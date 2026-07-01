@@ -113,21 +113,26 @@ public class CommandProcessor implements AutoCloseable {
         var errorActor = Actor.ASSISTANT;
         final var currentUsage = new ModelUsageStats();
         try {
-            final var responseF = agent.executeAsync(AgentInput
-                    .<String>builder()
-                    .requestMetadata(AgentRequestMetadata.builder()
-                            .sessionId(sessionId)
-                            .runId(input.runId())
-                            .userId(user)
-                            .build())
-                    .request(prompt)
-                    .build());
+            final var streamHandler = new BufferedOutputPrinter(printer);
+            final var responseF = agent.executeAsyncTextStreaming(
+                                                                  AgentInput.<String>builder()
+                                                                          .requestMetadata(AgentRequestMetadata
+                                                                                  .builder()
+                                                                                  .sessionId(sessionId)
+                                                                                  .runId(input.runId())
+                                                                                  .userId(user)
+                                                                                  .build())
+                                                                          .request(prompt)
+                                                                          .build(),
+                                                                  streamHandler);
             runningTask = responseF;
             final var response = responseF.get();
+            streamHandler.markDone();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
-                messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(response.getData()))
-                        .withImportant(true));
+                //                messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(response.getData()))
+                //                        .withImportant(true));
+                log.info("Agent response: {}", response.getData());
                 var infoMessage = Printer.Colours.WHITE + "%s %s.".formatted(
                                                                              Severity.SUCCESS
                                                                                      .getEmoji(),

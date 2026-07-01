@@ -74,9 +74,6 @@ public class ModelTuning {
     Duration timeout;
 
     @Nullable
-    Boolean parallelToolCalls;
-
-    @Nullable
     Integer seed;
 
     @Nullable
@@ -143,7 +140,6 @@ public class ModelTuning {
                 .temperature(mergedSettings.getTemperature())
                 .topP(mergedSettings.getTopP())
                 .timeout(mergedSettings.getTimeout())
-                .parallelToolCalls(mergedSettings.getParallelToolCalls())
                 .seed(mergedSettings.getSeed())
                 .presencePenalty(mergedSettings.getPresencePenalty())
                 .frequencyPenalty(mergedSettings.getFrequencyPenalty())
@@ -171,7 +167,6 @@ public class ModelTuning {
                 && temperature == null
                 && topP == null
                 && timeout == null
-                && parallelToolCalls == null
                 && seed == null
                 && presencePenalty == null
                 && frequencyPenalty == null
@@ -236,7 +231,7 @@ public class ModelTuning {
                 .temperature(temperature)
                 .topP(topP)
                 .timeout(timeout)
-                .parallelToolCalls(parallelToolCalls)
+                .parallelToolCalls(false)
                 .seed(seed)
                 .presencePenalty(presencePenalty)
                 .frequencyPenalty(frequencyPenalty)

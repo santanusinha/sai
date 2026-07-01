@@ -15,7 +15,6 @@
  */
 package io.appform.sai;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
@@ -73,10 +72,9 @@ public class AgentConfig {
     ModelTuning tuning;
 
     MCPConfiguration mcp;
-    JsonNode outputSchema;
 
     @Default
-    OutputGenerationMode outputGenerationMode = OutputGenerationMode.TOOL_BASED;
+    OutputGenerationMode outputGenerationMode = OutputGenerationMode.STRUCTURED_OUTPUT;
 
     /**
      * Default model string in {@code provider/model[/mode]} format.

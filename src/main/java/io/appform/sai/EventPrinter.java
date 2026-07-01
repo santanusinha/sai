@@ -51,7 +51,7 @@ public class EventPrinter implements AgentEventVisitor<Void> {
         if (compactionCompleted.getErrorType().equals(ErrorType.SUCCESS)) {
             printer.print(Printer.systemMessage("Compaction completed successfully... Took %d ms"
                     .formatted(compactionCompleted.getElapsedTimeMs())));
-            printer.print(Printer.userMessage(compactionCompleted.getExtractedSummary().getSummary()));
+            //printer.print(Printer.userMessage(compactionCompleted.getExtractedSummary().getSummary()));
         }
         else {
             printer.print(Printer.systemMessage("Compaction completed with errors... Took %d ms. Error: %s - %s"

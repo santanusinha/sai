@@ -17,8 +17,6 @@ package io.appform.sai.tools;
 
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
-import jnr.x86asm.SEGMENT;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
