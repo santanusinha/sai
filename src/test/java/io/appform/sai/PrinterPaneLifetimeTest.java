@@ -169,6 +169,7 @@ class PrinterPaneLifetimeTest {
     void updateContextInfoAppearsInBuildPrompt() {
         printer.updateContextInfo("MyPersona", "copilot/claude-opus-4");
         final var prompt = printer.buildPrompt();
+        assertTrue(prompt.startsWith("\n"), "Prompt must start with an empty line");
         assertTrue(prompt.contains("MyPersona"), "Prompt must contain persona name");
         assertTrue(prompt.contains("copilot/claude-opus-4"), "Prompt must contain model");
         assertTrue(prompt.contains("\n"), "Two-line prompt must contain a newline");

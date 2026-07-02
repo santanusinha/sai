@@ -247,7 +247,7 @@ public class Printer implements AutoCloseable {
         if (info == null || info.isEmpty()) {
             return Colours.YELLOW + "> " + Colours.RESET;
         }
-        return info + "\n" + Colours.YELLOW + "> " + Colours.RESET;
+        return "\n" + info + "\n" + Colours.YELLOW + "> " + Colours.RESET;
     }
 
     @SuppressWarnings("java:S106")
