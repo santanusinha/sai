@@ -16,22 +16,21 @@
 package io.appform.sai;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.core.compaction.ExtractedSummary;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Formats a {@link SessionSummary} or {@link ExtractedSummary} into a human-readable,
+ * Formats an {@link ExtractedSummary} into a human-readable,
  * ANSI-coloured multi-line string for display in the interactive terminal.
  *
- * <p>The raw JSON field (accessible via {@link SessionSummary#getRaw()} as a string or
- * {@link ExtractedSummary#getRawData()} as a {@link JsonNode}) is produced by the sentinel-ai
- * compaction pipeline. Its schema (defined in {@code CompactionPrompts.DEFAULT_PROMPT_SCHEMA})
- * includes: {@code title}, {@code summary}, {@code keywords}, {@code key_points},
- * {@code key_facts}, {@code action_items}, {@code goal}, {@code discoveries},
- * {@code accomplishments}, {@code relevant_files}, {@code citations}, {@code sentiment},
- * {@code confidence}, and {@code metadata}.
+ * <p>The raw JSON field (accessible via {@link ExtractedSummary#getRawData()} as a
+ * {@link JsonNode}) is produced by the sentinel-ai compaction pipeline. Its schema
+ * (defined in {@code CompactionPrompts.DEFAULT_PROMPT_SCHEMA}) includes: {@code title},
+ * {@code summary}, {@code keywords}, {@code key_points}, {@code key_facts},
+ * {@code action_items}, {@code goal}, {@code discoveries}, {@code accomplishments},
+ * {@code relevant_files}, {@code citations}, {@code sentiment}, {@code confidence},
+ * and {@code metadata}.
  *
  * <p>This class parses the raw JSON and renders each present field as a labelled section,
  * gracefully skipping {@code null} or missing fields. When the raw JSON is absent or unparseable
@@ -40,17 +39,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class CompactionSummaryFormatter {
 
-    private static final String LABEL_COLOUR = Printer.Colours.CYAN;
+    private static final String LABEL_COLOUR = Printer.Colours.YELLOW;
     private static final String TEXT_COLOUR = Printer.Colours.WHITE;
     private static final String DIM_COLOUR = Printer.Colours.GRAY;
     private static final String RESET = Printer.Colours.RESET;
     private static final String BOLD = "\u001B[1m";
-
-    private final ObjectMapper mapper;
-
-    public CompactionSummaryFormatter(ObjectMapper mapper) {
-        this.mapper = mapper;
-    }
 
     private static void appendCitations(StringBuilder sb, JsonNode raw) {
         final var node = raw.get("citations");
@@ -138,13 +131,13 @@ public final class CompactionSummaryFormatter {
         return value == null || value.isBlank() ? "" : value;
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
     private static String text(String value) {
         return value == null || value.isBlank() ? "" : value;
     }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
     private static String textOr(JsonNode raw, String field, String fallback) {
         final var fromRaw = text(raw, field);
@@ -152,7 +145,7 @@ public final class CompactionSummaryFormatter {
     }
 
     /**
-     * Format the compaction result from a {@link CompactionCompletedEvent}'s
+     * Format the compaction result from a {@code CompactionCompletedEvent}'s
      * {@link ExtractedSummary} into a coloured, multi-line string.
      *
      * @param extractedSummary the summary extracted by the compaction pipeline
@@ -179,49 +172,6 @@ public final class CompactionSummaryFormatter {
             // Fallback: no raw JSON, just use the summary field
             sb.append("\n").append(LABEL_COLOUR).append("Summary: ").append(RESET)
                     .append(TEXT_COLOUR).append(extractedSummary.getSummary()).append(RESET);
-        }
-
-        return sb.toString();
-    }
-
-    /**
-     * Format the compaction result into a coloured, multi-line string.
-     *
-     * @param summary the session summary returned by {@code forceCompaction}
-     * @return a human-readable ANSI-coloured string, never {@code null}
-     */
-    public String format(final com.phonepe.sentinelai.session.SessionSummary summary) {
-        final var sb = new StringBuilder();
-
-        // Header
-        sb.append(LABEL_COLOUR).append(BOLD).append("\u2705 Session compacted").append(RESET);
-
-        // Title
-        final var title = text(summary.getTitle());
-        if (!title.isEmpty()) {
-            sb.append("\n").append(LABEL_COLOUR).append("Title: ").append(RESET)
-                    .append(TEXT_COLOUR).append(title).append(RESET);
-        }
-
-        // Parse the raw JSON for the rich fields
-        JsonNode raw = null;
-        final var rawJson = summary.getRaw();
-        if (rawJson != null && !rawJson.isBlank()) {
-            try {
-                raw = mapper.readTree(rawJson);
-            }
-            catch (Exception e) {
-                log.debug("Could not parse raw compaction JSON: {}", e.getMessage());
-            }
-        }
-
-        if (raw != null) {
-            renderRichFields(sb, raw, summary.getSummary());
-        }
-        else if (!text(summary.getSummary()).isEmpty()) {
-            // Fallback: no raw JSON, just use the summary field
-            sb.append("\n").append(LABEL_COLOUR).append("Summary: ").append(RESET)
-                    .append(TEXT_COLOUR).append(summary.getSummary()).append(RESET);
         }
 
         return sb.toString();

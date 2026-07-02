@@ -18,10 +18,10 @@ package io.appform.sai;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.phonepe.sentinelai.core.compaction.ExtractedSummary;
-import com.phonepe.sentinelai.session.SessionSummary;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,19 +31,13 @@ import org.junit.jupiter.api.Test;
 class CompactionSummaryFormatterTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final CompactionSummaryFormatter formatter = new CompactionSummaryFormatter(mapper);
+    private final CompactionSummaryFormatter formatter = new CompactionSummaryFormatter();
 
     @Test
-    void blankRawJsonFallsBackToSummaryText() {
-        final var summary = SessionSummary.builder()
-                .sessionId("test-blank-raw")
-                .title("Blank raw")
-                .summary("Fallback for blank raw.")
-                .raw("")
-                .updatedAt(System.currentTimeMillis())
-                .build();
+    void blankRawDataFallsBackToSummaryText() {
+        final var extracted = extracted("Blank raw", "Fallback for blank raw.", "");
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Summary: Fallback for blank raw."), "fallback summary");
@@ -59,15 +53,9 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-confidence")
-                .title("High confidence")
-                .summary("Very confident.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted("High confidence", "Very confident.", raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
 
         // Green ANSI code for >= 8
         assertTrue(result.contains(Printer.Colours.GREEN), "high confidence should be green");
@@ -87,15 +75,9 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-empty-lists")
-                .title("Empty lists")
-                .summary("Testing empty arrays.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted("Empty lists", "Testing empty arrays.", raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Title: Empty lists"), "title");
@@ -193,15 +175,11 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-full")
-                .title("Implement /compact command")
-                .summary("Added a /compact slash command with pretty-printing.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted("Implement /compact command",
+                                        "Added a /compact slash command with pretty-printing.",
+                                        raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
 
         // Strip ANSI codes for assertions
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
@@ -236,15 +214,8 @@ class CompactionSummaryFormatterTest {
 
     @Test
     void malformedRawJsonFallsBackToSummaryText() {
-        final var summary = SessionSummary.builder()
-                .sessionId("test-malformed")
-                .title("Malformed raw")
-                .summary("Fallback for malformed raw.")
-                .raw("{not valid json")
-                .updatedAt(System.currentTimeMillis())
-                .build();
-
-        final var result = formatter.format(summary);
+        final var extracted = extracted("Malformed raw", "Fallback for malformed raw.", "{not valid json");
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Summary: Fallback for malformed raw."), "fallback summary");
@@ -260,15 +231,9 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-minimal")
-                .title("Minimal compaction")
-                .summary("Just the basics.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted("Minimal compaction", "Just the basics.", raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Session compacted"), "header");
@@ -290,21 +255,15 @@ class CompactionSummaryFormatterTest {
         assertFalse(plain.contains("Metadata:"), "metadata should be absent");
     }
 
-    // -----------------------------------------------------------------
-    // ExtractedSummary overload (used by CompactionCompletedEvent)
-    // -----------------------------------------------------------------
-
     @Test
-    void nullRawJsonFallsBackToSummaryText() {
-        final var summary = SessionSummary.builder()
-                .sessionId("test-no-raw")
+    void nullRawDataFallsBackToSummaryText() {
+        final var extracted = ExtractedSummary.builder()
                 .title("No raw JSON")
                 .summary("Fallback summary text.")
-                .raw(null)
-                .updatedAt(System.currentTimeMillis())
+                .rawData(null)
                 .build();
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Session compacted"), "header");
@@ -324,15 +283,9 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-no-title")
-                .title(null)
-                .summary("Summary without title.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted(null, "Summary without title.", raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         assertTrue(plain.contains("Session compacted"), "header");
@@ -355,18 +308,29 @@ class CompactionSummaryFormatterTest {
                 }
                 """;
 
-        final var summary = SessionSummary.builder()
-                .sessionId("test-null-citations")
-                .title("Null citations")
-                .summary("Testing null citation entries.")
-                .raw(raw)
-                .updatedAt(System.currentTimeMillis())
-                .build();
+        final var extracted = extracted("Null citations", "Testing null citation entries.", raw);
 
-        final var result = formatter.format(summary);
+        final var result = formatter.format(extracted);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
         final var bulletCount = plain.lines().filter(l -> l.contains("•")).count();
         assertTrue(bulletCount == 1, "only one valid citation should render, got " + bulletCount);
+    }
+
+    private ExtractedSummary extracted(String title, String summary, String rawJson) {
+        JsonNode rawData = null;
+        if (rawJson != null && !rawJson.isBlank()) {
+            try {
+                rawData = mapper.readTree(rawJson);
+            }
+            catch (Exception e) {
+                rawData = JsonNodeFactory.instance.nullNode();
+            }
+        }
+        return ExtractedSummary.builder()
+                .title(title)
+                .summary(summary)
+                .rawData(rawData)
+                .build();
     }
 }

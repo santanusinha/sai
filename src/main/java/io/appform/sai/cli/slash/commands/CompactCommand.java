@@ -26,8 +26,8 @@ import picocli.CommandLine.ParentCommand;
  *
  * <p>Delegates to {@link com.phonepe.sentinelai.session.AgentSessionExtension#forceCompaction(String)}
  * to summarise the conversation history for the current session. When compaction succeeds the
- * sentinel session extension fires its {@code onSessionSummarized} callback (wired in
- * {@code SaiCommand}) which pretty-prints the summary via {@link io.appform.sai.CompactionSummaryFormatter}.
+ * sentinel event bus fires a {@code CompactionCompletedEvent} which is handled by
+ * {@link io.appform.sai.EventPrinter} and pretty-printed via {@link io.appform.sai.CompactionSummaryFormatter}.
  * This command only needs to initiate the operation and report errors.
  */
 @Command(name = "compact", description = "Manually compact the session history")

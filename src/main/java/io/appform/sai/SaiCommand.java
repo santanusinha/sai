@@ -259,10 +259,6 @@ public class SaiCommand implements Callable<Integer> {
             // Setup rest of the connections
             agent.registerToolbox(new CoreToolBox(printer));
             printer.updateContextInfo(agentConfig.getName(), modelPointer);
-            sessionExtension.onSessionSummarized()
-                    .connect(sessionSummary -> printer.print(
-                                                             Printer.raw(new CompactionSummaryFormatter(mapper).format(
-                                                                                                                       sessionSummary))));
             final var eventPrinter = new EventPrinter(printer, mapper);
             eventBus.onEvent().connect(event -> {
                 final var eventSessionId = event.getSessionId();

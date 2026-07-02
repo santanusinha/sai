@@ -53,7 +53,7 @@ public class EventPrinter implements AgentEventVisitor<Void> {
         if (compactionCompleted.getErrorType().equals(ErrorType.SUCCESS)) {
             final var summary = compactionCompleted.getExtractedSummary();
             if (summary != null) {
-                final var formatter = new CompactionSummaryFormatter(mapper);
+                final var formatter = new CompactionSummaryFormatter();
                 printer.print(Printer.raw(formatter.format(summary)));
             }
             else {
