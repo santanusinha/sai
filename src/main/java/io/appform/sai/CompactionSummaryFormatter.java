@@ -17,14 +17,16 @@ package io.appform.sai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.core.compaction.ExtractedSummary;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Formats a {@link com.phonepe.sentinelai.session.SessionSummary} into a human-readable,
+ * Formats a {@link SessionSummary} or {@link ExtractedSummary} into a human-readable,
  * ANSI-coloured multi-line string for display in the interactive terminal.
  *
- * <p>The {@link SessionSummary#getRaw()} field is a JSON string produced by the sentinel-ai
+ * <p>The raw JSON field (accessible via {@link SessionSummary#getRaw()} as a string or
+ * {@link ExtractedSummary#getRawData()} as a {@link JsonNode}) is produced by the sentinel-ai
  * compaction pipeline. Its schema (defined in {@code CompactionPrompts.DEFAULT_PROMPT_SCHEMA})
  * includes: {@code title}, {@code summary}, {@code keywords}, {@code key_points},
  * {@code key_facts}, {@code action_items}, {@code goal}, {@code discoveries},
@@ -33,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>This class parses the raw JSON and renders each present field as a labelled section,
  * gracefully skipping {@code null} or missing fields. When the raw JSON is absent or unparseable
- * it falls back to the plain {@link SessionSummary#getSummary()} text.
+ * it falls back to the plain summary text.
  */
 @Slf4j
 public final class CompactionSummaryFormatter {
@@ -150,6 +152,39 @@ public final class CompactionSummaryFormatter {
     }
 
     /**
+     * Format the compaction result from a {@link CompactionCompletedEvent}'s
+     * {@link ExtractedSummary} into a coloured, multi-line string.
+     *
+     * @param extractedSummary the summary extracted by the compaction pipeline
+     * @return a human-readable ANSI-coloured string, never {@code null}
+     */
+    public String format(final ExtractedSummary extractedSummary) {
+        final var sb = new StringBuilder();
+
+        // Header
+        sb.append(LABEL_COLOUR).append(BOLD).append("\u2705 Session compacted").append(RESET);
+
+        // Title
+        final var title = text(extractedSummary.getTitle());
+        if (!title.isEmpty()) {
+            sb.append("\n").append(LABEL_COLOUR).append("Title: ").append(RESET)
+                    .append(TEXT_COLOUR).append(title).append(RESET);
+        }
+
+        final var raw = extractedSummary.getRawData();
+        if (raw != null && !raw.isNull()) {
+            renderRichFields(sb, raw, extractedSummary.getSummary());
+        }
+        else if (!text(extractedSummary.getSummary()).isEmpty()) {
+            // Fallback: no raw JSON, just use the summary field
+            sb.append("\n").append(LABEL_COLOUR).append("Summary: ").append(RESET)
+                    .append(TEXT_COLOUR).append(extractedSummary.getSummary()).append(RESET);
+        }
+
+        return sb.toString();
+    }
+
+    /**
      * Format the compaction result into a coloured, multi-line string.
      *
      * @param summary the session summary returned by {@code forceCompaction}
@@ -181,44 +216,7 @@ public final class CompactionSummaryFormatter {
         }
 
         if (raw != null) {
-            // Summary (prefer the raw JSON's summary, fall back to SessionSummary.summary)
-            appendText(sb, "Summary", textOr(raw, "summary", summary.getSummary()));
-
-            // Keywords
-            appendList(sb, "Keywords", raw, "keywords");
-
-            // Goal
-            appendText(sb, "Goal", text(raw, "goal"));
-
-            // Key points
-            appendList(sb, "Key points", raw, "key_points");
-
-            // Key facts
-            appendList(sb, "Key facts", raw, "key_facts");
-
-            // Discoveries
-            appendList(sb, "Discoveries", raw, "discoveries");
-
-            // Accomplishments
-            appendList(sb, "Accomplishments", raw, "accomplishments");
-
-            // Action items
-            appendList(sb, "Action items", raw, "action_items");
-
-            // Relevant files
-            appendList(sb, "Relevant files", raw, "relevant_files");
-
-            // Citations
-            appendCitations(sb, raw);
-
-            // Sentiment
-            appendText(sb, "Sentiment", text(raw, "sentiment"));
-
-            // Confidence
-            appendConfidence(sb, raw);
-
-            // Metadata
-            appendText(sb, "Metadata", text(raw, "metadata"));
+            renderRichFields(sb, raw, summary.getSummary());
         }
         else if (!text(summary.getSummary()).isEmpty()) {
             // Fallback: no raw JSON, just use the summary field
@@ -227,5 +225,50 @@ public final class CompactionSummaryFormatter {
         }
 
         return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared rendering
+    // -------------------------------------------------------------------------
+
+    private void renderRichFields(final StringBuilder sb, final JsonNode raw, final String fallbackSummary) {
+        // Summary (prefer the raw JSON's summary, fall back to the provided summary)
+        appendText(sb, "Summary", textOr(raw, "summary", fallbackSummary));
+
+        // Keywords
+        appendList(sb, "Keywords", raw, "keywords");
+
+        // Goal
+        appendText(sb, "Goal", text(raw, "goal"));
+
+        // Key points
+        appendList(sb, "Key points", raw, "key_points");
+
+        // Key facts
+        appendList(sb, "Key facts", raw, "key_facts");
+
+        // Discoveries
+        appendList(sb, "Discoveries", raw, "discoveries");
+
+        // Accomplishments
+        appendList(sb, "Accomplishments", raw, "accomplishments");
+
+        // Action items
+        appendList(sb, "Action items", raw, "action_items");
+
+        // Relevant files
+        appendList(sb, "Relevant files", raw, "relevant_files");
+
+        // Citations
+        appendCitations(sb, raw);
+
+        // Sentiment
+        appendText(sb, "Sentiment", text(raw, "sentiment"));
+
+        // Confidence
+        appendConfidence(sb, raw);
+
+        // Metadata
+        appendText(sb, "Metadata", text(raw, "metadata"));
     }
 }

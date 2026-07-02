@@ -15,7 +15,6 @@
  */
 package io.appform.sai.cli.slash.commands;
 
-import io.appform.sai.CompactionSummaryFormatter;
 import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
 
@@ -28,8 +27,8 @@ import picocli.CommandLine.ParentCommand;
  * <p>Delegates to {@link com.phonepe.sentinelai.session.AgentSessionExtension#forceCompaction(String)}
  * to summarise the conversation history for the current session. When compaction succeeds the
  * sentinel session extension fires its {@code onSessionSummarized} callback (wired in
- * {@code SaiCommand}) which prints the summary line. This command only needs to initiate the
- * operation and report the result.
+ * {@code SaiCommand}) which pretty-prints the summary via {@link io.appform.sai.CompactionSummaryFormatter}.
+ * This command only needs to initiate the operation and report errors.
  */
 @Command(name = "compact", description = "Manually compact the session history")
 public class CompactCommand implements Runnable {
@@ -58,17 +57,13 @@ public class CompactCommand implements Runnable {
                                           + Printer.Colours.GRAY + "\u2026" + Printer.Colours.RESET));
         try {
             final var result = sessionExtension.forceCompaction(sessionId).join();
-            if (result.isPresent()) {
-                final var summary = result.get();
-                final var formatter = new CompactionSummaryFormatter(context.getMapper());
-                printer.print(Printer.raw(formatter.format(summary)));
-            }
-            else {
+            if (result.isEmpty()) {
                 printer.print(Printer.systemMessage(
                                                     Printer.Colours.YELLOW
                                                             + "Compaction completed but no summary was produced (the session may be empty)."
                                                             + Printer.Colours.RESET));
             }
+            // Success case: the onSessionSummarized signal fires and pretty-prints the summary.
         }
         catch (Exception e) {
             printer.print(Printer.systemMessage(

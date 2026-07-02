@@ -30,7 +30,6 @@ import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
-import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
@@ -261,9 +260,9 @@ public class SaiCommand implements Callable<Integer> {
             agent.registerToolbox(new CoreToolBox(printer));
             printer.updateContextInfo(agentConfig.getName(), modelPointer);
             sessionExtension.onSessionSummarized()
-                    .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
-                            + "Session compacted with summary: " + Colours.WHITE
-                            + sessionSummary.getTitle() + Colours.RESET)));
+                    .connect(sessionSummary -> printer.print(
+                                                             Printer.raw(new CompactionSummaryFormatter(mapper).format(
+                                                                                                                       sessionSummary))));
             final var eventPrinter = new EventPrinter(printer, mapper);
             eventBus.onEvent().connect(event -> {
                 final var eventSessionId = event.getSessionId();

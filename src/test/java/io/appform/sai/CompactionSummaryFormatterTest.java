@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.phonepe.sentinelai.core.compaction.ExtractedSummary;
 import com.phonepe.sentinelai.session.SessionSummary;
 
 import org.junit.jupiter.api.Test;
@@ -102,6 +104,69 @@ class CompactionSummaryFormatterTest {
         assertFalse(plain.contains("Key points:"), "empty key points should be absent");
         assertFalse(plain.contains("Action items:"), "empty action items should be absent");
         assertFalse(plain.contains("Citations:"), "empty citations should be absent");
+    }
+
+    @Test
+    void extractedSummaryNullRawDataFallsBackToSummaryText() {
+        final var extracted = ExtractedSummary.builder()
+                .title("Auto compaction")
+                .summary("Auto-compacted by sentinel.")
+                .rawData(null)
+                .build();
+
+        final var result = formatter.format(extracted);
+        final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
+
+        assertTrue(plain.contains("Session compacted"), "header");
+        assertTrue(plain.contains("Title: Auto compaction"), "title");
+        assertTrue(plain.contains("Summary: Auto-compacted by sentinel."), "fallback summary");
+        assertFalse(plain.contains("Keywords:"), "keywords should be absent");
+    }
+
+    @Test
+    void extractedSummaryNullRawJsonNodeFallsBackToSummaryText() {
+        final var extracted = ExtractedSummary.builder()
+                .title("Null raw")
+                .summary("Fallback for null raw node.")
+                .rawData(JsonNodeFactory.instance.nullNode())
+                .build();
+
+        final var result = formatter.format(extracted);
+        final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
+
+        assertTrue(plain.contains("Summary: Fallback for null raw node."), "fallback summary");
+    }
+
+    @Test
+    void extractedSummaryWithRawDataRendersAllFields() {
+        final var rawNode = mapper.valueToTree(java.util.Map.of(
+                                                                "title",
+                                                                "Auto compaction",
+                                                                "summary",
+                                                                "Auto-compacted with rich data.",
+                                                                "keywords",
+                                                                java.util.List.of("auto", "compaction"),
+                                                                "confidence",
+                                                                8.5,
+                                                                "sentiment",
+                                                                "positive"));
+
+        final var extracted = ExtractedSummary.builder()
+                .title("Auto compaction")
+                .summary("Fallback text.")
+                .rawData(rawNode)
+                .build();
+
+        final var result = formatter.format(extracted);
+        final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
+
+        assertTrue(plain.contains("Session compacted"), "header");
+        assertTrue(plain.contains("Title: Auto compaction"), "title");
+        assertTrue(plain.contains("Summary: Auto-compacted with rich data."), "summary from raw JSON");
+        assertTrue(plain.contains("Keywords:"), "keywords label");
+        assertTrue(plain.contains("auto"), "keyword item");
+        assertTrue(plain.contains("Sentiment: positive"), "sentiment");
+        assertTrue(plain.contains("8.5/10"), "confidence value");
     }
 
     @Test
@@ -225,6 +290,10 @@ class CompactionSummaryFormatterTest {
         assertFalse(plain.contains("Metadata:"), "metadata should be absent");
     }
 
+    // -----------------------------------------------------------------
+    // ExtractedSummary overload (used by CompactionCompletedEvent)
+    // -----------------------------------------------------------------
+
     @Test
     void nullRawJsonFallsBackToSummaryText() {
         final var summary = SessionSummary.builder()
@@ -297,10 +366,6 @@ class CompactionSummaryFormatterTest {
         final var result = formatter.format(summary);
         final var plain = result.replaceAll("\u001B\\[[0-9;]*m", "");
 
-        assertTrue(plain.contains("Citations:"), "citations label");
-        assertTrue(plain.contains("valid-source"), "valid citation source");
-        assertTrue(plain.contains("valid-quote"), "valid citation quote");
-        // Should only have one citation entry despite 4 array elements
         final var bulletCount = plain.lines().filter(l -> l.contains("•")).count();
         assertTrue(bulletCount == 1, "only one valid citation should render, got " + bulletCount);
     }

@@ -79,8 +79,12 @@ class CompactCommandTest {
     }
 
     @Test
-    void compactWithExtensionAndSummaryPrintsSuccess() {
-        // Re-setup with a session extension that returns a non-empty summary
+    void compactWithExtensionAndSummaryPrintsCompactingMessage() {
+        // Re-setup with a session extension that returns a non-empty summary.
+        // CompactCommand no longer pretty-prints the summary itself — the
+        // onSessionSummarized signal callback (wired in SaiCommand) handles that.
+        // Here we only verify that the "Compacting session" transient message is
+        // printed and that the "no summary" fallback is NOT shown.
         final var agentFactory = mock(AgentFactory.class);
         final var mockAgent = mock(SaiAgent.class);
         when(agentFactory.createAgent(any(), any(), any(), any())).thenReturn(mockAgent);
@@ -118,8 +122,8 @@ class CompactCommandTest {
         final var dispatcher = new SlashCommandDispatcher(context);
 
         dispatcher.dispatch("compact", printer);
-        assertTrue(capturedContains("Session compacted"));
-        assertTrue(capturedContains("A brief summary of the conversation."));
+        assertTrue(capturedContains("Compacting session"));
+        assertTrue(!capturedContains("no summary was produced"));
     }
 
     @Test

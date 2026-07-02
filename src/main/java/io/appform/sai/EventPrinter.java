@@ -39,19 +39,27 @@ public class EventPrinter implements AgentEventVisitor<Void> {
 
 
     private final Printer printer;
+    private final ObjectMapper mapper;
     private final MessagePrinter messagePrinter;
 
     public EventPrinter(Printer printer, ObjectMapper mapper) {
         this.printer = printer;
+        this.mapper = mapper;
         this.messagePrinter = new MessagePrinter(printer, mapper, false);
     }
 
     @Override
     public Void visit(CompactionCompletedEvent compactionCompleted) {
         if (compactionCompleted.getErrorType().equals(ErrorType.SUCCESS)) {
-            printer.print(Printer.systemMessage("Compaction completed successfully... Took %d ms"
-                    .formatted(compactionCompleted.getElapsedTimeMs())));
-            //printer.print(Printer.userMessage(compactionCompleted.getExtractedSummary().getSummary()));
+            final var summary = compactionCompleted.getExtractedSummary();
+            if (summary != null) {
+                final var formatter = new CompactionSummaryFormatter(mapper);
+                printer.print(Printer.raw(formatter.format(summary)));
+            }
+            else {
+                printer.print(Printer.systemMessage("Compaction completed successfully... Took %d ms"
+                        .formatted(compactionCompleted.getElapsedTimeMs())));
+            }
         }
         else {
             printer.print(Printer.systemMessage("Compaction completed with errors... Took %d ms. Error: %s - %s"
