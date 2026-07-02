@@ -15,13 +15,11 @@
  */
 package io.appform.sai;
 
-import java.nio.charset.Charset;
-import java.util.function.Consumer;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Buffers streaming LLM output (delivered as raw {@code byte[]} chunks) and
+ * Buffers streaming LLM output (delivered as {@code String} chunks) and
  * dispatches complete, render-ready segments to the {@link Printer}.
  *
  * <h3>Buffering strategy</h3>
@@ -40,8 +38,8 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  *
  * <h3>Residual / carry-over</h3>
- * The incoming byte stream may be split mid-line across successive
- * {@link #accept(byte[])} calls. The last element produced by
+ * The incoming stream may be split mid-line across successive
+ * {@link #accept(String)} calls. The last element produced by
  * {@code split("\\R", -1)} is always either an empty string (if the chunk
  * ended with a newline) or a partial line. This residual is always saved in
  * {@code buffer} regardless of mode, so that {@code buffer + content} at the
@@ -49,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
  * before {@link #detectMode} is invoked.
  */
 @Slf4j
-class BufferedOutputPrinter implements Consumer<byte[]> {
+class BufferedOutputPrinter {
 
     enum Mode {
         /** Print each complete line immediately. */
@@ -71,12 +69,10 @@ class BufferedOutputPrinter implements Consumer<byte[]> {
         this.printer = printer;
     }
 
-    @Override
-    public void accept(byte[] data) {
-        if (data == null || data.length == 0) {
+    public void accept(final String content) {
+        if (content == null || content.isEmpty()) {
             return;
         }
-        final var content = new String(data, Charset.defaultCharset());
         // Prepend any carry-over from the previous call.
         final var currentContent = buffer + content;
         // split("\\R", -1) keeps trailing empty strings so we always get

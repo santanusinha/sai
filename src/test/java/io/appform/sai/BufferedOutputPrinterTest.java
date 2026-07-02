@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -204,8 +203,8 @@ class BufferedOutputPrinterTest {
 
     @Test
     void emptyChunkIsIgnored() {
-        bop.accept(new byte[0]);
         bop.accept(null);
+        bop.accept("");
         assertEquals(0, printCount(), "empty/null chunks should produce no output");
     }
 
@@ -573,7 +572,7 @@ class BufferedOutputPrinterTest {
     }
 
     private void feed(String text) {
-        bop.accept(text.getBytes(StandardCharsets.UTF_8));
+        bop.accept(text);
     }
 
     private int printCount() {
