@@ -15,6 +15,7 @@
  */
 package io.appform.sai.cli.slash.commands;
 
+import io.appform.sai.CompactionSummaryFormatter;
 import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
 
@@ -59,11 +60,8 @@ public class CompactCommand implements Runnable {
             final var result = sessionExtension.forceCompaction(sessionId).join();
             if (result.isPresent()) {
                 final var summary = result.get();
-                printer.print(Printer.systemMessage(
-                                                    Printer.Colours.GREEN + "\u2705 " + Printer.Colours.WHITE
-                                                            + "Session compacted." + Printer.Colours.GRAY
-                                                            + " Summary: " + Printer.Colours.WHITE
-                                                            + summary.getSummary() + Printer.Colours.RESET));
+                final var formatter = new CompactionSummaryFormatter(context.getMapper());
+                printer.print(Printer.raw(formatter.format(summary)));
             }
             else {
                 printer.print(Printer.systemMessage(
