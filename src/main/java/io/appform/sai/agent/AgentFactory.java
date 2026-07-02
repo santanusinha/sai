@@ -39,6 +39,7 @@ import io.appform.sai.Settings;
 import io.appform.sai.config.ModelTuning;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
+import io.appform.sai.transform.ReasoningNormalizationInterceptor;
 import io.appform.sai.transform.RequestTransformInterceptor;
 
 import java.nio.file.Paths;
@@ -196,30 +197,44 @@ public class AgentFactory {
     /**
      * Resolves the {@link ChatCompletionServiceFactory} to use for this agent.
      *
-     * <p>If the agent config contains {@code requestTransforms}, a new {@link OkHttpClient}
-     * is built with a {@link RequestTransformInterceptor} and a fresh
-     * {@link ConfigurableProviderFactory} is created. Otherwise the shared factory is reused.
+     * <p>Always wraps the shared {@link OkHttpClient} with a
+     * {@link ReasoningNormalizationInterceptor} so that reasoning/thinking fields
+     * from different providers are normalised to {@code reasoning_content}.
+     *
+     * <p>If the agent config additionally contains {@code requestTransforms}, a
+     * {@link RequestTransformInterceptor} is also added, and a fresh
+     * {@link ConfigurableProviderFactory} is created.
      */
     private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
                                                                 ModelTuning tuning) {
         final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
-        if (requestTransforms == null || requestTransforms.isEmpty()) {
-            return modelProviderFactory;
+        final var hasRequestTransforms = requestTransforms != null && !requestTransforms.isEmpty();
+
+        if (hasRequestTransforms) {
+            log.info("Applying {} request transform(s) for agent {}",
+                     requestTransforms.size(),
+                     config.getAgentId());
         }
 
-        log.info("Applying {} request transform(s) for agent {}",
-                 requestTransforms.size(),
-                 config.getAgentId());
+        var clientBuilder = httpClient.newBuilder()
+                .addInterceptor(new ReasoningNormalizationInterceptor(mapper));
 
-        var clientWithTransforms = httpClient.newBuilder()
-                .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms))
-                .build();
+        if (hasRequestTransforms) {
+            clientBuilder.addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
+        }
+
+        var effectiveClient = clientBuilder.build();
 
         if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
-            return new ConfigurableProviderFactory(factory.getProvider(), mapper, clientWithTransforms, settingsConfig);
+            return new ConfigurableProviderFactory(factory.getProvider(),
+                                                   mapper,
+                                                   effectiveClient,
+                                                   settingsConfig);
         }
 
-        log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
+        if (hasRequestTransforms) {
+            log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
+        }
         return modelProviderFactory;
     }
 }
