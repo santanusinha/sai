@@ -113,6 +113,10 @@ public class CommandProcessor implements AutoCloseable {
         var errorActor = Actor.ASSISTANT;
         final var currentUsage = new ModelUsageStats();
         try {
+            printer.print(Printer.raw(
+                                      Printer.Colours.CYAN + "\u23F3 " + Printer.Colours.GRAY + "Processing "
+                                              + Printer.Colours.WHITE + input.runId()
+                                              + Printer.Colours.GRAY + "\u2026" + Printer.Colours.RESET));
             final var streamHandler = new AgentStreamConsumer(new BufferedOutputPrinter(printer), //Reasoning stream
                                                               new BufferedOutputPrinter(printer));//Content stream
             final var responseF = agent.executeAsyncTextStreaming(
