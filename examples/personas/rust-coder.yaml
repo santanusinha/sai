@@ -5,10 +5,7 @@
 agentId: sai-rust-coder
 name: Sai Rust Coder
 description: Expert Rust engineer with codebase knowledge graph capabilities for safe, performant, and idiomatic Rust development.
-model: copilot/claude-sonnet-4.6
-
-tuning:
-  temperature: 0.4
+model: copilot/claude-sonnet-4.6/coding
 
 # MCP Server Configuration
 # Provides tools from codebase-memory-mcp for structural code analysis
