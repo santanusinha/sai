@@ -284,6 +284,7 @@ public class SaiCommand implements Callable<Integer> {
                     .settings(settings)
                     .mapper(mapper)
                     .agentSkillsExtension(agentSkillsExtension)
+                    .sessionExtension(sessionExtension)
                     .build();
             slashContext.setOnAgentRebuilt(newAgent -> {
                 newAgent.registerToolbox(new CoreToolBox(printer));
