@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import lombok.Builder;
@@ -109,6 +110,7 @@ public class Printer implements AutoCloseable {
 
     private final LinkedBlockingQueue<List<Update>> printingQueue = new LinkedBlockingQueue<>();
     private final Map<Signal, Consumer<Signal>> signalHandlers = new ConcurrentHashMap<>();
+    private final AtomicReference<String> contextInfo = new AtomicReference<>("");
     private Future<?> printerTask = null;
 
     @Builder
@@ -217,6 +219,35 @@ public class Printer implements AutoCloseable {
         if (lineReader instanceof LineReaderImpl impl) {
             impl.setCompleter(new AggregateCompleter(completer, impl.getCompleter()));
         }
+    }
+
+    /**
+     * Updates the context info shown above the input cursor (persona name + model).
+     * Call this whenever the active persona or model changes.
+     *
+     * @param personaName display name of the active persona
+     * @param model       current model string (e.g. {@code copilot/claude-haiku-4.5})
+     */
+    public void updateContextInfo(String personaName, String model) {
+        final var info = Colours.GRAY + "\uD83D\uDC64 " + Colours.WHITE + personaName
+                + Colours.GRAY + " | " + Colours.CYAN + "\uD83E\uDD16 " + model
+                + Colours.RESET;
+        contextInfo.set(info);
+    }
+
+    /**
+     * Builds the JLine prompt string. When context info is set the prompt spans two lines:
+     * the first line shows the persona + model and the second line carries the {@code > } cursor.
+     * This lets the user always see which profile and model are active without a status bar.
+     *
+     * @return ANSI prompt string suitable for {@link LineReader#readLine(String)}
+     */
+    public String buildPrompt() {
+        final var info = contextInfo.get();
+        if (info == null || info.isEmpty()) {
+            return Colours.YELLOW + "> " + Colours.RESET;
+        }
+        return info + "\n" + Colours.YELLOW + "> " + Colours.RESET;
     }
 
     @SuppressWarnings("java:S106")

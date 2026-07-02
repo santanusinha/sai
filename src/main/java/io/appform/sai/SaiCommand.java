@@ -259,6 +259,7 @@ public class SaiCommand implements Callable<Integer> {
                 .start()) {
             // Setup rest of the connections
             agent.registerToolbox(new CoreToolBox(printer));
+            printer.updateContextInfo(agentConfig.getName(), modelPointer);
             sessionExtension.onSessionSummarized()
                     .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
                             + "Session compacted with summary: " + Colours.WHITE
@@ -286,6 +287,8 @@ public class SaiCommand implements Callable<Integer> {
                     .build();
             slashContext.setOnAgentRebuilt(newAgent -> {
                 newAgent.registerToolbox(new CoreToolBox(printer));
+                printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
+                                          slashContext.getCurrentModel().get());
             });
 
             var commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
@@ -547,9 +550,8 @@ public class SaiCommand implements Callable<Integer> {
     }
 
     private Optional<String> readInput(final Printer printer) {
-        var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
         try {
-            return Optional.of(printer.getLineReader().readLine(prompt));
+            return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
         }
         catch (EndOfFileException | UserInterruptException e) {
             return Optional.empty();

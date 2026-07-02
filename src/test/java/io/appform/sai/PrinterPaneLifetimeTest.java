@@ -66,6 +66,13 @@ class PrinterPaneLifetimeTest {
     }
 
     @Test
+    void buildPromptWithoutContextInfoReturnsSimplePrompt() {
+        final var prompt = printer.buildPrompt();
+        assertTrue(prompt.contains(">"), "Default prompt must contain '>'");
+        assertFalse(prompt.contains("\n"), "Default prompt must be a single line");
+    }
+
+    @Test
     void closeAfterStart() {
         printer.start();
         assertDoesNotThrow(() -> printer.close());
@@ -156,5 +163,15 @@ class PrinterPaneLifetimeTest {
     @AfterEach
     void tearDown() throws IOException {
         printer.close();
+    }
+
+    @Test
+    void updateContextInfoAppearsInBuildPrompt() {
+        printer.updateContextInfo("MyPersona", "copilot/claude-opus-4");
+        final var prompt = printer.buildPrompt();
+        assertTrue(prompt.contains("MyPersona"), "Prompt must contain persona name");
+        assertTrue(prompt.contains("copilot/claude-opus-4"), "Prompt must contain model");
+        assertTrue(prompt.contains("\n"), "Two-line prompt must contain a newline");
+        assertTrue(prompt.endsWith("> " + Printer.Colours.RESET), "Second line must end with the cursor '> '");
     }
 }
