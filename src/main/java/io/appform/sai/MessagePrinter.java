@@ -399,12 +399,25 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var stdout = response.getStdout();
         final var stderr = response.getStderr();
         if (statusCode == 0) {
+            if (historical && !Strings.isNullOrEmpty(stdout)) {
+                messages.add(Printer.raw(Colours.GRAY + stdout + Colours.RESET));
+                messages.add(Printer.empty());
+            }
             messages.add(Printer.systemMessage("Status: %s -> Command executed successfully"
                     .formatted(statusCode)));
         }
         else {
-            messages.add(Printer.raw(Colours.RED + "Status: %s -> Command executed successfully" + Colours.RESET
-                    .formatted(statusCode)));
+            var errorMessage = !Strings.isNullOrEmpty(stderr) ? stderr : "";
+            if (!Strings.isNullOrEmpty(stdout)) {
+                errorMessage += !errorMessage.isEmpty() ? System.lineSeparator() : "";
+                errorMessage += stdout;
+            }
+            if (historical && !Strings.isNullOrEmpty(errorMessage)) {
+                messages.add(Printer.raw(Colours.GRAY + errorMessage + Colours.RESET));
+                messages.add(Printer.empty());
+            }
+            messages.add(Printer.raw((Colours.RED + "Status: %s -> Command failed"
+                    + Colours.RESET).formatted(statusCode)));
         }
     }
 
