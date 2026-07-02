@@ -32,8 +32,6 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.Terminal.Signal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedString;
-import org.jline.utils.InfoCmp.Capability;
-import org.jline.utils.Status;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -44,7 +42,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import lombok.Builder;
@@ -109,11 +106,9 @@ public class Printer implements AutoCloseable {
     @Getter
     private final LineReader lineReader;
 
-    private final Status status;
 
     private final LinkedBlockingQueue<List<Update>> printingQueue = new LinkedBlockingQueue<>();
     private final Map<Signal, Consumer<Signal>> signalHandlers = new ConcurrentHashMap<>();
-    private final AtomicReference<String> contextInfo = new AtomicReference<>("");
     private Future<?> printerTask = null;
 
     @Builder
@@ -169,16 +164,10 @@ public class Printer implements AutoCloseable {
                                                                     .build();
                                                         });
         terminal.handle(Signal.TSTP, Terminal.SignalHandler.SIG_DFL);
-        this.status = Status.getStatus(terminal);
         bindAltEnter(this.lineReader);
     }
 
     public Printer start() {
-        if (!settings.isHeadless()) {
-            lineReader.getTerminal().puts(Capability.clear_screen);
-            lineReader.getTerminal().flush();
-        }
-
         printerTask = executorService.submit(this::processPrintingQueue);
         this.print(markIdleStatus());
         return this;
@@ -196,14 +185,6 @@ public class Printer implements AutoCloseable {
         return this;
     }
 
-    /**
-     * Prepend {@code completer} to the active JLine completer chain. The supplied completer is
-     * wrapped together with the existing completer in an {@link AggregateCompleter} so that both
-     * participate in TAB-completion. A no-op when the underlying {@link LineReader} is not a
-     * {@link LineReaderImpl} (e.g. in headless / test mode where a stub reader is injected).
-     *
-     * @param completer the {@link Completer} to prepend
-     */
     /**
      * Binds Alt+Enter to {@code self-insert-unmeta} in the emacs and viins keymaps so that
      * pressing Alt+Enter inserts a literal newline into the input buffer instead of submitting
@@ -260,22 +241,19 @@ public class Printer implements AutoCloseable {
                             return;
                         }
                         if (printable.isStatusUpdate()) {
-                            status.update(List.of(AttributedString.EMPTY));
-                            status.update(List.of(new AttributedString(buildStatusLine(printable.getData()))));
+                            return;
+                        }
+                        if (printable.isRaw()) {
+                            lineReader.printAbove("%s".formatted(printable.getData()));
                         }
                         else {
-                            if (printable.isRaw()) {
-                                lineReader.printAbove("%s".formatted(printable.getData()));
-                            }
-                            else {
-                                final var colour = Objects.requireNonNullElseGet(printable.getColour(),
-                                                                                 () -> defaultColour(printable
-                                                                                         .getSeverity()));
-                                lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(),
-                                                                            colour,
-                                                                            printable.getData(),
-                                                                            Colours.RESET));
-                            }
+                            final var colour = Objects.requireNonNullElseGet(printable.getColour(),
+                                                                             () -> defaultColour(printable
+                                                                                     .getSeverity()));
+                            lineReader.printAbove("%s %s%s%s".formatted(printable.getActor().getEmoji(),
+                                                                        colour,
+                                                                        printable.getData(),
+                                                                        Colours.RESET));
                         }
                     });
                 }
@@ -290,38 +268,6 @@ public class Printer implements AutoCloseable {
         return statusUpdate(" Idle " + Colours.GRAY + "(Waiting for input)");
     }
 
-    /**
-     * Updates the context information displayed on the right side of the status bar.
-     * Should be called whenever the active persona or model changes.
-     *
-     * @param personaName display name of the active persona
-     * @param model       current model string (e.g. {@code copilot/claude-haiku-4.5})
-     */
-    public void updateContextInfo(String personaName, String model) {
-        final var info = Colours.GRAY + "\uD83D\uDC64 " + Colours.WHITE + personaName
-                + Colours.GRAY + " | " + Colours.CYAN + "\uD83E\uDD16 " + model + " "
-                + Colours.RESET;
-        contextInfo.set(info);
-    }
-
-    /**
-     * Builds a full-width status-bar line: left-side {@code statusText} padded with spaces to push
-     * the context info (persona + model) to the right edge of the terminal.
-     */
-    private String buildStatusLine(String statusText) {
-        final var right = contextInfo.get();
-        if (right == null || right.isEmpty()) {
-            return statusText;
-        }
-        final var leftVisible = AttributedString.fromAnsi(statusText).length();
-        final var rightVisible = AttributedString.fromAnsi(right).length();
-        final var termWidth = terminal.getWidth();
-        if (termWidth <= 0) {
-            return statusText;
-        }
-        final var padding = Math.max(0, termWidth - leftVisible - rightVisible);
-        return statusText + " ".repeat(padding) + right;
-    }
 
     public static Update statusUpdate(String status) {
         return Update.builder()
