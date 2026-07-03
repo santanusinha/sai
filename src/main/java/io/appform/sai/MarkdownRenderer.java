@@ -109,7 +109,7 @@ public class MarkdownRenderer {
         @Override
         public void visit(Code code) {
             final var target = currentCell != null ? currentCell : sb;
-            target.append(Printer.Colours.GRAY)
+            target.append(Printer.Colours.YELLOW)
                     .append("`")
                     .append(code.getLiteral())
                     .append("`")
@@ -303,7 +303,7 @@ public class MarkdownRenderer {
                     buffer.append(t.getLiteral());
                 }
                 else if (child instanceof Code c) {
-                    buffer.append(Printer.Colours.GRAY)
+                    buffer.append(Printer.Colours.YELLOW)
                             .append("`")
                             .append(c.getLiteral())
                             .append("`")

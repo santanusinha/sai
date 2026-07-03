@@ -106,10 +106,10 @@ class MarkdownRendererTest {
     }
 
     @Test
-    void inlineCodeIsHighlightedWithGrayAndBackticks() {
+    void inlineCodeIsHighlightedWithYellowAndBackticks() {
         final var result = MarkdownRenderer.toAnsi("Use `foo()` here.");
         assertTrue(result.contains("`foo()`"), "backtick-wrapped literal should be present");
-        assertTrue(result.contains(Printer.Colours.GRAY), "should use GRAY colour for inline code");
+        assertTrue(result.contains(Printer.Colours.YELLOW), "should use YELLOW colour for inline code");
     }
 
     // ------------------------------------------------------------------

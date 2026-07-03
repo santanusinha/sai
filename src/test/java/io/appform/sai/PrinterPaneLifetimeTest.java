@@ -24,11 +24,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.SneakyThrows;
 
@@ -68,6 +66,13 @@ class PrinterPaneLifetimeTest {
     }
 
     @Test
+    void buildPromptWithoutContextInfoReturnsSimplePrompt() {
+        final var prompt = printer.buildPrompt();
+        assertTrue(prompt.contains(">"), "Default prompt must contain '>'");
+        assertFalse(prompt.contains("\n"), "Default prompt must be a single line");
+    }
+
+    @Test
     void closeAfterStart() {
         printer.start();
         assertDoesNotThrow(() -> printer.close());
@@ -76,6 +81,7 @@ class PrinterPaneLifetimeTest {
     @Test
     void closeIsIdempotent() {
         printer.start();
+        ;
         assertDoesNotThrow(() -> {
             printer.close();
             printer.close();
@@ -160,21 +166,13 @@ class PrinterPaneLifetimeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void updateContextInfoSetsPersonaAndModelInContextInfo()
-            throws InterruptedException, NoSuchFieldException, IllegalAccessException {
-        printer.updateContextInfo("myPersona", "claude-opus-4");
-        printer.print(Printer.markIdleStatus());
-        awaitQueueDrain();
-
-        final Field contextInfoField = Printer.class.getDeclaredField("contextInfo");
-        contextInfoField.setAccessible(true);
-        final var ref = (AtomicReference<String>) contextInfoField.get(printer);
-        final var stored = ref.get();
-        assertTrue(stored.contains("myPersona"), "contextInfo should contain persona name");
-        assertTrue(stored.contains("claude-opus-4"), "contextInfo should contain model name");
-
-        assertTrue(printer.getCapture().stream().anyMatch(Printer.Update::isStatusUpdate),
-                   "markIdleStatus should enqueue a status update");
+    void updateContextInfoAppearsInBuildPrompt() {
+        printer.updateContextInfo("MyPersona", "copilot/claude-opus-4");
+        final var prompt = printer.buildPrompt();
+        assertTrue(prompt.startsWith("\n"), "Prompt must start with an empty line");
+        assertTrue(prompt.contains("MyPersona"), "Prompt must contain persona name");
+        assertTrue(prompt.contains("copilot/claude-opus-4"), "Prompt must contain model");
+        assertTrue(prompt.contains("\n"), "Two-line prompt must contain a newline");
+        assertTrue(prompt.endsWith("> " + Printer.Colours.RESET), "Second line must end with the cursor '> '");
     }
 }

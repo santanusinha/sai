@@ -17,6 +17,7 @@ package io.appform.sai.cli.slash;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
+import com.phonepe.sentinelai.session.AgentSessionExtension;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.Printer;
@@ -91,6 +92,12 @@ public class SlashCommandContext {
     @Nullable
     private final AgentSkillsExtension<String, String, SaiAgent> agentSkillsExtension;
 
+    /**
+     * Session extension used for forced compaction via {@code /compact}.
+     * May be {@code null} in test contexts that do not exercise session features.
+     */
+    @Nullable
+    private final AgentSessionExtension<String, String, SaiAgent> sessionExtension;
     /**
      * Callback invoked after {@link #rebuildAgent()} creates a new agent. The REPL loop uses this
      * to register toolboxes on the new instance (e.g., {@code CoreToolBox}).

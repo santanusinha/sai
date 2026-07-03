@@ -30,7 +30,6 @@ import com.phonepe.sentinelai.session.SessionSummary;
 
 import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
-import io.appform.sai.Printer.Colours;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
@@ -260,10 +259,6 @@ public class SaiCommand implements Callable<Integer> {
             // Setup rest of the connections
             agent.registerToolbox(new CoreToolBox(printer));
             printer.updateContextInfo(agentConfig.getName(), modelPointer);
-            sessionExtension.onSessionSummarized()
-                    .connect(sessionSummary -> printer.print(Printer.systemMessage(Colours.YELLOW
-                            + "Session compacted with summary: " + Colours.WHITE
-                            + sessionSummary.getTitle() + Colours.RESET)));
             final var eventPrinter = new EventPrinter(printer, mapper);
             eventBus.onEvent().connect(event -> {
                 final var eventSessionId = event.getSessionId();
@@ -284,12 +279,12 @@ public class SaiCommand implements Callable<Integer> {
                     .settings(settings)
                     .mapper(mapper)
                     .agentSkillsExtension(agentSkillsExtension)
+                    .sessionExtension(sessionExtension)
                     .build();
             slashContext.setOnAgentRebuilt(newAgent -> {
                 newAgent.registerToolbox(new CoreToolBox(printer));
                 printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
                                           slashContext.getCurrentModel().get());
-                printer.print(Printer.markIdleStatus());
             });
 
             var commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
@@ -551,9 +546,8 @@ public class SaiCommand implements Callable<Integer> {
     }
 
     private Optional<String> readInput(final Printer printer) {
-        var prompt = Printer.Colours.YELLOW + "> " + Printer.Colours.RESET;
         try {
-            return Optional.of(printer.getLineReader().readLine(prompt));
+            return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
         }
         catch (EndOfFileException | UserInterruptException e) {
             return Optional.empty();
