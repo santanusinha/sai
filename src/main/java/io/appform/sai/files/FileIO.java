@@ -207,15 +207,33 @@ public class FileIO {
 
     private static List<String> editLines(String content, List<ToolIO.FileEditOperation> edits) {
         final var lines = new ArrayList<String>(Arrays.asList(content.split(System.lineSeparator(), -1)));
-        //Now apply the edits in reverse order
-        for (int i = edits.size() - 1; i >= 0; i--) {
-            final var replacement = edits.get(i);
+        // Apply edits from the bottom of the file upwards so that each edit's line numbers
+        // still refer to the original content. This must NOT depend on the order the caller
+        // supplied the edits in: sort by effective startLine descending here. Relying on the
+        // caller to pre-sort caused corrupted / duplicated lines at chunk boundaries when the
+        // edits were supplied out of order.
+        final var ordered = new ArrayList<>(edits);
+        ordered.sort((a, b) -> Integer.compare(effectiveEndLine(b, lines.size()), effectiveEndLine(a, lines.size())));
+        int previousStartLine = Integer.MAX_VALUE;
+        for (final var replacement : ordered) {
             final var startLine = replacement.getStartLine();
             final var endLine = replacement.getEndLine();
-            final var newContent = replacement.getContent();
-            applyEdit(lines, startLine, endLine, newContent);
+            final var effectiveEnd = effectiveEndLine(replacement, lines.size());
+            if (effectiveEnd >= previousStartLine) {
+                throw new IllegalArgumentException(
+                                                   "Overlapping edit ranges are not supported. Edit ending at line "
+                                                           + effectiveEnd
+                                                           + " overlaps a later edit starting at line "
+                                                           + previousStartLine + ".");
+            }
+            applyEdit(lines, startLine, endLine, replacement.getContent());
+            previousStartLine = startLine;
         }
         return lines;
+    }
+
+    private static int effectiveEndLine(ToolIO.FileEditOperation edit, int totalLines) {
+        return edit.getEndLine() == -1 ? totalLines : edit.getEndLine();
     }
 
     private static final ToolIO.FileEditResponse error(String message) {

@@ -197,6 +197,26 @@ class FileIOEditIntegrationTest {
 
     @Test
     @SneakyThrows
+    void expandingEditOutOfOrderKeepsOtherEditAligned() {
+        final var content = "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // Lower edit expands one line into three; higher edit is a plain replace.
+        // Supplied high-to-low; the higher replace must still land on original line 6.
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(6).endLine(6).content("Y").build(),
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("A\nB\nC")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("L1\nA\nB\nC\nL3\nL4\nL5\nY\nL7\nL8", written);
+    }
+
+    @Test
+    @SneakyThrows
     void invalidLineRange() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -210,6 +230,8 @@ class FileIOEditIntegrationTest {
         assertNotNull(result.getError());
         assertTrue(result.getError().contains("Invalid line range"));
     }
+
+    // ===== Bug #3: Checksum returned after edit =====
 
     @Test
     @SneakyThrows
@@ -227,8 +249,6 @@ class FileIOEditIntegrationTest {
         final var written = Files.readString(testFile);
         assertEquals("line1\nnew2\nnew3\nline4", written);
     }
-
-    // ===== Bug #3: Checksum returned after edit =====
 
     @Test
     @SneakyThrows
@@ -255,6 +275,50 @@ class FileIOEditIntegrationTest {
         assertFalse(written.contains("import java.util.Map;\nimport java.util.Map;"),
                     "Should not duplicate Map import");
     }
+
+    // ===== Bug #4: Trailing newline handling =====
+
+    @Test
+    @SneakyThrows
+    void multipleEditsSuppliedOutOfOrderDoNotDuplicateBoundaries() {
+        final var content = "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // Two "insert" idiom edits (re-send the boundary line + new line), but the caller
+        // lists them in descending order instead of ascending. This previously produced a
+        // duplicated boundary line ("L6") in the output.
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(6).endLine(6).content("L6\nNEW_B")
+                                          .build(),
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("L2\nNEW_A")
+                                          .build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        final var written = Files.readString(testFile);
+        assertEquals("L1\nL2\nNEW_A\nL3\nL4\nL5\nL6\nNEW_B\nL7\nL8", written);
+    }
+
+    @Test
+    @SneakyThrows
+    void overlappingEditRangesAreRejected() {
+        final var content = "L1\nL2\nL3\nL4\nL5\nL6";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(4).content("A").build(),
+                                  ToolIO.FileEditOperation.builder().startLine(4).endLine(6).content("B").build()
+        );
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("Overlapping"));
+        // File must be left untouched on a rejected edit set
+        assertEquals(content, Files.readString(testFile));
+    }
+
+    // ===== Complex multi-edit scenarios =====
 
     @Test
     @SneakyThrows
@@ -297,8 +361,6 @@ class FileIOEditIntegrationTest {
         assertTrue(written.contains("package com.example;"));
     }
 
-    // ===== Bug #4: Trailing newline handling =====
-
     @Test
     @SneakyThrows
     void replaceFirstLine() {
@@ -331,8 +393,6 @@ class FileIOEditIntegrationTest {
         final var written = Files.readString(testFile);
         assertEquals("first\nsecond\nnew_last", written);
     }
-
-    // ===== Complex multi-edit scenarios =====
 
     @Test
     @SneakyThrows
@@ -449,6 +509,8 @@ class FileIOEditIntegrationTest {
         final var actualContent = Files.readString(testFile);
         assertEquals(checksum(actualContent), result.getNewChecksum());
     }
+
+    // ===== Regression: boundary duplication when edits are supplied out of order =====
 
     @AfterEach
     void tearDown() throws IOException {
