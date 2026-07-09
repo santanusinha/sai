@@ -238,9 +238,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
                         case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
-                        case Agent.OUTPUT_GENERATOR_ID -> {
-                            messages.add(Printer.debug(Actor.ASSISTANT, "Output Generator Tool called..."));
-                        }
+                        case Agent.OUTPUT_GENERATOR_ID -> messages.add(Printer.debug(Actor.ASSISTANT,
+                                                                                     "Output Generator Tool called..."));
                         default -> {
                             final var toolMessage = Printer.Colours.YELLOW + "Tool call:" + Printer.Colours.WHITE
                                     + " %s".formatted(toolCall.getToolName()) + Printer.Colours.RESET;
