@@ -89,7 +89,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertEquals("openai", openai.getType());
         assertEquals("https://api.openai.com/v1", openai.getEndpoint());
@@ -118,7 +118,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var azure = config.getProvider("azure");
+        final var azure = config.getProvider("azure").orElse(null);
         assertNotNull(azure);
         assertEquals("azure", azure.getType());
         assertEquals("https://my-resource.openai.azure.com", azure.getEndpoint());
@@ -139,7 +139,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertEquals("https://fallback.example.com/v1", openai.getEndpoint());
     }
@@ -160,7 +160,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertEquals("https://api.openai.com/v1", openai.getEndpoint());
         assertEquals(pathValue, openai.getApiKey());
@@ -182,7 +182,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertNotNull(openai.getExtraHeaders());
         assertEquals("Bearer sk-helicone-xyz", openai.getExtraHeaders().get("Helicone-Auth"));
@@ -207,7 +207,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openrouter = config.getProvider("openrouter");
+        final var openrouter = config.getProvider("openrouter").orElse(null);
         assertNotNull(openrouter);
         final var model = openrouter.getModel("anthropic/claude-3.5-sonnet");
         assertNotNull(model);
@@ -230,7 +230,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertEquals("openai", openai.getType());
     }
@@ -248,7 +248,7 @@ class SettingsConfigLoaderTest {
                                       ""));
         final var config = SettingsConfigLoader.load(file);
         assertNotNull(config);
-        final var openai = config.getProvider("openai");
+        final var openai = config.getProvider("openai").orElse(null);
         assertNotNull(openai);
         assertEquals("${SAI_TEST_NONEXISTENT_12345}", openai.getEndpoint());
     }

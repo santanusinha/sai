@@ -82,7 +82,7 @@ public class SettingsResolver {
 
         final var config = Objects.requireNonNullElseGet(settingsConfig,
                                                          () -> SettingsConfig.builder().build());
-        final var providerEntry = config.getProvider(provider);
+        final var providerEntry = config.getProvider(provider).orElse(null);
 
         ModelTuning effectiveTuning = null;
         var foundInSettings = false;

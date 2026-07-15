@@ -129,7 +129,7 @@ public class AgentFactory {
                                                modelOptions))
                 .outputGenerationMode(config.getOutputGenerationMode())
                 .autoCompactionSetup(AutoCompactionSetup.builder()
-                        .compactionTriggerThresholdPercentage(50)
+                        .compactionTriggerThresholdPercentage(50) //TODO::CONFIG?
                         .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);
@@ -151,8 +151,7 @@ public class AgentFactory {
     }
 
     private TemplatizedHttpTool createTool(ConfiguredHttpTool tool) {
-        return new TemplatizedHttpTool(
-                                       tool.metadata(),
+        return new TemplatizedHttpTool(tool.metadata(),
                                        tool.definition(),
                                        tool.transformer());
     }
@@ -161,7 +160,7 @@ public class AgentFactory {
         return ModelSettings.builder()
                 .parallelToolCalls(false)
                 .modelAttributes(ModelAttributes.builder()
-                        .contextWindowSize(128_000)
+                        .contextWindowSize(ModelAttributes.DEFAULT_WINDOW_SIZE)
                         .encodingType(EncodingType.O200K_BASE)
                         .build())
                 .build();
@@ -207,34 +206,29 @@ public class AgentFactory {
      */
     private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
                                                                 ModelTuning tuning) {
+        if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
+            log.trace("Using ConfigurableProviderFactory for agent {}: {}", config.getAgentId(), factory);
+        }
+        else {
+            log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
+            return modelProviderFactory;
+        }
         final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
         final var hasRequestTransforms = requestTransforms != null && !requestTransforms.isEmpty();
-
-        if (hasRequestTransforms) {
-            log.info("Applying {} request transform(s) for agent {}",
-                     requestTransforms.size(),
-                     config.getAgentId());
-        }
 
         var clientBuilder = httpClient.newBuilder()
                 .addInterceptor(new ReasoningNormalizationInterceptor(mapper));
 
         if (hasRequestTransforms) {
+            log.info("Applying {} request transform(s) for agent {}",
+                     requestTransforms.size(),
+                     config.getAgentId());
             clientBuilder.addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
         }
 
-        var effectiveClient = clientBuilder.build();
-
-        if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
-            return new ConfigurableProviderFactory(factory.getProvider(),
-                                                   mapper,
-                                                   effectiveClient,
-                                                   settingsConfig);
-        }
-
-        if (hasRequestTransforms) {
-            log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
-        }
-        return modelProviderFactory;
+        return new ConfigurableProviderFactory(factory.getProvider(),
+                                               mapper,
+                                               clientBuilder.build(),
+                                               settingsConfig);
     }
 }

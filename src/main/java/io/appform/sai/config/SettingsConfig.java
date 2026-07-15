@@ -17,8 +17,10 @@ package io.appform.sai.config;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.base.Strings;
 
 import java.util.Map;
+import java.util.Optional;
 
 import javax.annotation.Nullable;
 
@@ -50,12 +52,11 @@ public class SettingsConfig {
      * @param providerName the provider name (e.g. {@code "openai"}, {@code "azure"})
      * @return the provider entry, or {@code null}
      */
-    @Nullable
-    public ProviderEntry getProvider(@Nullable String providerName) {
-        if (providers == null || providerName == null) {
-            return null;
+    public Optional<ProviderEntry> getProvider(@Nullable String providerName) {
+        if (providers == null || Strings.isNullOrEmpty(providerName)) {
+            return Optional.empty();
         }
-        return providers.get(providerName);
+        return Optional.ofNullable(providers.get(providerName));
     }
 
     /**
