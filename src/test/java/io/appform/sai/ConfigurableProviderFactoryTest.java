@@ -68,7 +68,7 @@ class ConfigurableProviderFactoryTest {
                                           .build()))
                 .build();
         final var factory = new ConfigurableProviderFactory("azure", mapper, httpClient, config);
-        final var services = factory.get("my-deployment").orElse(null);
+        final var services = factory.get("my-deployment");
         assertNotNull(services);
     }
 
