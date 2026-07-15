@@ -115,7 +115,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         // All other providers (including built-in names like openai/azure/copilot-proxy) check
         // settings.yaml first. If a config entry exists, build from it. If not, fall back to
         // env-var behavior for backward compatibility.
-        final var providerEntry = settingsConfig.getProvider(provider);
+        final var providerEntry = settingsConfig.getProvider(provider).orElse(null);
         if (providerEntry != null) {
             return buildFromConfig(providerEntry, modelName);
         }
@@ -148,7 +148,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                         String[] parts = header.split(":", 2);
                         if (parts.length == 2) {
                             requestBuilder.addHeader(parts[0].trim(), parts[1].trim());
-                            log.debug("Adding extra header to OpenAI request: {}", header);
+                            log.debug("Adding extra header to OpenAI request: {}", parts[0].trim());
                         }
                     }
                     return chain.proceed(requestBuilder.build());
@@ -172,7 +172,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                     var requestBuilder = chain.request().newBuilder();
                     extraHeaders.forEach((key, value) -> {
                         requestBuilder.addHeader(key, value);
-                        log.debug("Adding extra header from config: {}:{}", key, value);
+                        log.debug("Adding extra header from config: {}", key);
                     });
                     return chain.proceed(requestBuilder.build());
                 })
@@ -302,7 +302,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         final var organizationId = resolveValueOrNull(entry.getOrganizationId(), "OPENAI_ORGANIZATION");
         final var projectId = resolveValueOrNull(entry.getProjectId(), "OPENAI_PROJECT_ID");
         var httpClient = applyExtraHeadersFromMap(okHttpClient, entry.getExtraHeaders());
-        log.info("Using OpenAI endpoint: {} for provider: {}. Api key: {}", endpoint, provider, apiKey);
+        log.debug("Using OpenAI endpoint: {} for provider: {}", endpoint, provider);
         return SimpleOpenAI.builder()
                 .baseUrl(endpoint)
                 .apiKey(apiKey)
