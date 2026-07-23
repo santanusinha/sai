@@ -58,6 +58,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -174,6 +175,19 @@ public class SaiCommand implements Callable<Integer> {
 
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
+
+        // Create a per-session scratch directory under /tmp/sai/<sessionId>/scratch/.
+        // On a fresh session this directory will not yet exist.
+        // On resume the directory already exists; we catch and ignore that case.
+        final var scratchDir = Paths.get("/tmp", "sai", effectiveSessionId, "scratch");
+        try {
+            Files.createDirectories(scratchDir.getParent());
+            Files.createDirectory(scratchDir);
+            log.debug("Created scratch directory: {}", scratchDir);
+        }
+        catch (FileAlreadyExistsException e) {
+            log.debug("Scratch directory already exists (session resumed): {}", scratchDir);
+        }
 
         // On resume: restore model, mode, and persona from the saved session extra data.
         // CLI flags (--model / --persona) always take priority over saved values.
