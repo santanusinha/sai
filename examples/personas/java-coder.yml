@@ -41,12 +41,14 @@ mcp:
 
 skillDirectories:
   - ${HOME}/Work/OSS/java-jdtls-mcp-server/skills
+  - ${HOME}/.config/sai/skills
 
 skillNames:
   - java-lifecycle
   - java-navigation
   - java-project-load
   - java-verification
+  - smdr-review
 
 prompt: |
   # Role

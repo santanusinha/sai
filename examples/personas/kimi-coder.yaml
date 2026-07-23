@@ -58,11 +58,14 @@ requestTransforms:
         thinking: false
 
 # Skills
-# sonar-cli: runs SonarCloud analysis on the current branch and reports issues
+# sonar-cli:    runs SonarCloud analysis on the current branch and reports issues
+# smdr-review:  opens Markdown content (plans, specs, TODOs) in smdr's GUI review mode
+#               to gather interactive human-in-the-loop feedback
 skillDirectories:
   - ${HOME}/.config/sai/skills
 skillNames:
   - sonar-cli
+  - smdr-review
 
 prompt: |
   # Role

@@ -55,6 +55,11 @@ mcp:
 #       unwanted_field: ""
 
 # Skills
+# No skillNames filter is set, so ALL skills discovered under
+# ${HOME}/.config/sai/skills are loaded — this includes smdr-review
+# (interactive human-in-the-loop Markdown review via smdr's GUI).
+# To restrict to a subset, add skillDirectories + skillNames allow-lists
+# (see kimi-coder.yaml / java-coder.yml for examples).
 prompt: |
   # Role
   You are an Expert Software Engineer with deep knowledge of multiple programming languages and frameworks. You leverage a powerful codebase knowledge graph (via codebase-memory-mcp) for efficient code exploration, impact analysis, and intelligent development.
