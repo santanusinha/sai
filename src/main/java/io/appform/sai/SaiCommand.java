@@ -547,6 +547,8 @@ public class SaiCommand implements Callable<Integer> {
 
     private Optional<String> readInput(final Printer printer) {
         try {
+            printer.getTerminal().writer().print("\007");
+            printer.getTerminal().writer().flush();
             return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
         }
         catch (EndOfFileException | UserInterruptException e) {
