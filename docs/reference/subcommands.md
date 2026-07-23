@@ -6,49 +6,68 @@ SAI provides several subcommands for session management and inspection. All subc
 
 ### list-sessions
 
-List all sessions with their metadata, sorted by last modified time (most recent first).
+List sessions with their metadata, sorted by last update time (most recent first).
+By default only sessions started from the **current working directory** are shown.
+Use `--all` to list sessions from all directories.
 
 **Usage:**
 
 ```bash
-sai list-sessions [--data-dir=<path>]
+sai list-sessions [--all] [--data-dir=<path>]
 ```
 
 **Options:**
 
 | Option | Description | Default |
 |--------|-------------|---------|
+| `-a, --all` | List sessions from all directories | `false` (current directory only) |
 | `--data-dir` | Override default data directory | `~/.local/state/sai/` |
 
 **Output Format:**
 
-The command displays sessions in a table format with the following columns:
+Default (current-directory) mode displays:
 
-- **Session ID**: Unique identifier for the session
-- **Created**: Timestamp when the session was created
-- **Last Modified**: Timestamp of the last interaction
-- **Messages**: Number of messages in the session
-- **Persona**: Persona used in the session (if any)
-- **Model**: LLM model used in the session
+- **SESSION ID**: Unique identifier for the session
+- **UPDATED AT**: Timestamp of the last interaction
+- **TITLE**: Session title or summary excerpt
+
+In `--all` mode an additional **DIRECTORY** column is shown indicating the working
+directory where the session was started. Sessions with no stored directory information
+(e.g. older sessions) display `(unknown)` in that column.
 
 **Examples:**
 
 ```bash
-# List all sessions using default data directory
+# List sessions in the current working directory (default)
 sai list-sessions
+
+# List all sessions across every directory
+sai list-sessions --all
 
 # List sessions from a custom data directory
 sai list-sessions --data-dir=/custom/path/to/data
+
+# List all sessions from a custom data directory
+sai list-sessions --all --data-dir=/custom/path/to/data
 ```
 
-**Sample Output:**
+**Sample Output (default — current directory):**
 
 ```
-Session ID              Created              Last Modified        Messages  Persona      Model
-----------------------------------------------------------------------------------------------
-docs-2024-01-15        2024-01-15 09:30:15  2024-01-15 14:22:30  42        sai-coder    copilot/claude-sonnet-4.6
-review-abc123          2024-01-14 16:45:00  2024-01-15 10:15:20  15        sai-reviewer copilot/gpt-4o
-testing-session        2024-01-13 11:20:10  2024-01-14 08:30:45  8         sai-agent    copilot/claude-haiku-4.5
+SESSION ID                               UPDATED AT                TITLE
+-------------------------------------------------------------------------------------------------------------------
+docs-2024-01-15-abc123                   2024-01-15 14:22:30       Comprehensive CLI reference documentation
+review-abc123                            2024-01-14 10:15:20       Code review session for PR #42
+```
+
+**Sample Output (`--all`):**
+
+```
+SESSION ID                               UPDATED AT                DIRECTORY                           TITLE
+------------------------------------------------------------------------------------------------------------------------------------------------------
+docs-2024-01-15-abc123                   2024-01-15 14:22:30       /home/user/Work/myproject           Comprehensive CLI reference documentation
+review-abc123                            2024-01-14 10:15:20       /home/user/Work/other-repo          Code review session for PR #42
+old-session-xyz                          2024-01-10 09:00:00       (unknown)                           Project planning
 ```
 
 ---
@@ -341,11 +360,12 @@ Size: 124.5 KB (42 messages)
 - **Analysis**: Analyze conversation patterns, token usage, or model performance
 - **Migration**: Move sessions between different SAI installations
 - **Documentation**: Extract conversation history for project documentation
-
-!!! tip "Session Archival Workflow"
     ```bash
-    # 1. List sessions to identify old ones
+    # 1. List sessions in the current directory to identify old ones
     sai list-sessions
+
+    # Or list all sessions across all directories
+    sai list-sessions --all
     
     # 2. Export important sessions before cleanup
     sai export-session -s important-session-1 -o archives/session-1.json
@@ -395,9 +415,11 @@ All session management commands respect the `--data-dir` flag, which allows you 
 
 **Example Workflow:**
 
-```bash
-# Development sessions in default location
+# Sessions in current working directory (default)
 sai list-sessions
+
+# All sessions across all directories
+sai list-sessions --all
 
 # Testing sessions in temporary directory
 sai list-sessions --data-dir=/tmp/sai-test

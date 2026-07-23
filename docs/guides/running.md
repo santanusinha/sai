@@ -65,9 +65,12 @@ Process multiple inputs from a file.
 ### List Sessions
 
 ```bash
+# Current working directory only (default)
 java -jar target/sai-1.0-SNAPSHOT.jar list-sessions
-```
 
+# All directories
+java -jar target/sai-1.0-SNAPSHOT.jar list-sessions --all
+```
 ### Resume Session
 
 ```bash
