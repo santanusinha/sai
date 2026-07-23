@@ -28,15 +28,20 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 import picocli.CommandLine.ParentCommand;
 
 /**
- * {@code list-sessions} — lists all available sessions with ID, timestamp, and title.
+ * {@code list-sessions} — lists sessions with ID, timestamp, and title.
+ * By default only sessions from the current working directory are shown.
+ * Use {@code --all} to list sessions from all directories.
  */
 @Slf4j
 @Command(name = "list-sessions", description = "List available sessions")
@@ -48,6 +53,41 @@ public class ListSessionsCommand implements Callable<Integer> {
 
     @ParentCommand
     private SaiCommand parent;
+
+    @Option(names = {
+            "--all", "-a"
+    }, description = "List sessions from all directories (default: current directory only)")
+    private boolean all;
+
+    private static String abbreviate(String s, int maxLen) {
+        if (s.length() <= maxLen) {
+            return s;
+        }
+        return "..." + s.substring(s.length() - (maxLen - 3));
+    }
+
+    private static String resolveTitle(SessionSummary session) {
+        String title = session.getTitle();
+        if (Strings.isNullOrEmpty(title)) {
+            title = session.getSummary();
+            if (title != null && title.length() > 50) {
+                title = title.substring(0, 47) + "...";
+            }
+        }
+        if (Strings.isNullOrEmpty(title)) {
+            title = "No Title";
+        }
+        return title;
+    }
+
+    private static String sessionWorkDir(SessionSummary session) {
+        final var extra = session.getExtra();
+        if (extra == null || extra.isEmpty()) {
+            return null;
+        }
+        final var val = extra.get("workDir");
+        return val != null ? val.toString() : null;
+    }
 
     @Override
     @SneakyThrows
@@ -67,34 +107,57 @@ public class ListSessionsCommand implements Callable<Integer> {
                 .cacheSize(1)
                 .build();
 
-        // Fetch all sessions, oldest first
         final var sessionsScrollable = sessionStore.sessions(Integer.MAX_VALUE, null, QueryDirection.NEWER);
-        final var sessions = sessionsScrollable.getItems();
+        final var allSessions = sessionsScrollable.getItems();
 
-        if (sessions.isEmpty()) {
+        if (allSessions.isEmpty()) {
             System.out.println("No sessions found.");
             return 0;
         }
 
-        System.out.printf("%-40s %-25s %-50s%n", "SESSION ID", "UPDATED AT", "TITLE");
-        System.out.println("-".repeat(115));
+        final List<SessionSummary> sessions;
+        if (all) {
+            sessions = allSessions;
+        }
+        else {
+            final var currentWorkDir = settings.getWorkDir();
+            sessions = allSessions.stream()
+                    .filter(s -> currentWorkDir.equals(sessionWorkDir(s)))
+                    .toList();
+        }
+
+        if (sessions.isEmpty()) {
+            System.out.printf("No sessions found in current directory. Use --all to list all sessions.%n");
+            return 0;
+        }
+
+        if (all) {
+            System.out.printf("%-40s %-25s %-35s %-50s%n", "SESSION ID", "UPDATED AT", "DIRECTORY", "TITLE");
+            System.out.println("-".repeat(150));
+        }
+        else {
+            System.out.printf("%-40s %-25s %-50s%n", "SESSION ID", "UPDATED AT", "TITLE");
+            System.out.println("-".repeat(115));
+        }
 
         for (SessionSummary session : sessions) {
-            String title = session.getTitle();
-            if (Strings.isNullOrEmpty(title)) {
-                title = session.getSummary(); // Fallback to summary
-                if (title != null && title.length() > 50) {
-                    title = title.substring(0, 47) + "...";
-                }
-            }
-            if (Strings.isNullOrEmpty(title)) {
-                title = "No Title";
-            }
+            final var title = resolveTitle(session);
+            final var timestamp = DATE_FORMATTER.format(Instant.ofEpochMilli(session.getUpdatedAt() / 1000));
 
-            System.out.printf("%-40s %-25s %-50s%n",
-                              session.getSessionId(),
-                              DATE_FORMATTER.format(Instant.ofEpochMilli(session.getUpdatedAt() / 1000)),
-                              title);
+            if (all) {
+                final var workDir = Objects.requireNonNullElse(sessionWorkDir(session), "(unknown)");
+                System.out.printf("%-40s %-25s %-35s %-50s%n",
+                                  session.getSessionId(),
+                                  timestamp,
+                                  abbreviate(workDir, 33),
+                                  title);
+            }
+            else {
+                System.out.printf("%-40s %-25s %-50s%n",
+                                  session.getSessionId(),
+                                  timestamp,
+                                  title);
+            }
         }
 
         return 0;
