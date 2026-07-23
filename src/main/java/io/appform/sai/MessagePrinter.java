@@ -447,11 +447,18 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         }
         if (response.isChanged()) {
             if (!Strings.isNullOrEmpty(content)) {
-                messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                final var lines = content.split("\n", -1);
+                final String displayContent;
+                if (lines.length <= 8) {
+                    displayContent = content;
+                }
+                else {
+                    final var head = String.join("\n", Arrays.copyOfRange(lines, 0, 5));
+                    final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - 3, lines.length));
+                    displayContent = head + "\n...\n" + tail;
+                }
+                messages.add(Printer.raw(Printer.Colours.GRAY + displayContent + Printer.Colours.RESET));
                 messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
-            }
-            else {
-                messages.add(Printer.systemMessage("File is empty."));
             }
         }
         else {
