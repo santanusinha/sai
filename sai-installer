@@ -16,6 +16,7 @@
 #   owner/repo                   GitHub repo (cloned; root must contain SKILL.md)
 #   owner/repo/sub/path          GitHub repo sub-directory containing SKILL.md
 #   https://github.com/...       full GitHub (or any git) URL; optionally append #sub/path
+#   https://github.com/o/r/tree/<branch>/sub/path  GitHub web-UI link (tree or blob)
 #   https://example.com/sk.zip  direct zip/tar.gz download
 #
 # <source> for persona-install can be:
@@ -51,7 +52,8 @@ usage() {
     echo "skill-install sources:" >&2
     echo "  /path/to/dir              Local directory containing SKILL.md" >&2
     echo "  owner/repo                GitHub repo root" >&2
-    echo "  owner/repo/sub/path       GitHub repo sub-directory" >&2
+    echo "  https://github.com/...    Full git URL (append #sub/path for a subdir)" >&2
+    echo "  https://github.com/o/r/tree/<branch>/sub  GitHub web-UI link (tree/blob)" >&2
     echo "  https://github.com/...    Full git URL (append #sub/path for a subdir)" >&2
     echo "  https://example.com/f.zip Direct zip or tar.gz download" >&2
     echo "" >&2
@@ -845,6 +847,30 @@ do_skill_install() {
         local skill_dir
         skill_dir=$(find "${extract_dir}" -name "SKILL.md" -maxdepth 3 | head -1 | xargs -r dirname)
         [[ -z "${skill_dir}" ]] && die "No SKILL.md found in downloaded archive."
+        install_skill_dir "${skill_dir}"
+        return
+    fi
+
+    # ── GitHub web-UI URL: https://github.com/owner/repo/(tree|blob)/<ref>/<subpath> ──
+    # These are browser links (not git-cloneable). Rewrite to a real clone + subpath.
+    if [[ "${source}" =~ ^https://github\.com/[^/]+/[^/]+/(tree|blob)/ ]]; then
+        local _stripped="${source#https://github.com/}"
+        local _owner="${_stripped%%/*}"; _stripped="${_stripped#*/}"
+        local _repo="${_stripped%%/*}";  _stripped="${_stripped#*/}"
+        # _stripped is now: tree/<ref>/<subpath...>  or  blob/<ref>/<subpath...>
+        _stripped="${_stripped#*/}"      # drop the 'tree'/'blob' segment → <ref>/<subpath...>
+        local _ref="${_stripped%%/*}"
+        local _sub="${_stripped#*/}"
+        [[ "${_sub}" == "${_ref}" ]] && _sub=""   # ref had no trailing subpath
+        # If a /blob/ URL pointed at SKILL.md itself, use its containing directory
+        [[ "${_sub}" == *.md ]] && _sub="$(dirname "${_sub}")"
+        [[ "${_sub}" == "." ]] && _sub=""
+
+        local git_url="https://github.com/${_owner}/${_repo}.git"
+        info "Cloning ${git_url} (ref: ${_ref})..."
+        git clone --depth 1 --branch "${_ref}" "${git_url}" "${tmp_dir}/repo" -q
+        local skill_dir="${tmp_dir}/repo"
+        [[ -n "${_sub}" ]] && skill_dir="${tmp_dir}/repo/${_sub}"
         install_skill_dir "${skill_dir}"
         return
     fi
