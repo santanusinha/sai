@@ -550,7 +550,7 @@ Sai AI Agent
                                discovery is disabled.
   -V, --version              Print version information and exit.
 Commands:
-  list-sessions    List available sessions
+  list-sessions    List sessions (default: current directory only; use --all for all)
   delete-sessions  Delete a session
   prune-sessions   Prune older sessions. Provide a duration string like '1d',
                      '3h', '30m'
@@ -572,9 +572,17 @@ Commands:
 
 - list-sessions
   ```bash
+  # List sessions in the current working directory (default)
   java -jar target/sai-1.0-SNAPSHOT.jar list-sessions
+
+  # List all sessions across every directory
+  java -jar target/sai-1.0-SNAPSHOT.jar list-sessions --all
   ```
-  Lists sessions found under the configured data directory. Honors `--data-dir` when provided.
+  Lists sessions under the configured data directory.
+  By default only sessions started from the **current working directory** are shown.
+  Use `--all` (or `-a`) to list sessions from all directories — in that mode a
+  **DIRECTORY** column is added to the output. Sessions with no stored directory
+  information are shown as `(unknown)`. Honors `--data-dir` when provided.
 
 - summary
   ```bash
@@ -644,9 +652,14 @@ Commands:
   echo "List the key modules in this repo" | java -jar target/sai-1.0-SNAPSHOT.jar
   ```
 
-- List sessions:
+- List sessions in the current directory:
   ```bash
   java -jar target/sai-1.0-SNAPSHOT.jar list-sessions
+  ```
+
+- List all sessions across all directories:
+  ```bash
+  java -jar target/sai-1.0-SNAPSHOT.jar list-sessions --all
   ```
 
 - Delete a session:
