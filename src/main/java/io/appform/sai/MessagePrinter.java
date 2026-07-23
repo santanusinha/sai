@@ -606,8 +606,18 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         messages.add(Printer.raw(Printer.Colours.YELLOW + "Write: " + Printer.Colours.WHITE
                 + node.get("filePath").asText() + Printer.Colours.RESET));
         messages.add(Printer.empty());
-        messages.add(Printer.raw(Printer.Colours.GRAY
-                + node.get("content").asText() + Printer.Colours.RESET));
+        final var content = node.get("content").asText();
+        final var lines = content.split("\n", -1);
+        final String displayContent;
+        if (lines.length <= 8) {
+            displayContent = content;
+        }
+        else {
+            final var head = String.join("\n", Arrays.copyOfRange(lines, 0, 5));
+            final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - 3, lines.length));
+            displayContent = head + "\n...\n" + tail;
+        }
+        messages.add(Printer.raw(Printer.Colours.GRAY + displayContent + Printer.Colours.RESET));
     }
 
     @SneakyThrows
