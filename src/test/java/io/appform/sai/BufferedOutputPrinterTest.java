@@ -209,6 +209,18 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
+    void indentedOrderedListMarkerDotIsNotTreatedAsSentenceBoundary() {
+        feed("   2. Nested item");
+        assertEquals(0,
+                     printCount(),
+                     "an indented '2.' marker must not be flushed as a sentence");
+    }
+
+    // -------------------------------------------------------------------------
+    // CODE block rendering
+    // -------------------------------------------------------------------------
+
+    @Test
     void markDoneFlushesResidualNormalLine() {
         feed("no newline at end");
         assertEquals(0, printCount());
@@ -216,10 +228,6 @@ class BufferedOutputPrinterTest {
         assertEquals(1, printCount());
         assertTrue(renderedOutput().contains("no newline at end"));
     }
-
-    // -------------------------------------------------------------------------
-    // CODE block rendering
-    // -------------------------------------------------------------------------
 
     @Test
     void markDoneFlushesTruncatedCodeBlock() {
@@ -237,6 +245,14 @@ class BufferedOutputPrinterTest {
         bop.markDone();
         bop.markDone();
         assertEquals(1, printCount(), "markDone on empty state should not produce extra prints");
+    }
+
+    @Test
+    void multiDigitOrderedListMarkerDotIsNotTreatedAsSentenceBoundary() {
+        feed("42. Item forty two");
+        assertEquals(0,
+                     printCount(),
+                     "a multi-digit '42.' marker must not be flushed as a sentence");
     }
 
     @Test
@@ -307,10 +323,28 @@ class BufferedOutputPrinterTest {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // TABLE block rendering
+    // -------------------------------------------------------------------------
+
     @Test
     void normalLinesArePrintedImmediatelyOneByOne() {
         feed("hello\nworld\n");
         assertEquals(2, printCount(), "each complete line becomes one print call");
+    }
+
+    @Test
+    void orderedListMarkerDotIsNotTreatedAsSentenceBoundary() {
+        // Streaming "1. First item" without a trailing newline must NOT flush
+        // the "1." bullet marker on its own — doing so would separate the
+        // list number from its item text and break the numbered-list render.
+        feed("1. First item");
+        assertEquals(0,
+                     printCount(),
+                     "the '1.' ordered-list marker must not be flushed as a sentence");
+        bop.markDone();
+        final var out = renderedOutput();
+        assertTrue(out.contains("First item"), "list item text should survive");
     }
 
     @Test
@@ -322,9 +356,28 @@ class BufferedOutputPrinterTest {
         assertTrue(renderedOutput().contains("hello"));
     }
 
-    // -------------------------------------------------------------------------
-    // TABLE block rendering
-    // -------------------------------------------------------------------------
+    @Test
+    void realSentenceBoundaryStillFlushesImmediately() {
+        // Guard: ordinary prose that ends in a period followed by a space must
+        // still flush eagerly (the list-marker guard must not suppress it).
+        feed("This is a sentence. ");
+        assertEquals(1, printCount(), "a normal sentence should flush on its boundary");
+        assertTrue(renderedOutput().contains("This is a sentence."));
+    }
+
+    @Test
+    void sentenceAfterOrderedListMarkerStillFlushes() {
+        // The marker dot is skipped, but a genuine sentence end later in the
+        // same buffer must still flush (up to and including that period).
+        feed("1. First item. ");
+        assertEquals(1,
+                     printCount(),
+                     "the real sentence boundary after the list item should flush");
+        final var parts = renderedParts();
+        assertTrue(parts.get(0).contains("1."),
+                   "flushed text must keep the list marker with its item: " + parts.get(0));
+        assertTrue(parts.get(0).contains("First item"), "item text should be present");
+    }
 
     @BeforeEach
     void setUp() {
@@ -400,12 +453,22 @@ class BufferedOutputPrinterTest {
         assertEquals(1, printCount(), "markDone should flush the table as one unit");
     }
 
+    // -------------------------------------------------------------------------
+    // Mixed / streaming scenarios
+    // -------------------------------------------------------------------------
+
+    // -------------------------------------------------------------------------
+    // Issue fixes: trailing newline, blank-line skip, consecutive code blocks,
+    // table after heading
+    // -------------------------------------------------------------------------
+
     @Test
     void tableBlockIsFlushedWhenNonTableLineArrives() {
         feed("| A | B |\n| - | - |\n| 1 | 2 |\nsome text after\n");
         // table (1) + "some text after" (1) = 2
         assertEquals(2, printCount());
     }
+
 
     @Test
     void tableChunkedMidRowCarriesOverCorrectly() {
@@ -457,15 +520,6 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("┤"), "header/body separator right junction");
     }
 
-    // -------------------------------------------------------------------------
-    // Mixed / streaming scenarios
-    // -------------------------------------------------------------------------
-
-    // -------------------------------------------------------------------------
-    // Issue fixes: trailing newline, blank-line skip, consecutive code blocks,
-    // table after heading
-    // -------------------------------------------------------------------------
-
     @Test
     void tableRendersBoxDrawingBorders() {
         feed("| Name | Age |\n|------|-----|\n| Alice | 30 |\n");
@@ -478,7 +532,6 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("│"), "vertical separators");
         assertTrue(out.contains("─"), "horizontal lines");
     }
-
 
     @Test
     void tableRowSplitMidLineAtChunkBoundaryRendersCorrectly() {

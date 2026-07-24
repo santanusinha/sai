@@ -69,6 +69,31 @@ class BufferedOutputPrinter {
         this.printer = printer;
     }
 
+    /**
+     * Return {@code true} when the {@code '.'} at {@code dotIndex} is the
+     * terminator of an ordered-list marker rather than a sentence end, i.e.
+     * the whole preceding content of {@code buffer} (ignoring leading
+     * whitespace used for indentation/nesting) consists only of digits, like
+     * {@code "1."}, {@code "42."}, or {@code "   3."}. In those cases the dot
+     * belongs to the list bullet and must not trigger a sentence flush.
+     */
+    private static boolean isOrderedListMarker(String buffer, int dotIndex) {
+        int start = 0;
+        while (start < dotIndex && Character.isWhitespace(buffer.charAt(start))) {
+            start++;
+        }
+        // Must have at least one digit and nothing but digits before the dot.
+        if (start == dotIndex) {
+            return false;
+        }
+        for (int i = start; i < dotIndex; i++) {
+            if (!Character.isDigit(buffer.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public void accept(final String content) {
         if (content == null || content.isEmpty()) {
             return;
@@ -147,6 +172,10 @@ class BufferedOutputPrinter {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     /**
      * Flush any buffered content that has not yet been printed. Should be
      * called exactly once after the LLM stream is exhausted.
@@ -162,9 +191,6 @@ class BufferedOutputPrinter {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     /**
      * Classify {@code line} into the appropriate {@link Mode}.
@@ -193,7 +219,6 @@ class BufferedOutputPrinter {
         return currentMode == Mode.CODE ? Mode.CODE : Mode.NORMAL;
     }
 
-
     /**
      * In NORMAL mode the residual {@code buffer} may already contain one or
      * more complete sentences (i.e. text ending with {@code .}, {@code !}, or
@@ -216,6 +241,14 @@ class BufferedOutputPrinter {
             if (c == '.' || c == '!' || c == '?') {
                 // Accept boundary if followed by a space or at end of buffer.
                 if (i + 1 == buffer.length() || buffer.charAt(i + 1) == ' ') {
+                    // A '.' that merely terminates an ordered-list marker
+                    // (e.g. "1." or "  2."), where everything before it is
+                    // digits only, is a list bullet — not a sentence end.
+                    // Splitting here would flush the marker away from its
+                    // list item, so leave it in the buffer.
+                    if (c == '.' && isOrderedListMarker(buffer, i)) {
+                        continue;
+                    }
                     flushUpTo = i + 1; // exclusive: include the punctuation
                 }
             }
