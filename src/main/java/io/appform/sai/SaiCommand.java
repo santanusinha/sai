@@ -300,6 +300,7 @@ public class SaiCommand implements Callable<Integer> {
                             .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
                                     .formatted(effectiveSessionId))
                             .build());
+                    printStartupBanner(agent, agentSkillsExtension, printer);
                 }
                 if (sessionIdProvided) {
                     if (!settings.isHeadless()) {
@@ -545,6 +546,66 @@ public class SaiCommand implements Callable<Integer> {
             }
         }
 
+    }
+
+    /**
+     * Prints a compact startup banner listing tool and skill names as aligned columns.
+     * Shown on both new sessions and resumed sessions (when not in headless mode).
+     */
+    private void printStartupBanner(final SaiAgent agent,
+                                    final AgentSkillsExtension<String, String, SaiAgent> skillsExtension,
+                                    final Printer printer) {
+        final var C = Printer.Colours.CYAN;
+        final var G = Printer.Colours.GRAY;
+        final var W = Printer.Colours.WHITE;
+        final var R = Printer.Colours.RESET;
+
+        final var toolNames = agent.tools().values().stream()
+                .map(t -> t.getToolDefinition().getName())
+                .sorted()
+                .toList();
+
+        final var skillNames = new java.util.ArrayList<String>();
+        if (skillsExtension != null) {
+            final var catalog = skillsExtension.listSkills();
+            if (!Strings.isNullOrEmpty(catalog) && !catalog.startsWith("No skills")) {
+                catalog.lines()
+                        .filter(l -> l.startsWith("- **"))
+                        .map(l -> l.replaceFirst("^- \\*\\*(.+?)\\*\\*.*", "$1"))
+                        .sorted()
+                        .forEach(skillNames::add);
+            }
+        }
+
+        // Render two aligned columns: tools on the left, skills on the right
+        final var sb = new StringBuilder("\n");
+        final int rows = Math.max(toolNames.size(), skillNames.size());
+        final int colWidth = toolNames.stream().mapToInt(String::length).max().orElse(0) + 4;
+
+        final var toolHeader = "\uD83D\uDEE0  Tools";
+        final var skillHeader = skillNames.isEmpty() ? "" : "\uD83C\uDFA8  Skills";
+        // header — emoji adds 1 extra visual char, compensate with -1 padding
+        sb.append(C).append(toolHeader).append(R);
+        if (!skillHeader.isEmpty()) {
+            // pad to column width (emoji counts as 1 char in length but 2 visually, so -1)
+            final int pad = colWidth - toolHeader.length() + 1;
+            sb.append(" ".repeat(Math.max(1, pad))).append(C).append(skillHeader).append(R);
+        }
+        sb.append("\n");
+
+        for (int i = 0; i < rows; i++) {
+            final var tool = i < toolNames.size() ? "  \u2022 " + toolNames.get(i) : "";
+            final var skil = i < skillNames.size() ? "  \u2022 " + skillNames.get(i) : "";
+            sb.append(G).append(tool).append(R);
+            if (!skil.isEmpty()) {
+                final int pad = colWidth - tool.length();
+                sb.append(" ".repeat(Math.max(1, pad))).append(G).append(skil).append(R);
+            }
+            sb.append("\n");
+        }
+        sb.append("\n");
+
+        printer.print(Printer.raw(sb.toString()));
     }
 
     private Optional<String> readInput(final Printer printer) {

@@ -138,6 +138,13 @@ class BufferedOutputPrinter {
         // fragment to be processed as a standalone new line, breaking multi-token
         // table rows that lack a leading '|' in mid-chunk fragments.)
         buffer = lines[lines.length - 1];
+
+        // In NORMAL mode, flush any sentence-complete prefix from the residual
+        // immediately so the user sees text as sentences arrive, not only when
+        // a full newline-terminated line is received.
+        if (currentMode == Mode.NORMAL) {
+            flushSentencesFromBuffer();
+        }
     }
 
     /**
@@ -184,6 +191,41 @@ class BufferedOutputPrinter {
         }
         // Any other line: stay CODE if already in a code block, otherwise NORMAL.
         return currentMode == Mode.CODE ? Mode.CODE : Mode.NORMAL;
+    }
+
+
+    /**
+     * In NORMAL mode the residual {@code buffer} may already contain one or
+     * more complete sentences (i.e. text ending with {@code .}, {@code !}, or
+     * {@code ?} followed by a space or the end of the buffer). Flush those
+     * complete sentences immediately so the user sees output as each sentence
+     * arrives rather than waiting for the entire line's newline.
+     *
+     * <p>The remainder (any text after the last sentence boundary) is kept in
+     * {@code buffer} for reassembly with the next chunk.
+     */
+    private void flushSentencesFromBuffer() {
+        if (buffer.isEmpty()) {
+            return;
+        }
+        // Find the rightmost sentence boundary: [.!?] followed by a space, or
+        // [.!?] at the very end of the buffer (stream may end mid-sentence).
+        int flushUpTo = -1;
+        for (int i = 0; i < buffer.length(); i++) {
+            final char c = buffer.charAt(i);
+            if (c == '.' || c == '!' || c == '?') {
+                // Accept boundary if followed by a space or at end of buffer.
+                if (i + 1 == buffer.length() || buffer.charAt(i + 1) == ' ') {
+                    flushUpTo = i + 1; // exclusive: include the punctuation
+                }
+            }
+        }
+        if (flushUpTo <= 0) {
+            return;
+        }
+        final String toFlush = buffer.substring(0, flushUpTo);
+        buffer = buffer.substring(flushUpTo);
+        printLine(toFlush);
     }
 
     private void printBlock(String markdown) {
