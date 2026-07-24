@@ -87,7 +87,7 @@ import picocli.CommandLine.Option;
         DeleteSessionsCommand.class,
         PruneSessionsCommand.class,
         ExportSessionCommand.class,
-        io.appform.sai.commands.SummaryCommand.class,
+        io.appform.sai.commands.SessionSummaryCommand.class,
         CopilotCommand.class
 })
 public class SaiCommand implements Callable<Integer> {

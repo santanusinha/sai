@@ -72,14 +72,14 @@ old-session-xyz                          2024-01-10 09:00:00       (unknown)    
 
 ---
 
-### summary
+### session-summary
 
 Display a summary of a specific session, including metadata, message count, persona information, and the first/last messages.
 
 **Usage:**
 
 ```bash
-sai summary --session-id=<session-id> [--data-dir=<path>]
+sai session-summary --session-id=<session-id> [--data-dir=<path>]
 ```
 
 **Options:**
@@ -103,10 +103,10 @@ The command displays:
 
 ```bash
 # Display summary for a specific session
-sai summary --session-id=docs-2024-01-15
+sai session-summary --session-id=docs-2024-01-15
 
 # Summary with custom data directory
-sai summary -s review-abc123 --data-dir=/custom/path/to/data
+sai session-summary -s review-abc123 --data-dir=/custom/path/to/data
 ```
 
 **Sample Output:**

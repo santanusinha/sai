@@ -43,14 +43,14 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 
 /**
- * {@code summary <sessionId>} — prints a detailed human-readable summary for a single session,
- * including metadata, keywords, raw JSON, per-type message counts, and aggregate token usage
- * (input/output/cached tokens and cache hit rate).
+ * {@code session-summary <sessionId>} — prints a detailed human-readable summary for a single
+ * session, including metadata, keywords, raw JSON, per-type message counts, and aggregate token
+ * usage (input/output/cached tokens and cache hit rate).
  */
 @Slf4j
-@Command(name = "summary", description = "Show detailed summary of a specific session")
+@Command(name = "session-summary", description = "Show detailed summary of a specific session")
 @SuppressWarnings("java:S106")
-public class SummaryCommand implements Callable<Integer> {
+public class SessionSummaryCommand implements Callable<Integer> {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
