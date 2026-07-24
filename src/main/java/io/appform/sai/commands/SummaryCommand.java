@@ -18,6 +18,10 @@ package io.appform.sai.commands;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.base.Strings;
+import com.phonepe.sentinelai.core.agentmessages.AgentMessage;
+import com.phonepe.sentinelai.core.agentmessages.responses.StructuredOutput;
+import com.phonepe.sentinelai.core.agentmessages.responses.Text;
+import com.phonepe.sentinelai.core.model.ModelUsageStats;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.QueryDirection;
@@ -40,7 +44,8 @@ import picocli.CommandLine.ParentCommand;
 
 /**
  * {@code summary <sessionId>} — prints a detailed human-readable summary for a single session,
- * including metadata, keywords, raw JSON, and per-type message counts.
+ * including metadata, keywords, raw JSON, per-type message counts, and aggregate token usage
+ * (input/output/cached tokens and cache hit rate).
  */
 @Slf4j
 @Command(name = "summary", description = "Show detailed summary of a specific session")
@@ -55,6 +60,20 @@ public class SummaryCommand implements Callable<Integer> {
 
     @Parameters(index = "0", description = "The session ID to view the summary for")
     private String sessionId;
+
+    /**
+     * Extracts usage stats from a stored message when it is a response type that carries them
+     * ({@link Text} or {@link StructuredOutput}); returns {@code null} otherwise.
+     */
+    private static ModelUsageStats statsOf(AgentMessage message) {
+        if (message instanceof Text text) {
+            return text.getStats();
+        }
+        if (message instanceof StructuredOutput structuredOutput) {
+            return structuredOutput.getStats();
+        }
+        return null;
+    }
 
     @Override
     @SneakyThrows
@@ -159,6 +178,29 @@ public class SummaryCommand implements Callable<Integer> {
             System.out.println("  Tool Call Requests:    " + toolCallReqs);
             System.out.println("  Tool Call Responses:   " + toolCallResps);
             System.out.println("  Text Responses:        " + textResps);
+
+            // Aggregate token usage across all response messages that carry stats.
+            long requestTokens = 0;
+            long responseTokens = 0;
+            long cachedTokens = 0;
+            for (var message : messages) {
+                final var stats = statsOf(message);
+                if (stats == null) {
+                    continue;
+                }
+                requestTokens += stats.getRequestTokens();
+                responseTokens += stats.getResponseTokens();
+                cachedTokens += stats.getRequestTokenDetails().getCachedTokens();
+            }
+            if (requestTokens > 0 || responseTokens > 0) {
+                final double hitRate = requestTokens > 0 ? (cachedTokens * 100.0 / requestTokens) : 0.0;
+                System.out.println();
+                System.out.println("Token Usage:");
+                System.out.println("  Input Tokens:          " + requestTokens);
+                System.out.println("  Output Tokens:         " + responseTokens);
+                System.out.println("  Cached Tokens:         " + cachedTokens);
+                System.out.printf("  Cache Hit Rate:        %.1f%%%n", hitRate);
+            }
         }
 
         System.out.println("-".repeat(80));
