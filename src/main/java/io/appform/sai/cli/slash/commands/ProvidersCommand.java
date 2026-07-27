@@ -17,32 +17,26 @@ package io.appform.sai.cli.slash.commands;
 
 import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
-import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsConfigLoader;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.ParentCommand;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
+import picocli.CommandLine.Command;
+import picocli.CommandLine.ParentCommand;
+
 /**
  * {@code /providers} — list all providers, models, and modes defined in {@code settings.yaml}.
  *
- * <p>Loads the settings file from the current config directory and renders a tree:
+ * <p>One line per model, modes inline in brackets:
  * <pre>
- *   copilot  (built-in)
- *     claude-haiku-4.5
- *       coding
- *     claude-sonnet-4.6
- *       coding  medium  review
- *   openrouter  [openai → https://openrouter.ai/api/v1]
- *     kimi-k3  (→ moonshotai/kimi-k3)
- *       coding
- * </pre>
+ * copilot (built-in)
+ * claude-haiku-4.5 [coding]
  *
- * <p>If no providers are configured a short informational message is printed instead.
+ * openrouter openai → https://openrouter.ai/api/v1
+ * kimi-k3 → moonshotai/kimi-k3 [coding]
+ * </pre>
  */
 @Command(name = "providers", description = "List providers, models, and modes from settings.yaml")
 public class ProvidersCommand implements Runnable {
@@ -55,69 +49,91 @@ public class ProvidersCommand implements Runnable {
         final var context = parent.getContext();
         final var printer = context.getPrinter();
         final var configDir = context.getSettings().getConfigDir();
-
         final var settings = SettingsConfigLoader.load(configDir);
 
-        final var sb = new StringBuilder();
-        sb.append(Printer.Colours.YELLOW).append("Providers from settings.yaml:\n").append(Printer.Colours.RESET);
+        final var C = Printer.Colours.CYAN;
+        final var G = Printer.Colours.GREEN;
+        final var W = Printer.Colours.WHITE;
+        final var D = Printer.Colours.GRAY;
+        final var R = Printer.Colours.RESET;
 
-        // Always show copilot as a built-in first
-        sb.append(Printer.Colours.CYAN).append("  copilot").append(Printer.Colours.RESET)
-                .append(Printer.Colours.WHITE).append("  (built-in)").append(Printer.Colours.RESET).append('\n');
+        final var sb = new StringBuilder();
+        sb.append(W).append("Providers (settings.yaml):\n").append(R);
+
+        // copilot built-in
+        sb.append('\n').append(C).append("copilot").append(R)
+                .append(D).append("  (built-in)").append(R).append('\n');
+        appendCopilotModels(sb, settings, G, W, D, R);
 
         if (settings.isEmpty()) {
-            sb.append(Printer.Colours.WHITE)
-                    .append("  No additional providers configured in settings.yaml.\n")
-                    .append(Printer.Colours.RESET);
-            printer.print(Printer.raw(sb.toString()));
-            return;
+            sb.append(D).append("\nNo additional providers configured in settings.yaml.").append(R).append('\n');
         }
-
-        final var providers = Objects.requireNonNullElse(settings.getProviders(), Map.<String, io.appform.sai.config.ProviderEntry>of());
-        // Sort alphabetically for stable output
-        new TreeMap<>(providers).forEach((providerName, entry) -> {
-            // Provider header line
-            sb.append(Printer.Colours.CYAN).append("  ").append(providerName).append(Printer.Colours.RESET);
-            if (entry.getType() != null || entry.getEndpoint() != null) {
-                sb.append(Printer.Colours.WHITE).append("  [");
-                if (entry.getType() != null) {
-                    sb.append(entry.getType());
+        else {
+            final var providers = Objects.requireNonNullElse(settings.getProviders(),
+                                                             Map.<String, io.appform.sai.config.ProviderEntry>of());
+            new TreeMap<>(providers).forEach((providerName, entry) -> {
+                if ("copilot".equalsIgnoreCase(providerName)) {
+                    return;
                 }
-                if (entry.getEndpoint() != null) {
+                sb.append('\n').append(C).append(providerName).append(R);
+                if (entry.getType() != null || entry.getEndpoint() != null) {
+                    sb.append(D).append("  ");
                     if (entry.getType() != null) {
-                        sb.append(" → ");
+                        sb.append(entry.getType());
                     }
-                    sb.append(entry.getEndpoint());
-                }
-                sb.append(']').append(Printer.Colours.RESET);
-            }
-            sb.append('\n');
-
-            // Models
-            final var models = entry.getModels();
-            if (models == null || models.isEmpty()) {
-                return;
-            }
-            new TreeMap<>(models).forEach((modelId, modelEntry) -> {
-                sb.append(Printer.Colours.GREEN).append("    ").append(modelId).append(Printer.Colours.RESET);
-                if (modelEntry.getEffectiveModelId() != null) {
-                    sb.append(Printer.Colours.WHITE)
-                            .append("  (→ ").append(modelEntry.getEffectiveModelId()).append(')')
-                            .append(Printer.Colours.RESET);
+                    if (entry.getEndpoint() != null) {
+                        if (entry.getType() != null) {
+                            sb.append(" → ");
+                        }
+                        sb.append(entry.getEndpoint());
+                    }
+                    sb.append(R);
                 }
                 sb.append('\n');
 
-                // Modes
-                final var modes = modelEntry.getModes();
-                if (modes != null && !modes.isEmpty()) {
-                    sb.append("      ");
-                    new TreeMap<>(modes).forEach((modeName, modeEntry) ->
-                            sb.append(Printer.Colours.WHITE).append(modeName).append(Printer.Colours.RESET).append("  "));
-                    sb.append('\n');
+                final var models = entry.getModels();
+                if (models == null || models.isEmpty()) {
+                    return;
                 }
+                new TreeMap<>(models).forEach((modelId, modelEntry) -> {
+                    sb.append("  ").append(G).append(modelId).append(R);
+                    if (modelEntry.getEffectiveModelId() != null) {
+                        sb.append(D).append("  → ").append(modelEntry.getEffectiveModelId()).append(R);
+                    }
+                    final var modes = modelEntry.getModes();
+                    if (modes != null && !modes.isEmpty()) {
+                        final var modeList = String.join(", ", new TreeMap<>(modes).keySet());
+                        sb.append(W).append("  [").append(modeList).append(']').append(R);
+                    }
+                    sb.append('\n');
+                });
             });
-        });
+        }
 
         printer.print(Printer.raw(sb.toString()));
+    }
+
+    private void appendCopilotModels(StringBuilder sb,
+                                     io.appform.sai.config.SettingsConfig settings,
+                                     String G,
+                                     String W,
+                                     String D,
+                                     String R) {
+        if (settings.isEmpty()) {
+            return;
+        }
+        final var copilotEntry = settings.getProvider("copilot").orElse(null);
+        if (copilotEntry == null || copilotEntry.getModels() == null) {
+            return;
+        }
+        new TreeMap<>(copilotEntry.getModels()).forEach((modelId, modelEntry) -> {
+            sb.append("  ").append(G).append(modelId).append(R);
+            final var modes = modelEntry.getModes();
+            if (modes != null && !modes.isEmpty()) {
+                final var modeList = String.join(", ", new TreeMap<>(modes).keySet());
+                sb.append(W).append("  [").append(modeList).append(']').append(R);
+            }
+            sb.append('\n');
+        });
     }
 }
