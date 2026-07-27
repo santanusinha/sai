@@ -118,16 +118,23 @@ public class AgentFactory {
 
         final var effectiveProviderFactory = resolveProviderFactory(config, resolved.getTuning());
 
+        // If the ModelEntry defines an effectiveModelId (e.g. "moonshotai/kimi-k3" for an
+        // OpenRouter model keyed as "kimi-k3"), use it as the API model ID; otherwise fall back
+        // to the bare model name from the CLI string.
+        final var apiModelId = Objects.requireNonNullElse(resolved.getEffectiveModelId(), modelName);
+        if (!apiModelId.equals(modelName)) {
+            log.info("Overriding API model ID: '{}' -> '{}'", modelName, apiModelId);
+        }
+
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorService)
                 .mapper(mapper)
                 .eventBus(eventBus)
                 .modelSettings(modelSettings)
-                .model(new SimpleOpenAIModel<>(modelName,
+                .model(new SimpleOpenAIModel<>(apiModelId,
                                                effectiveProviderFactory,
                                                mapper,
                                                modelOptions))
-                .outputGenerationMode(config.getOutputGenerationMode())
                 .autoCompactionSetup(AutoCompactionSetup.builder()
                         .compactionTriggerThresholdPercentage(50) //TODO::CONFIG?
                         .build())

@@ -51,6 +51,19 @@ public class ModelEntry {
     String defaultMode;
 
     /**
+     * The actual model identifier to send to the provider API.
+     *
+     * <p>Use this when the API model ID contains slashes (e.g. {@code "moonshotai/kimi-k3"} on
+     * OpenRouter) and therefore cannot be used as the YAML map key or the {@code provider/model}
+     * CLI segment. Set a slash-free key in the YAML map (e.g. {@code kimi-k3}) and set this
+     * field to the real API slug.
+     *
+     * <p>If {@code null}, the YAML map key (the model segment of the CLI string) is used as-is.
+     */
+    @Nullable
+    String effectiveModelId;
+
+    /**
      * Modes defined under this model, keyed by mode name (e.g. {@code "coding"},
      * {@code "planning"}).
      */

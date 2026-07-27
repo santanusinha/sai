@@ -61,6 +61,17 @@ public class SettingsResolver {
 
         @Nullable
         ModelTuning tuning;
+
+        /**
+         * The effective model ID to send to the provider API.
+         *
+         * <p>Non-null only when the {@link ModelEntry} in settings.yaml carries an
+         * {@code effectiveModelId} override (e.g. {@code "moonshotai/kimi-k3"} for an
+         * OpenRouter model keyed as {@code kimi-k3}). When null, the caller should use
+         * the bare model name from the CLI string as-is.
+         */
+        @Nullable
+        String effectiveModelId;
     }
 
     /**
@@ -85,6 +96,7 @@ public class SettingsResolver {
         final var providerEntry = config.getProvider(provider).orElse(null);
 
         ModelTuning effectiveTuning = null;
+        String effectiveModelId = null;
         var foundInSettings = false;
 
         if (providerEntry != null) {
@@ -109,6 +121,10 @@ public class SettingsResolver {
                         log.warn("Mode '{}' not found for model '{}' under provider '{}'", mode, model, provider);
                     }
                 }
+
+                if (modelEntry.getEffectiveModelId() != null) {
+                    effectiveModelId = modelEntry.getEffectiveModelId();
+                }
             }
         }
 
@@ -130,13 +146,14 @@ public class SettingsResolver {
         }
 
         if (effectiveTuning == null || effectiveTuning.isEmpty()) {
-            return ResolvedSettings.builder().build();
+            return ResolvedSettings.builder().effectiveModelId(effectiveModelId).build();
         }
 
         return ResolvedSettings.builder()
                 .modelSettings(effectiveTuning.toModelSettings())
                 .modelOptions(effectiveTuning.toModelOptions())
                 .tuning(effectiveTuning)
+                .effectiveModelId(effectiveModelId)
                 .build();
     }
 }
