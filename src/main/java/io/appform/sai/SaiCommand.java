@@ -40,6 +40,7 @@ import io.appform.sai.cli.slash.SlashCommandDispatcher;
 import io.appform.sai.commands.CopilotCommand;
 import io.appform.sai.commands.DeleteSessionsCommand;
 import io.appform.sai.commands.ExportSessionCommand;
+import io.appform.sai.commands.ListProvidersCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
 import io.appform.sai.config.AgentConfigLoader;
@@ -88,7 +89,8 @@ import picocli.CommandLine.Option;
         PruneSessionsCommand.class,
         ExportSessionCommand.class,
         io.appform.sai.commands.SessionSummaryCommand.class,
-        CopilotCommand.class
+        CopilotCommand.class,
+        ListProvidersCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
     @Option(names = {
@@ -147,6 +149,9 @@ public class SaiCommand implements Callable<Integer> {
         final var builder = Settings.builder();
         if (!Strings.isNullOrEmpty(parent.getDataDir())) {
             builder.dataDir(parent.getDataDir());
+        }
+        if (!Strings.isNullOrEmpty(parent.getConfigDir())) {
+            builder.configDir(parent.getConfigDir());
         }
         return builder.build();
     }
