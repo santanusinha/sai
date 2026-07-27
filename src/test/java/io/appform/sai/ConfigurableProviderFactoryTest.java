@@ -184,10 +184,12 @@ class ConfigurableProviderFactoryTest {
 
     @Test
     void getOpenAiWithoutConfigAndWithoutEnvThrows() {
+        // Use a custom provider name that has no built-in env-var fallback, so the test
+        // always throws regardless of whether OPENAI_API_KEY happens to be set in the env.
         final var config = SettingsConfig.builder().build();
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, config);
+        final var factory = new ConfigurableProviderFactory("my-openai-test", mapper, httpClient, config);
         final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("gpt-4o"));
-        assertTrue(ex.getMessage().contains("OPENAI_API_KEY"));
+        assertTrue(ex.getMessage().contains("Unsupported provider"));
     }
 
     @Test

@@ -155,7 +155,7 @@ class SettingsConfigLoaderTest {
                                       "providers:",
                                       "  openai:",
                                       "    type: openai",
-                                      "    endpoint: ${OPENAI_ENDPOINT:-https://api.openai.com/v1}",
+                                      "    endpoint: ${SAI_TEST_NONEXISTENT_ENDPOINT_12345:-https://api.openai.com/v1}",
                                       "    apiKey: ${PATH}",
                                       ""));
         final var config = SettingsConfigLoader.load(file);
