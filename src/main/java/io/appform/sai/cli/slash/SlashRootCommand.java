@@ -17,6 +17,7 @@ package io.appform.sai.cli.slash;
 
 import io.appform.sai.cli.slash.commands.CompactCommand;
 import io.appform.sai.cli.slash.commands.HelpCommand;
+import io.appform.sai.cli.slash.commands.InfoCommand;
 import io.appform.sai.cli.slash.commands.ModeCommand;
 import io.appform.sai.cli.slash.commands.ModelCommand;
 import io.appform.sai.cli.slash.commands.PersonaCommand;
@@ -33,13 +34,14 @@ import picocli.CommandLine.Command;
  * dispatched.
  *
  * <p>The root command itself is a no-op {@link Runnable}; all real work is done by its subcommands
- * ({@code /compact}, {@code /help}, {@code /model}, {@code /mode}, {@code /persona},
+ * ({@code /compact}, {@code /help}, {@code /info}, {@code /model}, {@code /mode}, {@code /persona},
  * {@code /providers}, {@code /skills}).
  */
 @Getter
 @Command(name = "", mixinStandardHelpOptions = false, subcommands = {
         CompactCommand.class,
         HelpCommand.class,
+        InfoCommand.class,
         ModeCommand.class,
         ModelCommand.class,
         PersonaCommand.class,
