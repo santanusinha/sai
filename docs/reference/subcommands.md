@@ -1,8 +1,49 @@
 # Subcommands
 
-SAI provides several subcommands for session management and inspection. All subcommands honor the `--data-dir` flag to override the default data directory (`~/.local/state/sai/`).
+SAI provides several subcommands for session management, inspection, and provider discovery. All subcommands honor the `--data-dir` flag to override the default data directory (`~/.local/state/sai/`).
+
+## Provider Commands
+
+### list-providers
+
+Print all valid `-m` / `--model` argument values defined in `settings.yaml`, one per line. Each line is ready to paste directly after `-m`.
+
+**Usage:**
+
+```bash
+sai list-providers [--config-dir=<path>]
+```
+
+**Output format:** `provider/model` (base) and `provider/model/mode` (for each mode defined on that model).
+
+**Sample output:**
+
+```
+# copilot  (built-in, use copilot/<model>)
+copilot/claude-haiku-4.5
+copilot/claude-haiku-4.5/coding
+openrouter/anthropic/claude-3.5-sonnet
+openrouter/anthropic/claude-3.5-sonnet/coding
+```
+
+**Examples:**
+
+```bash
+# List all available -m values
+sai list-providers
+
+# Use with a custom config directory
+sai list-providers --config-dir=~/my-sai-config
+```
+
+!!! tip "Discovering models"
+    Run `sai list-providers` whenever you add or update `settings.yaml` to see the exact strings to pass to `-m`.
+    The `copilot` provider is always shown — it is built-in and does not need to be configured.
+
+---
 
 ## Session Management Commands
+
 
 ### list-sessions
 

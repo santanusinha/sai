@@ -23,9 +23,10 @@ Slash commands give you live control over the session. They start with `/` and a
 |----------------------------------|----------------------------------------------------------|
 | `/help`                          | List all available slash commands                        |
 | `/model`                         | Show the currently active model                          |
-| `/model <provider/model>`        | Switch to a different model mid-session                  |
+| `/model <provider/model[/mode]>` | Switch to a different model mid-session                  |
 | `/persona`                       | Show the name of the currently active persona            |
 | `/persona <name-or-path>`        | Load a different persona mid-session                     |
+| `/providers`                     | List all valid `-m` values (`provider/model[/mode]`)     |
 | `/skills`                        | List all available agent skills                          |
 
 ### `/help`
@@ -35,10 +36,11 @@ Prints a list of all available slash commands with their descriptions:
 ```
 SAI > /help
 Available slash commands:
-  /help     Show available slash commands
-  /model    Get or set the current model (format: provider/model)
-  /persona  Load a persona file (.yaml/.yml/.json)
-  /skills   List available agent skills
+  /help      Show available slash commands
+  /model     Get or set the current model (format: provider/model[/mode])
+  /persona   Load a persona file (.yaml/.yml/.json)
+  /providers List valid -m values (provider/model[/mode])
+  /skills    List available agent skills
 ```
 
 ### `/model`
@@ -51,15 +53,15 @@ SAI > /model
 Current model: copilot/claude-haiku-4.5
 
 # Switch to a different model
-SAI > /model openai/gpt-4
-Model switched to: openai/gpt-4
+SAI > /model openrouter/anthropic/claude-3.5-sonnet
+Model switched to: openrouter/anthropic/claude-3.5-sonnet
 
-# Another example
-SAI > /model copilot/claude-sonnet-4.6
-Model switched to: copilot/claude-sonnet-4.6
+# Switch to a model with a specific mode
+SAI > /model copilot/claude-sonnet-4.6/coding
+Model switched to: copilot/claude-sonnet-4.6/coding
 ```
 
-The model change takes effect immediately — subsequent queries in the same session use the new model.
+The model change takes effect immediately — subsequent queries in the same session use the new model. Use `/providers` to see all valid values.
 
 ### `/persona`
 
@@ -80,6 +82,30 @@ Persona loaded: Basic Agent (model: copilot/claude-haiku-4.5)
 ```
 
 Loading a persona also switches the model to whichever model is defined in that persona file (if any).
+
+### `/providers`
+
+List all valid `-m` / `--model` values from `settings.yaml`. Each line is a ready-to-use `provider/model` or `provider/model/mode` string.
+
+```
+SAI > /providers
+# copilot  (built-in, use copilot/<model>)
+copilot/claude-haiku-4.5
+copilot/claude-haiku-4.5/coding
+openrouter/anthropic/claude-3.5-sonnet
+openrouter/anthropic/claude-3.5-sonnet/coding
+```
+
+Use a line from this output directly with `/model`:
+
+```
+SAI > /providers
+copilot/claude-haiku-4.5
+openrouter/anthropic/claude-3.5-sonnet
+
+SAI > /model openrouter/anthropic/claude-3.5-sonnet
+Model switched to: openrouter/anthropic/claude-3.5-sonnet
+```
 
 ### `/skills`
 
