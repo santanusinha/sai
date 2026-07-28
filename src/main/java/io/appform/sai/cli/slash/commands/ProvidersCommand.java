@@ -27,18 +27,17 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.ParentCommand;
 
 /**
- * {@code /providers} — list all providers, models, and modes defined in {@code settings.yaml}.
+ * {@code /providers} — list all valid {@code -m} argument values from {@code settings.yaml}.
  *
- * <p>One line per model, modes inline in brackets:
+ * <p>One line per usable value:
  * <pre>
- * copilot (built-in)
- * claude-haiku-4.5 [coding]
- *
- * openrouter openai → https://openrouter.ai/api/v1
- * kimi-k3 → moonshotai/kimi-k3 [coding]
+ * copilot/claude-haiku-4.5
+ * copilot/claude-haiku-4.5/coding
+ * openrouter/kimi-k3
+ * openrouter/kimi-k3/coding
  * </pre>
  */
-@Command(name = "providers", description = "List providers, models, and modes from settings.yaml")
+@Command(name = "providers", description = "List valid -m (provider/model[/mode]) values from settings.yaml")
 public class ProvidersCommand implements Runnable {
 
     @ParentCommand
@@ -53,20 +52,24 @@ public class ProvidersCommand implements Runnable {
 
         final var C = Printer.Colours.CYAN;
         final var G = Printer.Colours.GREEN;
-        final var W = Printer.Colours.WHITE;
         final var D = Printer.Colours.GRAY;
         final var R = Printer.Colours.RESET;
 
         final var sb = new StringBuilder();
-        sb.append(W).append("Providers (settings.yaml):\n").append(R);
 
-        // copilot built-in
-        sb.append('\n').append(C).append("copilot").append(R)
-                .append(D).append("  (built-in)").append(R).append('\n');
-        appendCopilotModels(sb, settings, G, W, D, R);
+        // copilot is always available — print a header line so it's discoverable
+        sb.append(C).append("# copilot").append(R).append(D).append("  (built-in, use copilot/<model>)").append(R)
+                .append('\n');
+        appendModels(sb,
+                     "copilot",
+                     settings.isEmpty() ? null
+                             : settings.getProvider("copilot").map(e -> e.getModels()).orElse(null),
+                     C,
+                     D,
+                     R);
 
         if (settings.isEmpty()) {
-            sb.append(D).append("\nNo additional providers configured in settings.yaml.").append(R).append('\n');
+            sb.append(D).append("No additional providers configured in settings.yaml.\n").append(R);
         }
         else {
             final var providers = Objects.requireNonNullElse(settings.getProviders(),
@@ -75,65 +78,30 @@ public class ProvidersCommand implements Runnable {
                 if ("copilot".equalsIgnoreCase(providerName)) {
                     return;
                 }
-                sb.append('\n').append(C).append(providerName).append(R);
-                if (entry.getType() != null || entry.getEndpoint() != null) {
-                    sb.append(D).append("  ");
-                    if (entry.getType() != null) {
-                        sb.append(entry.getType());
-                    }
-                    if (entry.getEndpoint() != null) {
-                        if (entry.getType() != null) {
-                            sb.append(" → ");
-                        }
-                        sb.append(entry.getEndpoint());
-                    }
-                    sb.append(R);
-                }
-                sb.append('\n');
-
-                final var models = entry.getModels();
-                if (models == null || models.isEmpty()) {
-                    return;
-                }
-                new TreeMap<>(models).forEach((modelId, modelEntry) -> {
-                    sb.append("  ").append(G).append(modelId).append(R);
-                    if (modelEntry.getEffectiveModelId() != null) {
-                        sb.append(D).append("  → ").append(modelEntry.getEffectiveModelId()).append(R);
-                    }
-                    final var modes = modelEntry.getModes();
-                    if (modes != null && !modes.isEmpty()) {
-                        final var modeList = String.join(", ", new TreeMap<>(modes).keySet());
-                        sb.append(W).append("  [").append(modeList).append(']').append(R);
-                    }
-                    sb.append('\n');
-                });
+                appendModels(sb, providerName, entry.getModels(), C, D, R);
             });
         }
 
         printer.print(Printer.raw(sb.toString()));
     }
 
-    private void appendCopilotModels(StringBuilder sb,
-                                     io.appform.sai.config.SettingsConfig settings,
-                                     String G,
-                                     String W,
-                                     String D,
-                                     String R) {
-        if (settings.isEmpty()) {
+    private void appendModels(StringBuilder sb,
+                              String providerName,
+                              Map<String, io.appform.sai.config.ModelEntry> models,
+                              String C,
+                              String D,
+                              String R) {
+        if (models == null || models.isEmpty()) {
             return;
         }
-        final var copilotEntry = settings.getProvider("copilot").orElse(null);
-        if (copilotEntry == null || copilotEntry.getModels() == null) {
-            return;
-        }
-        new TreeMap<>(copilotEntry.getModels()).forEach((modelId, modelEntry) -> {
-            sb.append("  ").append(G).append(modelId).append(R);
+        new TreeMap<>(models).forEach((modelId, modelEntry) -> {
+            final var base = providerName + "/" + modelId;
+            sb.append(C).append(base).append(R).append('\n');
             final var modes = modelEntry.getModes();
-            if (modes != null && !modes.isEmpty()) {
-                final var modeList = String.join(", ", new TreeMap<>(modes).keySet());
-                sb.append(W).append("  [").append(modeList).append(']').append(R);
+            if (modes != null) {
+                new TreeMap<>(modes).keySet()
+                        .forEach(mode -> sb.append(C).append(base).append('/').append(mode).append(R).append('\n'));
             }
-            sb.append('\n');
         });
     }
 }

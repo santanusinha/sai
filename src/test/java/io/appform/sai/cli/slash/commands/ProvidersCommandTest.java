@@ -74,6 +74,44 @@ class ProvidersCommandTest {
     private SlashCommandDispatcher dispatcherWithProviders;
     private SlashCommandDispatcher dispatcherNoProviders;
 
+    @Test
+    void providersAlwaysShowsCopilotBuiltIn() {
+        dispatcherWithProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("copilot"));
+    }
+
+    @Test
+    void providersListsConfiguredProvider() {
+        dispatcherWithProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("my-provider"));
+    }
+
+    @Test
+    void providersListsModel() {
+        dispatcherWithProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("my-provider/my-model"));
+    }
+
+    @Test
+    void providersListsModes() {
+        dispatcherWithProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("my-provider/my-model/coding"));
+        assertTrue(capturedContains("my-provider/my-model/planning"));
+    }
+
+    @Test
+    void providersNoSettingsShowsInfoMessage() {
+        dispatcherNoProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("copilot"));
+        assertTrue(capturedContains("No additional providers"));
+    }
+
+    @Test
+    void providersShowsFullModelPath() {
+        dispatcherWithProviders.dispatch("providers", printer);
+        assertTrue(capturedContains("my-provider/my-model"));
+    }
+
     @BeforeEach
     @SneakyThrows
     void setUp() {
@@ -148,44 +186,6 @@ class ProvidersCommandTest {
                 .mapper(new ObjectMapper())
                 .build();
         dispatcherNoProviders = new SlashCommandDispatcher(contextNoProviders);
-    }
-
-    @Test
-    void providersAlwaysShowsCopilotBuiltIn() {
-        dispatcherWithProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("copilot"));
-    }
-
-    @Test
-    void providersListsConfiguredProvider() {
-        dispatcherWithProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("my-provider"));
-    }
-
-    @Test
-    void providersListsModel() {
-        dispatcherWithProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("my-model"));
-    }
-
-    @Test
-    void providersListsModes() {
-        dispatcherWithProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("coding"));
-        assertTrue(capturedContains("planning"));
-    }
-
-    @Test
-    void providersShowsEndpoint() {
-        dispatcherWithProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("https://api.example.com/v1"));
-    }
-
-    @Test
-    void providersNoSettingsShowsInfoMessage() {
-        dispatcherNoProviders.dispatch("providers", printer);
-        assertTrue(capturedContains("copilot"));
-        assertTrue(capturedContains("No additional providers"));
     }
 
     @AfterEach

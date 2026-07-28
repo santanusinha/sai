@@ -28,20 +28,18 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.ParentCommand;
 
 /**
- * {@code list-providers} — prints all providers, models, and modes defined in
- * {@code settings.yaml}, then exits.
+ * {@code list-providers} — prints all valid {@code -m} argument values, one per line.
  *
- * <p>One line per model, modes inline in brackets:
+ * <p>Output format:
  * <pre>
- * copilot (built-in)
- * claude-haiku-4.5 [coding]
- *
- * openrouter openai → https://openrouter.ai/api/v1
- * kimi-k3 → moonshotai/kimi-k3 [coding]
+ * copilot/claude-haiku-4.5
+ * copilot/claude-haiku-4.5/coding
+ * openrouter/kimi-k3
+ * openrouter/kimi-k3/coding
  * </pre>
  */
 @Slf4j
-@Command(name = "list-providers", description = "List all providers, models, and modes defined in settings.yaml")
+@Command(name = "list-providers", description = "List all valid -m (provider/model[/mode]) values from settings.yaml")
 @SuppressWarnings("java:S106")
 public class ListProvidersCommand implements Callable<Integer> {
 
@@ -53,16 +51,12 @@ public class ListProvidersCommand implements Callable<Integer> {
         final var settings = SaiCommand.resolveSettings(parent);
         final var config = SettingsConfigLoader.load(settings.getConfigDir());
 
-        System.out.println("Providers (settings.yaml):");
-
-        // copilot is always available as a built-in
-        System.out.println();
-        System.out.println("copilot  (built-in)");
-        appendCopilotModels(config);
+        // copilot built-in — no extra models to enumerate unless configured
+        printModels("copilot",
+                    config.isEmpty() ? null
+                            : config.getProvider("copilot").map(e -> e.getModels()).orElse(null));
 
         if (config.isEmpty()) {
-            System.out.println();
-            System.out.println("No additional providers configured in settings.yaml.");
             return 0;
         }
 
@@ -74,57 +68,24 @@ public class ListProvidersCommand implements Callable<Integer> {
             if ("copilot".equalsIgnoreCase(providerName)) {
                 return;
             }
-            System.out.println();
-            final var sb = new StringBuilder(providerName);
-            if (entry.getType() != null || entry.getEndpoint() != null) {
-                sb.append("  ");
-                if (entry.getType() != null) {
-                    sb.append(entry.getType());
-                }
-                if (entry.getEndpoint() != null) {
-                    if (entry.getType() != null) {
-                        sb.append(" -> ");
-                    }
-                    sb.append(entry.getEndpoint());
-                }
-            }
-            System.out.println(sb);
-
-            final var models = entry.getModels();
-            if (models == null || models.isEmpty()) {
-                return;
-            }
-            new TreeMap<>(models).forEach((modelId, modelEntry) -> {
-                final var line = new StringBuilder("  ").append(modelId);
-                if (modelEntry.getEffectiveModelId() != null) {
-                    line.append("  -> ").append(modelEntry.getEffectiveModelId());
-                }
-                final var modes = modelEntry.getModes();
-                if (modes != null && !modes.isEmpty()) {
-                    line.append("  [").append(String.join(", ", new TreeMap<>(modes).keySet())).append(']');
-                }
-                System.out.println(line);
-            });
+            printModels(providerName, entry.getModels());
         });
 
         return 0;
     }
 
-    private void appendCopilotModels(io.appform.sai.config.SettingsConfig config) {
-        if (config.isEmpty()) {
+    private void printModels(String providerName,
+                             Map<String, io.appform.sai.config.ModelEntry> models) {
+        if (models == null || models.isEmpty()) {
             return;
         }
-        final var copilotEntry = config.getProvider("copilot").orElse(null);
-        if (copilotEntry == null || copilotEntry.getModels() == null) {
-            return;
-        }
-        new TreeMap<>(copilotEntry.getModels()).forEach((modelId, modelEntry) -> {
-            final var line = new StringBuilder("  ").append(modelId);
+        new TreeMap<>(models).forEach((modelId, modelEntry) -> {
+            final var base = providerName + "/" + modelId;
+            System.out.println(base);
             final var modes = modelEntry.getModes();
-            if (modes != null && !modes.isEmpty()) {
-                line.append("  [").append(String.join(", ", new TreeMap<>(modes).keySet())).append(']');
+            if (modes != null) {
+                new TreeMap<>(modes).keySet().forEach(mode -> System.out.println(base + "/" + mode));
             }
-            System.out.println(line);
         });
     }
 }
