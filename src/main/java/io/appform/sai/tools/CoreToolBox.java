@@ -64,12 +64,15 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.BashResponse bash(
                                     @JsonPropertyDescription("Reason for requesting the tool. This is shown to the user for informational purposes.") String requestReason,
                                     @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.") String command,
-                                    @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes.") int timeoutSeconds) {
+                                    @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes. A value of -1 disables the timeout entirely, allowing the command to run indefinitely. Use -1 only when you genuinely need an unbounded execution (e.g., long-running servers or interactive processes); do not use it as a general/default case.") int timeoutSeconds) {
         log.info("Executing bash command: {}", command);
         try {
+            final var effectiveTimeout = timeoutSeconds == -1
+                    ? Duration.ofMillis(Long.MAX_VALUE)
+                    : Duration.ofSeconds(timeoutSeconds);
             final var commandOutput = new BashCommandRunner(
                                                             command,
-                                                            Duration.ofSeconds(timeoutSeconds),
+                                                            effectiveTimeout,
                                                             messageConsumer).call();
 
             final var statusCode = commandOutput.getStatusCode();

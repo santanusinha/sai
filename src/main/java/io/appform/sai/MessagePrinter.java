@@ -381,11 +381,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         if (!ensureParamsExist(request, messages, "command", "timeoutSeconds", "requestReason")) {
             return;
         }
+        final var timeoutSeconds = request.get("timeoutSeconds").asInt();
+        final var timeoutDisplay = timeoutSeconds == -1 ? "no timeout" : timeoutSeconds + " seconds";
         messages.add(Printer.assistantMessage(request.get("requestReason").asText()));
         messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.YELLOW + "$ " + Printer.Colours.WHITE
                 + request.get("command").asText() + Printer.Colours.GRAY
-                + " (Timeout: " + request.get("timeoutSeconds").asInt() + " seconds)"
+                + " (Timeout: " + timeoutDisplay + ")"
                 + Printer.Colours.RESET));
     }
 
