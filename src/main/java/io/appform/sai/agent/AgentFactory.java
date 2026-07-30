@@ -131,6 +131,7 @@ public class AgentFactory {
                 .mapper(mapper)
                 .eventBus(eventBus)
                 .modelSettings(modelSettings)
+                .outputGenerationMode(config.getOutputGenerationMode())
                 .model(new SimpleOpenAIModel<>(apiModelId,
                                                effectiveProviderFactory,
                                                mapper,

@@ -131,9 +131,7 @@ public class ModelTuning {
         }
 
         final var mergedSettings = ModelSettings.merge(lhs.toModelSettings(), rhs.toModelSettings());
-        final var lhsOptions = lhs.toModelOptions();
-        final var rhsOptions = rhs.toModelOptions();
-        final var mergedOptions = lhsOptions.merge(rhsOptions);
+        final var mergedToolChoice = rhs.getToolChoice() != null ? rhs.getToolChoice() : lhs.getToolChoice();
 
         return ModelTuning.builder()
                 .maxTokens(mergedSettings.getMaxTokens())
@@ -149,7 +147,7 @@ public class ModelTuning {
                 .contextWindowSize(rhs.getContextWindowSize() != null
                         ? rhs.getContextWindowSize()
                         : lhs.getContextWindowSize())
-                .toolChoice(mergedOptions.getToolChoice())
+                .toolChoice(mergedToolChoice)
                 .extraArgs(rhs.getExtraArgs() != null ? rhs.getExtraArgs() : lhs.getExtraArgs())
                 .requestTransforms(rhs.getRequestTransforms() != null
                         ? rhs.getRequestTransforms()
@@ -204,11 +202,13 @@ public class ModelTuning {
      * Converts this tuning to a {@link SimpleOpenAIModelOptions} instance.
      *
      * @return a {@link SimpleOpenAIModelOptions} with the tool choice, or
-     *         {@link SimpleOpenAIModelOptions#DEFAULT} if toolChoice is null
+     *         {@code null} if toolChoice is null so that callers can fall back
+     *         to legacy {@code modelOptions} or framework defaults
      */
+    @Nullable
     public SimpleOpenAIModelOptions toModelOptions() {
         if (toolChoice == null) {
-            return SimpleOpenAIModelOptions.DEFAULT;
+            return null;
         }
         return new SimpleOpenAIModelOptions(toolChoice, null);
     }

@@ -212,13 +212,6 @@ class ModelTuningTest {
     }
 
     @Test
-    void toModelOptionsReturnsDefaultWhenToolChoiceNull() {
-        final var tuning = ModelTuning.builder().build();
-        final var options = tuning.toModelOptions();
-        assertNotNull(options);
-    }
-
-    @Test
     void toModelOptionsReturnsNonNullWhenToolChoiceSet() {
         final var tuning = ModelTuning.builder()
                 .toolChoice(com.phonepe.sentinelai.models.SimpleOpenAIModelOptions.ToolChoice.AUTO)
@@ -227,6 +220,13 @@ class ModelTuningTest {
         assertNotNull(options);
         assertEquals(com.phonepe.sentinelai.models.SimpleOpenAIModelOptions.ToolChoice.AUTO,
                      options.getToolChoice());
+    }
+
+    @Test
+    void toModelOptionsReturnsNullWhenToolChoiceNull() {
+        final var tuning = ModelTuning.builder().build();
+        final var options = tuning.toModelOptions();
+        assertNull(options);
     }
 
     @Test
