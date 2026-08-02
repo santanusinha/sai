@@ -6,7 +6,7 @@
 agentId: sai-web-search
 name: Sai Web Search
 description: Fast web research agent. Finds, retrieves, and synthesizes information from the web with minimal latency.
-model: copilot/gemini-3-flash-preview
+model: copilot/gemini-3.6-flash
 tuning:
   temperature: 0.3
   maxTokens: 2048

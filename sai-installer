@@ -384,20 +384,6 @@ write_env_template() {
 EOF
     success "Env template written → ${ENV_FILE}"
 
-    ask "Would you like to set your OpenAI API key now? [y/N]"
-    read -r answer
-    if [[ "$(echo "${answer}" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
-        ask "OPENAI_API_KEY:"
-        read -rs api_key
-        echo
-        if [[ -n "${api_key}" ]]; then
-            sed -i.bak "s|# OPENAI_API_KEY=your_key_here|OPENAI_API_KEY=${api_key}|" "${ENV_FILE}"
-            rm -f "${ENV_FILE}.bak"
-            success "API key saved to ${ENV_FILE}"
-        else
-            warn "No key entered — you can edit ${ENV_FILE} later."
-        fi
-    fi
 }
 
 setup_config_dir() {
