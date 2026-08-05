@@ -167,6 +167,7 @@ The `tuning` block is shared between `settings.yaml` and persona files. All fiel
 | `encodingType` | String | Tokenizer encoding: `CL100K_BASE`, `O200K_BASE`, etc. |
 | `contextWindowSize` | Integer | Context window size in tokens |
 | `toolChoice` | String | Tool choice: `AUTO` or `REQUIRED` |
+| `compactionOutputGenerationMode` | String | Auto-compaction output mode: `TOOL_BASED` (default) or `STRUCTURED_OUTPUT` |
 | `extraArgs` | Map\<String, String\> | Free-form passthrough arguments |
 
 !!! note "Merge semantics"

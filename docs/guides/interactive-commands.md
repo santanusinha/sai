@@ -24,6 +24,8 @@ Slash commands give you live control over the session. They start with `/` and a
 | `/help`                          | List all available slash commands                        |
 | `/model`                         | Show the currently active model                          |
 | `/model <provider/model[/mode]>` | Switch to a different model mid-session                  |
+| `/mode`                          | Show the currently active mode                           |
+| `/mode <name>`                   | Set the active mode and rebuild the agent                |
 | `/persona`                       | Show the name of the currently active persona            |
 | `/persona <name-or-path>`        | Load a different persona mid-session                     |
 | `/providers`                     | List all valid `-m` values (`provider/model[/mode]`)     |
@@ -38,6 +40,7 @@ SAI > /help
 Available slash commands:
   /help      Show available slash commands
   /model     Get or set the current model (format: provider/model[/mode])
+  /mode      Get or set the current mode
   /persona   Load a persona file (.yaml/.yml/.json)
   /providers List valid -m values (provider/model[/mode])
   /skills    List available agent skills
@@ -228,7 +231,7 @@ Goodbye!
 
 - Use `exit` **without** the `!` prefix
 - The command `!exit` would try to execute the shell's exit command (different behavior)
-- Ctrl+C also exits but may leave the session in an inconsistent state
+- Ctrl+C cancels the current agent task and returns to the prompt; it does not exit SAI.
 
 ## Command Examples
 

@@ -8,9 +8,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - **Interactive & Headless Modes**: Conversational sessions or batch processing
 - **Session Persistence**: Resume previous conversations
 - **Interrupt Handling**: Press Ctrl-C to cancel running agent tasks and return to prompt
-- **Optimized File Operations**: 
-  - Checksum-based read optimization to avoid re-sending unchanged file content
-  - Write safety checks to prevent accidental overwrites
+- **Optimized File Operations**: Checksum-based read optimization and write safety checks.
 - **Agent Skills**: Extensible skill system following the [Agent Skills specification](https://agentskills.io/specification)
 - **Clean Terminal UX**: Streaming output with real-time event updates
 
@@ -96,41 +94,42 @@ target/sai-1.0-SNAPSHOT.jar
 
 ### Authenticate with GitHub Copilot
 
-SAI includes a built-in authentication command for GitHub Copilot:
+SAI includes a built-in `copilot` subcommand for authentication:
 
 ```bash
-sai copilot-auth
+sai copilot --auth
 ```
 
-This will:
-1. Initiate a GitHub OAuth Device Flow
-2. Display a code and URL for you to authorize
-3. Save your token to `~/.config/sai/copilot_token`
+This initiates a GitHub OAuth Device Flow, displays a code and URL for you to authorize, and saves your token to `~/.config/sai/copilot_token`.
 
-**Options:**
-- `-f, --force`: Force re-authentication even if token exists
-- `--show-token`: Display the token after authentication
-- `--remove`: Remove the stored authentication token
+| Option | Description |
+|---|---|
+| `-a, --auth` | Authenticate with GitHub Copilot |
+| `-f, --force` | Force re-authentication even if token exists |
+| `--list` | List available GitHub Copilot models |
+| `--remove` | Remove the stored authentication token |
+| `--show-token` | Display the token after authentication |
 
 **Examples:**
 
 ```bash
 # First-time authentication
-sai copilot-auth
+sai copilot --auth
 
 # Force re-authentication
-sai copilot-auth --force
+sai copilot --auth --force
+
+# List available models
+sai copilot --list
 
 # Show the token (for debugging)
-sai copilot-auth --show-token
+sai copilot --show-token
 
 # Remove the stored token
-sai copilot-auth --remove
+sai copilot --remove
 ```
 
-**Token location:**
-- Default: `~/.config/sai/copilot_token`
-- Override: Set `COPILOT_TOKEN_PATH` environment variable
+Token is stored at `~/.config/sai/copilot_token` by default. Set `COPILOT_TOKEN_PATH` to override.
 
 After authentication, use the `copilot` provider:
 
@@ -169,7 +168,7 @@ If no model is passed anywhere, it defaults to `copilot/claude-haiku-4.5`.
 SAI supports the following provider types:
 - **openai** - For all openai compliant endpoints including openai, cerebras, openrouter and so on
 - **azure** - For azure hosted models
-- **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI reads the GitHub OAuth token from `~/.config/sai/copilot_token` (written by `sai copilot-auth`), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
+- **copilot** — Talks directly to the GitHub Copilot API without requiring an external proxy server. SAI reads the GitHub OAuth token from `~/.config/sai/copilot_token` (written by `sai copilot --auth`), exchanges it for a short-lived Copilot bearer token, and schedules automatic token refresh before expiry. No external server process needed.
 - **copilot-proxy** — Routes requests through an external Copilot proxy server such as [copilot-api](https://github.com/ericc-ch/copilot-api) running on `localhost:4141`.
 
 Providers can be configured via environment variables (see below) or via a `settings.yaml` file (see [Settings Configuration](docs/reference/settings.md)). The `settings.yaml` file is the primary mechanism for multi-provider setups, per-model tuning, and modes. Environment variables serve as a fallback when no config entry exists.
@@ -226,10 +225,10 @@ Provider-specific environment variables (fallback when no settings.yaml entry ex
 - AZURE_API_KEY: required
 - AZURE_API_VERSION: optional, default `2024-10-21`
 
-- **GitHub Copilot (direct)**
+**GitHub Copilot (direct)**
 - COPILOT_TOKEN_PATH: optional, overrides the default token file path (`~/.config/sai/copilot_token`)
 
-> **Prerequisites**: Run `sai copilot-auth` once to authenticate with GitHub. SAI will handle all token exchange and refresh operations automatically.
+> **Prerequisites**: Run `sai copilot --auth` once to authenticate with GitHub. SAI will handle all token exchange and refresh operations automatically.
 
 **GitHub Copilot Proxy**
 - COPILOT_PROXY_ENDPOINT: optional, default `http://localhost:4141`
@@ -254,8 +253,6 @@ AZURE_API_KEY=your_azure_key
 
 Using GitHub Copilot directly (no proxy server required):
 
-Using GitHub Copilot directly (no proxy server required):
-
 ```env
 # No environment variables required by default.
 # SAI reads the token from ~/.config/sai/copilot_token
@@ -264,7 +261,7 @@ Using GitHub Copilot directly (no proxy server required):
 # COPILOT_TOKEN_PATH=/custom/path/to/copilot_token
 ```
 
-> **First-time setup**: Run `sai copilot-auth` once to authenticate and create the token file. After that, use `--model copilot/<model-name>` with no external server.
+> **First-time setup**: Run `sai copilot --auth` once to authenticate and create the token file. After that, use `--model copilot/<model-name>` with no external server.
 
 Using a Copilot proxy:
 
@@ -384,12 +381,14 @@ Slash commands give you live control over the session without leaving SAI. Type 
 
 | `/help`                          | List all available slash commands                        |
 | `/model`                         | Show the currently active model                          |
-| `/model <provider/model[/mode]>`| Switch to a different model (and optionally mode)         |
+| `/model <provider/model[/mode]>` | Switch to a different model (and optionally mode)        |
 | `/mode`                          | Show the currently active mode                           |
-| `/mode <name>`                   | Set the active mode and rebuild the agent                 |
+| `/mode <name>`                   | Set the active mode and rebuild the agent                |
 | `/persona`                       | Show the name of the currently active persona            |
 | `/persona <name-or-path>`        | Load a different persona mid-session                     |
+| `/providers`                     | List all valid `-m` values (`provider/model[/mode]`)     |
 | `/skills`                        | List all available agent skills                          |
+
 #### Examples
 
 ```text
@@ -419,12 +418,7 @@ Persona loaded: Code Reviewer (model: copilot/claude-sonnet-4.6)
 
 ### Interrupt handling
 
-Press **Ctrl-C** at any time during agent execution to cancel the current task and return to the input prompt. This allows you to:
-- Stop long-running operations
-- Cancel tasks that are taking too long
-- Quickly return to the prompt to start a new query
-
-The agent will gracefully cancel the running task and display a message confirming the interruption.
+Press **Ctrl-C** at any time to cancel the current task and return to the input prompt.
 
 ### Shell execution (`!`)
 
@@ -539,8 +533,8 @@ Sai AI Agent
   -i, --input=<input>        Execute a single input and exit. If the value
                                starts with '@', read input from the specified
                                file.
-  -m, --model[=<model>]      Model to use, in the format 'provider/model' (e.g.
-                               'copilot/claude-haiku-4.5'). Overrides
+  -m, --model[=<model>]      Model to use, in the format 'provider/model[/mode]'
+                               (e.g. 'copilot/claude-haiku-4.5'). Overrides
                                model specified in persona file.
   -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session-id=<sessionId>
@@ -556,19 +550,23 @@ Commands:
                      '3h', '30m'
   export-session   Export a session to a markdown file
   session-summary  Show detailed summary of a specific session
-  copilot-auth     Authenticate with GitHub Copilot
-```
-  session-summary  Show detailed summary of a specific session
+  copilot          Manage GitHub Copilot authentication and settings
+  list-providers   List all valid -m (provider/model[/mode]) values from settings.yaml
 ```
 
-- copilot-auth
+- copilot
   ```bash
-  java -jar target/sai-1.0-SNAPSHOT.jar copilot-auth
+  java -jar target/sai-1.0-SNAPSHOT.jar copilot --auth
   ```
   Authenticates with GitHub Copilot using OAuth Device Flow. Saves token to `~/.config/sai/copilot_token`.
-  Options: `-f, --force` to re-authenticate, `--show-token` to display the token, `--remove` to delete the stored token.
-  Authenticates with GitHub Copilot using OAuth Device Flow. Saves token to `~/.config/sai/copilot_token`.
-  Options: `-f, --force` to re-authenticate, `--show-token` to display the token.
+
+  | Option | Description |
+  |---|---|
+  | `-a, --auth` | Authenticate with GitHub Copilot |
+  | `-f, --force` | Force re-authentication even if token exists |
+  | `--list` | List available GitHub Copilot models |
+  | `--remove` | Remove the stored authentication token |
+  | `--show-token` | Display the token after authentication |
 
 - list-sessions
   ```bash

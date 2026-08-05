@@ -12,7 +12,7 @@ hide:
 
     ---
 
-    Connect to OpenAI, Azure OpenAI, or GitHub Copilot proxy. Switch providers seamlessly with a single configuration change.
+    Connect to OpenAI, Azure OpenAI, or GitHub Copilot (direct or via proxy). Switch providers with a single configuration change.
 
 -   :speech_balloon:{ .lg .middle } __Interactive & Headless Modes__
 
@@ -42,7 +42,7 @@ hide:
 
     ---
 
-    Single shaded JAR, Java 17+, no external dependencies. Start chatting in seconds.
+    Single shaded JAR, Java 17+. No runtime dependencies. Start chatting quickly.
 
 -   :lock:{ .lg .middle } __Privacy First__
 
@@ -79,9 +79,9 @@ echo "What can you do?" | sai
 
 ## Why SAI?
 
-**Flexible Integration** - Works with your existing AI provider subscriptions or proxies
+**Flexible Integration** - Works with your existing AI provider subscriptions or proxies.
 
-**Local First** - Session data stays on your machine. Full control over your data.
+**Local First** - Session data stays on your machine.
 
 **Extensible** - Add custom skills, personas, and tools without modifying core code.
 

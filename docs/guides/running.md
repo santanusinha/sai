@@ -17,11 +17,7 @@ Start a conversational session with the AI agent.
 
 #### Interactive Features
 
-- **Ctrl-C to Interrupt**: Press Ctrl-C at any time to cancel a running agent task
-  - Gracefully stops the current operation
-  - Returns immediately to the input prompt
-  - Allows you to start a new query without waiting
-  - No need to kill the process
+- **Ctrl-C**: Cancel the current agent task and return to the input prompt.
 
 - **Slash Commands**: Control session settings with `/` commands
   ```

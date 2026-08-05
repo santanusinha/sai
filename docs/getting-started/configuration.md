@@ -125,26 +125,25 @@ java -jar target/sai-1.0-SNAPSHOT.jar --model azure/gpt-4o
 
 For direct GitHub Copilot integration (no proxy server required).
 
-### Prerequisites
+### Authentication
 
-1. Authenticate with GitHub Copilot:
-   ```bash
-   sai copilot --auth
-   ```
+Use the `copilot` subcommand to authenticate:
 
-2. This stores your GitHub OAuth token at:
-   ```
-   ~/.config/sai/copilot_token
-   ```
-
-3. **No server needed** - SAI connects directly to GitHub Copilot API
-
-### Environment Variables
-
-No environment variables required! Authentication token is read automatically from:
+```bash
+sai copilot --auth
 ```
-~/.config/sai/copilot_token
-```
+
+This initiates a GitHub OAuth Device Flow and saves your token to `~/.config/sai/copilot_token`.
+
+| Option | Description |
+|---|---|
+| `-a, --auth` | Authenticate with GitHub Copilot |
+| `-f, --force` | Force re-authentication even if token exists |
+| `--list` | List available GitHub Copilot models |
+| `--remove` | Remove the stored authentication token |
+| `--show-token` | Display the token after authentication |
+
+No environment variables are required after authentication. SAI reads the token from `~/.config/sai/copilot_token` automatically.
 
 ### Usage
 
@@ -159,27 +158,28 @@ java -jar target/sai-1.0-SNAPSHOT.jar --model copilot/claude-sonnet-4.6
 
 ### Available Models
 
-- `copilot/claude-sonnet-4.6` - Anthropic Claude Sonnet (most capable)
-- `copilot/claude-haiku-4.5` - Anthropic Claude Haiku (fast, default)
+Use `sai copilot --list` to see all models available under your subscription.
+
+Common models:
+
+- `copilot/claude-sonnet-4.6` - Anthropic Claude Sonnet
+- `copilot/claude-haiku-4.5` - Anthropic Claude Haiku (default)
 - `copilot/gpt-4o` - OpenAI GPT-4o
 - `copilot/gpt-4o-mini` - OpenAI GPT-4o Mini
 - `copilot/o1-mini` - OpenAI o1-mini
+- `copilot/o1-preview` - OpenAI o1-preview
 - `copilot/o1-preview` - OpenAI o1-preview
 - `copilot/gemini-2.0-flash-exp` - Google Gemini 2.0 Flash
 
 ### Enterprise/Business Setup
 
-For GitHub Copilot Business or Enterprise:
+For GitHub Copilot Business or Enterprise, set a custom endpoint if required:
 
-1. Set custom endpoint (if required):
-   ```bash
-   export COPILOT_ENDPOINT=https://your-enterprise-endpoint
-   ```
+```bash
+export COPILOT_ENDPOINT=https://your-enterprise-endpoint
+```
 
-2. Token location remains the same:
-   ```
-   ~/.config/sai/copilot_token
-   ```
+The token file location remains `~/.config/sai/copilot_token`.
 
 ### Troubleshooting
 
@@ -309,7 +309,6 @@ If configured correctly, you should get a response from the AI model.
 !!! tip "Solution"
     - For copilot: No proxy required — SAI connects directly to GitHub Copilot API
     - For custom endpoints: Verify the OPENAI_ENDPOINT URL is correct
-    - Check your firewall/network settings
     - Check your firewall/network settings
 
 ### Model Not Found

@@ -27,6 +27,12 @@ The installer creates `~/.config/sai/.env`. Open it and fill in your credentials
 nano ~/.config/sai/.env
 ```
 
+The installer creates `~/.config/sai/.env`. Open it and fill in your credentials:
+
+```bash
+nano ~/.config/sai/.env
+```
+
 Choose one provider:
 
 === "OpenAI"
@@ -42,6 +48,14 @@ Choose one provider:
     AZURE_API_KEY=your_azure_key
     ```
 
+=== "Copilot (direct)"
+
+    ```bash
+    # Run once to authenticate
+    sai copilot --auth
+    # No environment variables required after that.
+    ```
+
 === "Copilot Proxy"
 
     ```bash
@@ -52,8 +66,7 @@ Choose one provider:
     # No env vars needed — proxy runs on localhost:4141 by default
     ```
 
-!!! tip
-    Need detailed setup? See the [Configuration Guide](configuration.md).
+See the [Configuration Guide](configuration.md) for full setup details.
 
 ## Step 3: Start your first session
 

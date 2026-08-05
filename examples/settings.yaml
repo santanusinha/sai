@@ -282,3 +282,35 @@ providers:
           maxTokens: 8192
           contextWindowSize: 128000
 
+
+  # ── AI1 (Local vLLM server) ───────────────────────────────────────────────
+  # Local OpenAI-compatible vLLM endpoint serving Qwen3.6.
+  ai1:
+    type: openai
+    endpoint: http://localhost:8000
+    apiKey: local
+
+    models:
+      # ── Qwen3.6-35B-A3B — local NVFP4 MoE, 3B active params ────────────────
+      # compactionOutputGenerationMode: overrides the auto-compaction output mode.
+      # Default for all models is TOOL_BASED; Qwen3.6 works better with
+      # STRUCTURED_OUTPUT for compaction summaries.
+      qwen-3.6:
+        effectiveModelId: "Qwen3.6-35B-A3B"
+        tuning:
+          temperature: 0.7
+          topP: 0.8
+          maxTokens: 32768
+          contextWindowSize: 200000
+          encodingType: O200K_BASE
+          toolChoice: AUTO
+          compactionOutputGenerationMode: STRUCTURED_OUTPUT
+        modes:
+          coding:
+            tuning:
+              temperature: 0.6
+              topP: 0.95
+          planning:
+            tuning:
+              temperature: 0.8
+              reasoning: HIGH

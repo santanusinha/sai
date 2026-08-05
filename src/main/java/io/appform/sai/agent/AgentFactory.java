@@ -23,6 +23,7 @@ import com.phonepe.sentinelai.core.agent.AutoCompactionSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
+import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
@@ -126,6 +127,11 @@ public class AgentFactory {
             log.info("Overriding API model ID: '{}' -> '{}'", modelName, apiModelId);
         }
 
+        final var compactionOutputGenerationMode = resolved.getTuning() != null
+                && resolved.getTuning().getCompactionOutputGenerationMode() != null
+                        ? resolved.getTuning().getCompactionOutputGenerationMode()
+                        : OutputGenerationMode.TOOL_BASED;
+
         final var agentSetup = AgentSetup.builder()
                 .executorService(executorService)
                 .mapper(mapper)
@@ -138,6 +144,8 @@ public class AgentFactory {
                                                modelOptions))
                 .autoCompactionSetup(AutoCompactionSetup.builder()
                         .compactionTriggerThresholdPercentage(50) //TODO::CONFIG?
+                        .outputGenerationMode(compactionOutputGenerationMode) //Configurable via tuning; defaults to tool based
+                        .skipToolMessages(false) //Keep tool i/o in summaries for now; flip when validated
                         .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);

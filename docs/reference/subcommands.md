@@ -1,6 +1,51 @@
 # Subcommands
 
-SAI provides several subcommands for session management, inspection, and provider discovery. All subcommands honor the `--data-dir` flag to override the default data directory (`~/.local/state/sai/`).
+SAI provides several subcommands for session management, inspection, provider discovery, and GitHub Copilot authentication. All subcommands honor the `--data-dir` flag to override the default data directory (`~/.local/state/sai/`).
+
+## Copilot Commands
+
+### copilot
+
+Manage GitHub Copilot authentication and settings.
+
+**Usage:**
+
+```bash
+sai copilot [options]
+```
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-a, --auth` | Authenticate with GitHub Copilot (OAuth Device Flow) |
+| `-f, --force` | Force re-authentication even if a token already exists |
+| `--list` | List available GitHub Copilot models |
+| `--remove` | Remove the stored authentication token |
+| `--show-token` | Display the token after authentication |
+
+**Examples:**
+
+```bash
+# Authenticate (first-time setup)
+sai copilot --auth
+
+# Force re-authentication
+sai copilot --auth --force
+
+# List available models
+sai copilot --list
+
+# Show stored token (for debugging)
+sai copilot --show-token
+
+# Remove the stored token
+sai copilot --remove
+```
+
+The token is stored at `~/.config/sai/copilot_token`. Set `COPILOT_TOKEN_PATH` to override the location.
+
+---
 
 ## Provider Commands
 

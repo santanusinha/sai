@@ -60,19 +60,6 @@ pip install zensical
 # Build documentation
 zensical build --clean
 
-# Serve locally (if available)
-zensical serve
-```
-
-Or using standard MkDocs commands:
-
-```bash
-# Install dependencies
-pip install zensical
-
-# Build site
-zensical build --clean
-
 # Serve locally
 zensical serve
 ```

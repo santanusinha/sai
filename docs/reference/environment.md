@@ -231,14 +231,13 @@ Configuration for GitHub Copilot via direct API integration.
 
 ### Authentication
 
-**Setup**: Authenticate once using the `sai` CLI:
+Authenticate once using the `sai copilot` subcommand:
 
 ```bash
 sai copilot --auth
 ```
 
-This stores your GitHub OAuth token at `~/.config/sai/copilot_token`.
-**No environment variables required** - SAI reads the token automatically from the file.
+This stores your GitHub OAuth token at `~/.config/sai/copilot_token`. No environment variables are required. SAI reads the token automatically.
 
 ### COPILOT_ENDPOINT (optional)
 
@@ -266,12 +265,7 @@ export COPILOT_ENDPOINT=https://your-enterprise-copilot-endpoint
 - `copilot/o1-preview` (OpenAI o1-preview)
 - `copilot/gemini-2.0-flash-exp` (Google Gemini 2.0 Flash)
 
-!!! tip "GitHub Copilot Subscription"
-    Requires an active GitHub Copilot subscription. This provides cost-effective access to multiple frontier models through a single subscription.
-
-!!! info "No Proxy Server Required"
-    SAI connects directly to GitHub Copilot API. No need to run a separate proxy server.
-
+Use `sai copilot --list` to see all models available under your subscription.
 **Troubleshooting**:
 
 ```bash
@@ -426,7 +420,6 @@ Later sources override earlier ones, and command-line flags override all environ
 export MODEL=openai/gpt-4
 
 # ~/.config/sai/.env
-# ~/.config/sai/.env
 MODEL=copilot/claude-haiku-4.5
 
 # Command line
@@ -566,7 +559,6 @@ ls -la ~/.config/sai/copilot_token
 ```bash
 rm ~/.config/sai/copilot_token
 sai copilot --auth
-```
 ```
 
 4. Test connection:

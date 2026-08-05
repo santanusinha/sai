@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.knuddels.jtokkit.api.EncodingType;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
+import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.core.model.Reasoning;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 
@@ -102,6 +103,15 @@ public class ModelTuning {
     @JsonProperty("toolChoice")
     SimpleOpenAIModelOptions.ToolChoice toolChoice;
 
+    // ── Compaction settings ───────────────────────────────────────────────
+
+    /**
+     * Output generation mode used by the auto-compaction agent. When {@code null}, the caller
+     * falls back to {@link OutputGenerationMode#TOOL_BASED}.
+     */
+    @Nullable
+    OutputGenerationMode compactionOutputGenerationMode;
+
     // ── Free-form passthrough ─────────────────────────────────────────────
 
     @Nullable
@@ -148,6 +158,9 @@ public class ModelTuning {
                         ? rhs.getContextWindowSize()
                         : lhs.getContextWindowSize())
                 .toolChoice(mergedToolChoice)
+                .compactionOutputGenerationMode(rhs.getCompactionOutputGenerationMode() != null
+                        ? rhs.getCompactionOutputGenerationMode()
+                        : lhs.getCompactionOutputGenerationMode())
                 .extraArgs(rhs.getExtraArgs() != null ? rhs.getExtraArgs() : lhs.getExtraArgs())
                 .requestTransforms(rhs.getRequestTransforms() != null
                         ? rhs.getRequestTransforms()
@@ -173,6 +186,7 @@ public class ModelTuning {
                 && encodingType == null
                 && contextWindowSize == null
                 && toolChoice == null
+                && compactionOutputGenerationMode == null
                 && (extraArgs == null || extraArgs.isEmpty())
                 && (requestTransforms == null || requestTransforms.isEmpty());
     }
