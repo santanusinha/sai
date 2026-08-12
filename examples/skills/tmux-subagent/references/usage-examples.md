@@ -2,6 +2,18 @@
 
 This document provides practical examples of using the `tmux-subagent` skill to spawn and manage Sai subagents in separate tmux panes.
 
+## Script Location
+
+The spawn script lives at:
+```
+~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh
+```
+
+All examples below use this path. You can also set a shell variable for convenience:
+```bash
+SPAWN_SCRIPT="$HOME/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh"
+```
+
 ## Communication Protocol
 
 The spawn script uses a file-based communication protocol for robust inter-agent communication:
@@ -14,18 +26,40 @@ The spawn script uses a file-based communication protocol for robust inter-agent
 
 ### Benefits of File-Based Communication
 
-- **Asynchronous**: Parent doesn't block waiting for subagent
+- **Asynchronous**: Parent does not block waiting for subagent
 - **Reliable**: File system ensures message delivery
 - **Debuggable**: Can inspect files to troubleshoot
 - **Works with --input mode**: No console output needed from subagent
 - **Persistent**: Output files remain for inspection
+
+## Available Personas
+
+Personas are installed in `~/.config/sai/persona/`. The script resolves persona names automatically:
+
+| Persona | File | Use Case |
+|---------|------|----------|
+| `coder` | `coder.yaml` | General implementation, writing code, file operations |
+| `planner` | `planner.yaml` | Breaking down complex tasks, research, planning |
+| `reviewer` | `reviewer.yaml` | Code review, security audits, quality checks |
+| `pr-reviewer` | `pr-reviewer.yaml` | Detailed pull request reviews |
+| `java-coder` | `java-coder.yml` | Java-specific implementation tasks |
+| `rust-coder` | `rust-coder.yaml` | Rust-specific implementation tasks |
+| `nvim-coder` | `nvim-coder.yaml` | Neovim-integrated coding tasks |
+| `webdev` | `webdev.yaml` | Web development tasks |
+| `web-search` | `web-search.yaml` | Web research and information gathering |
+| `basic` | `basic.yaml` | General-purpose assistant |
+
+List installed personas:
+```bash
+ls ~/.config/sai/persona/
+```
 
 ## Example 1: Basic Code Review Task
 
 Spawn a reviewer subagent to analyze a specific file:
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona reviewer \
   --task "Review src/main/java/Agent.java for code quality issues" \
   --split-direction horizontal
@@ -46,7 +80,7 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 Spawn a coder to generate a utility function, with debug output visible in the pane:
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --task "Create a Java utility class for file operations with read, write, and delete methods" \
   --split-direction vertical \
@@ -64,7 +98,7 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 Spawn a planner subagent in a specific project directory:
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona planner \
   --task "Create a detailed implementation plan for adding authentication to the API" \
   --working-dir /path/to/api-project \
@@ -76,7 +110,7 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 Spawn a subagent without a predefined task for interactive use:
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --split-direction vertical
 ```
@@ -89,7 +123,7 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 
 ## Pane Lifecycle Behavior
 
-As of v1.2, **pane lifetime is tied directly to the agent process**. This is achieved by passing a launcher script directly to `tmux split-window` as its command argument.
+**Pane lifetime is tied directly to the agent process.** This is achieved by passing a launcher script directly to `tmux split-window` as its command argument.
 
 ### How It Works
 
@@ -106,9 +140,9 @@ As of v1.2, **pane lifetime is tied directly to the agent process**. This is ach
 | During execution | N+1 | Subagent pane is active |
 | After agent exits | N | Pane closes automatically |
 
-### Benefits Over Previous Approach
+### Benefits
 
-- **No orphan panes**: Previously `split-window` + `send-keys` could leave empty shells
+- **No orphan panes**: No empty shells left behind
 - **Crash-safe**: If sai crashes, the pane still closes cleanly
 - **No manual cleanup**: No need to track and kill panes
 - **Simpler code**: Avoids complex quoting with `send-keys`
@@ -119,13 +153,13 @@ Spawn multiple subagents in parallel for independent tasks:
 
 ```bash
 # Spawn planner and reviewer in parallel
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona planner \
   --task "Break down the authentication feature into subtasks" \
   --split-direction horizontal \
   --no-wait
 
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona reviewer \
   --task "Review current codebase for security issues" \
   --split-direction vertical \
@@ -153,19 +187,19 @@ Use multiple subagents for a complex workflow:
 
 ```bash
 # Stage 1: Planner creates implementation plan
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona planner \
   --task "Create implementation plan for REST API" \
   --split-direction horizontal
 
 # Stage 2: Coder implements based on plan
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --task "Implement the REST API endpoints as specified in plan.md" \
   --split-direction vertical
 
 # Stage 3: Reviewer checks the implementation
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona reviewer \
   --task "Review the REST API implementation for security and best practices" \
   --split-direction horizontal
@@ -238,15 +272,21 @@ Parent agent polls for this marker to detect task completion.
 tmux new-session -s mywork
 ```
 
+### Problem: "sai command not found"
+**Solution:** Install sai:
+```bash
+sai-installer install
+```
+Ensure `~/.local/bin` is in your PATH.
+
 ### Problem: "Persona not found"
 **Solution:** Check persona exists:
 ```bash
-ls examples/personas/
-# or
 ls ~/.config/sai/persona/
 ```
+The script searches for `<name>.yaml`, `<name>.yml`, and `<name>.json` in `~/.config/sai/persona/`.
 
-### Problem: Subagent doesn't complete task
+### Problem: Subagent does not complete task
 **Solution:** Check the output in the tmux pane:
 1. Switch to the subagent pane: `Ctrl+b` then arrow keys
 2. Look for errors or stuck processes
@@ -274,7 +314,7 @@ ls ~/.config/sai/persona/
 3. **Choose appropriate personas**: Match persona to task type (coder for code, reviewer for reviews, etc.)
 4. **Organize panes**: Use consistent split directions for easier navigation
 5. **Monitor progress**: Switch to subagent pane periodically for long-running tasks
-6. **Keep output files**: Don't manually delete output files until you've processed them
+6. **Keep output files**: Do not manually delete output files until you have processed them
 7. **One task per subagent**: For complex workflows, use multiple sequential subagents
 8. **Check scratch directory**: Useful for debugging communication issues
 
@@ -285,7 +325,7 @@ ls ~/.config/sai/persona/
 Override the default scratch directory:
 ```bash
 export SAI_SESSION_ID="my-custom-session"
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh ...
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh ...
 ```
 
 ### Processing Output Programmatically
@@ -303,21 +343,11 @@ fi
 Pass output from one subagent as input to another:
 ```bash
 # First subagent generates plan
-bash spawn-subagent.sh --persona planner --task "Create plan" ...
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh --persona planner --task "Create plan" ...
 
 # Read the output
 PLAN=$(cat /tmp/sai/.../subagent-*-output.txt)
 
 # Second subagent implements based on plan
-bash spawn-subagent.sh --persona coder --task "Implement this plan: $PLAN" ...
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh --persona coder --task "Implement this plan: $PLAN" ...
 ```
-
-## Future Enhancements
-
-Potential improvements to the communication protocol:
-
-1. **Status updates**: Subagent writes progress updates to intermediate file
-2. **Bidirectional communication**: Parent sends follow-up queries via command file
-3. **Structured output**: JSON format for easier parsing
-4. **Error reporting**: Separate error file for failures
-5. **Resource limits**: Timeout and resource constraints for subagents

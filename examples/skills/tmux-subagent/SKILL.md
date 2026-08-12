@@ -4,13 +4,11 @@ description: Spawn specialized Sai subagents (coder, planner, reviewer) in new t
 license: Apache-2.0
 metadata:
   author: sai-project
-  version: "1.2"
-compatibility: Requires tmux installed and running inside a tmux session. Requires the `sai` command to be installed (via sai-installer) and available in PATH
+  version: "2.0"
+compatibility: Requires tmux installed and running inside a tmux session. Requires the `sai` command to be installed (via `sai-installer install`) and available in PATH
 ---
 
 # Tmux Subagent Spawner
-
-
 
 ## Purpose
 This skill enables you to spawn specialized Sai subagents in new tmux panes. Use this when:
@@ -18,16 +16,15 @@ This skill enables you to spawn specialized Sai subagents in new tmux panes. Use
 - You want to delegate subtasks to run in parallel
 - You need persistent, visible subagent sessions the user can interact with
 - You want to demonstrate multi-agent coordination patterns
+
 ## How It Works
 The skill provides a script that:
 1. Checks if running inside tmux
 2. Creates a new horizontal or vertical split pane
-3. Launches a Sai agent with a specified persona in that pane using the `sai` wrapper command
+3. Launches a Sai agent with a specified persona in that pane using the `sai` command
 4. **Pane lifetime is tied to the agent process** — when sai exits, the pane closes automatically
 5. Uses file-based communication protocol for reliable inter-agent messaging
 6. Polls for task completion and automatically retrieves results
-
-
 
 ### Communication Protocol
 The script establishes a robust file-based communication channel:
@@ -41,8 +38,8 @@ This protocol works seamlessly with `--input` mode and enables asynchronous task
 
 ## Prerequisites
 - Must be running inside a tmux session
-- The `sai` command must be installed and available in PATH (installed via `bash sai-installer install`)
-- Persona files must exist (default: `examples/personas/*.yaml` or `~/.config/sai/persona/*.yaml`)
+- The `sai` command must be installed and available in PATH (installed via `sai-installer install`)
+- Persona files must exist in `~/.config/sai/persona/` (installed by default with sai)
 
 ## Instructions
 
@@ -53,17 +50,26 @@ Before spawning a subagent, ask yourself:
 - Is the task substantial enough to warrant a separate agent?
 
 ### Step 2: Choose the Right Persona
-Available personas (from `examples/personas/`):
+Available personas (from `~/.config/sai/persona/`):
 - **coder**: For implementation tasks, writing code, file operations
 - **planner**: For breaking down complex tasks, research, planning
 - **reviewer**: For code review, security audits, quality checks
+- **pr-reviewer**: For detailed pull request reviews
+- **java-coder**: For Java-specific implementation tasks
+- **rust-coder**: For Rust-specific implementation tasks
+- **nvim-coder**: For Neovim-integrated coding tasks
+- **webdev**: For web development tasks
+- **web-search**: For web research and information gathering
 - **basic**: General-purpose assistant
 
 ### Step 3: Execute the Spawn Script
-Use the `spawn-subagent.sh` script via bash tool:
+Use the `spawn-subagent.sh` script via bash tool. The script lives at:
+```
+~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh
+```
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona PERSONA_NAME \
   --split-direction [horizontal|vertical] \
   --task "Task description for subagent"
@@ -80,20 +86,21 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 **Example**:
 
 ```bash
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --split-direction vertical \
   --task "Implement a new feature for user authentication"
 ```
+
 **Example (parallel spawn)**:
 ```bash
 # Spawn multiple subagents in parallel
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --task "Implement feature A" \
   --no-wait
 
-bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
+bash ~/.config/sai/skills/tmux-subagent/scripts/spawn-subagent.sh \
   --persona coder \
   --task "Implement feature B" \
   --no-wait
@@ -101,7 +108,6 @@ bash examples/skills/tmux-subagent/scripts/spawn-subagent.sh \
 # Later, check for completion by looking at marker files:
 # ls /tmp/sai/${SAI_SESSION_ID}/scratch/*-done.marker
 ```
-
 
 ### Step 4: Monitor and Coordinate
 After spawning with `--task`:
@@ -115,8 +121,6 @@ Without `--task` (interactive mode):
 - The subagent waits for interactive commands
 - **Pane closes automatically** when you exit sai (Ctrl+C or type 'exit')
 - Switch between panes using tmux navigation (Ctrl+b + arrow keys)
-
-
 
 **Debug Mode**:
 Use `--debug` flag to see real-time progress in the subagent pane while still using the communication protocol.
@@ -134,7 +138,7 @@ For complex workflows:
 ## Best Practices
 - **Clear Task Descriptions**: Provide specific, actionable tasks to subagents
 - **Appropriate Personas**: Match persona to task type
-- **Pane Management**: Don't spawn too many panes (3-4 max for readability)
+- **Pane Management**: Do not spawn too many panes (3-4 max for readability)
 - **Use --debug During Development**: See real-time progress and tool calls
 - **File-Based Communication**: Reliable for task delegation with automatic result capture
 - **Check Scratch Directory**: Communication files in `/tmp/sai/${SAI_SESSION_ID}/scratch/`
@@ -148,9 +152,9 @@ For complex workflows:
 
 ## Troubleshooting
 - **"Not in tmux"**: Run Sai from within a tmux session first
-- **"sai command not found"**: Install sai via `bash sai-installer install` and ensure `~/.local/bin` is in PATH
-- **"Persona not found"**: Check persona exists in `examples/personas/` or `~/.config/sai/persona/` or provide full path
-- **Pane doesn't spawn**: Check tmux version (`tmux -V`), requires tmux 2.0+
+- **"sai command not found"**: Install sai via `sai-installer install` and ensure `~/.local/bin` is in PATH
+- **"Persona not found"**: Check persona exists in `~/.config/sai/persona/` or provide full path
+- **Pane does not spawn**: Check tmux version (`tmux -V`), requires tmux 2.0+
 - **Timeout waiting for completion**: Task may need more time, check subagent pane for progress
 - **Output file not found**: Check scratch directory permissions and subagent errors in pane
-- **Communication files remain**: Normal - output files kept for inspection, only input/marker cleaned up
+- **Communication files remain**: Normal — output files kept for inspection, only input/marker cleaned up

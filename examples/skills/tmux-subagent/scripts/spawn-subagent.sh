@@ -60,7 +60,7 @@ Usage: spawn-subagent.sh --persona <name> [OPTIONS]
 Spawn a Sai subagent in a new tmux pane with file-based communication.
 
 Required:
-  --persona <name>              Persona name (from examples/personas/) or path to persona file
+  --persona <name>              Persona name (from ~/.config/sai/persona/) or path to persona file
 
 Optional:
   --split-direction <dir>       Split direction: horizontal or vertical (default: horizontal)
@@ -115,29 +115,34 @@ if [[ -z "${TMUX:-}" ]]; then
 fi
 
 # Resolve persona path
+# Search order: explicit path → ~/.config/sai/persona/<name>.yaml → ~/.config/sai/persona/<name>.yml → ~/.config/sai/persona/<name>.json
 PERSONA_PATH=""
 if [[ -f "$PERSONA" ]]; then
   # Full path provided
   PERSONA_PATH="$PERSONA"
-elif [[ -f "examples/personas/${PERSONA}.yaml" ]]; then
-  # Name provided, resolve from examples/personas/
-  PERSONA_PATH="examples/personas/${PERSONA}.yaml"
 elif [[ -f "${HOME}/.config/sai/persona/${PERSONA}.yaml" ]]; then
-  # Check user config directory
   PERSONA_PATH="${HOME}/.config/sai/persona/${PERSONA}.yaml"
+elif [[ -f "${HOME}/.config/sai/persona/${PERSONA}.yml" ]]; then
+  PERSONA_PATH="${HOME}/.config/sai/persona/${PERSONA}.yml"
+elif [[ -f "${HOME}/.config/sai/persona/${PERSONA}.json" ]]; then
+  PERSONA_PATH="${HOME}/.config/sai/persona/${PERSONA}.json"
 else
   echo -e "${RED}Error: Persona not found: $PERSONA${NC}" >&2
   echo "Searched in:" >&2
   echo "  - $PERSONA" >&2
-  echo "  - examples/personas/${PERSONA}.yaml" >&2
   echo "  - ~/.config/sai/persona/${PERSONA}.yaml" >&2
+  echo "  - ~/.config/sai/persona/${PERSONA}.yml" >&2
+  echo "  - ~/.config/sai/persona/${PERSONA}.json" >&2
+  echo "" >&2
+  echo "Available personas:" >&2
+  ls ~/.config/sai/persona/ 2>/dev/null >&2 || echo "  (no personas found)" >&2
   exit 1
 fi
 
 # Check if sai command is available
 if ! command -v sai &>/dev/null; then
   echo -e "${RED}Error: 'sai' command not found in PATH${NC}" >&2
-  echo "Install sai first: bash sai-installer install" >&2
+  echo "Install sai first: sai-installer install" >&2
   echo "Ensure ~/.local/bin is in your PATH" >&2
   exit 1
 fi
@@ -171,7 +176,7 @@ OUTPUT_FILE="${SCRATCH_DIR}/${SESSION_ID}-output.txt"
 MARKER_FILE="${SCRATCH_DIR}/${SESSION_ID}-done.marker"
 COMPLETION_MARKER="<<<SUBAGENT_TASK_COMPLETE>>>"
 
-# Create input prompt file if task is provided
+# Create input prompt file if task is given
 if [[ -n "$TASK" ]]; then
   cat > "$INPUT_FILE" <<EOF
 $TASK
@@ -191,7 +196,7 @@ EOF
   echo -e "${BLUE}Created input file: $INPUT_FILE${NC}"
 fi
 
-# Build Sai command using the sai wrapper script
+# Build Sai command
 SAI_CMD="cd '$WORKING_DIR' && sai --persona '$PERSONA_PATH'"
 
 # Always add debug flag for task-based subagents for visibility,
