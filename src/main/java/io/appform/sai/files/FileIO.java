@@ -161,12 +161,18 @@ public class FileIO {
                         .build();
             }
         }
+        final var contentBytes = content.getBytes(StandardCharsets.UTF_8);
+        if (contentBytes.length > MAX_FILE_SIZE_BYTES) {
+            return ToolIO.WriteResponse.builder()
+                    .error("File size exceeds the maximum limit of 1 MB. Use the bash tool to read and operate on large files.")
+                    .build();
+        }
         try {
             Files.writeString(path, content, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             return ToolIO.WriteResponse.builder()
                     .success(true)
                     .charsWritten(content.length())
-                    .updatedChecksum(calculateChecksum(content.getBytes(StandardCharsets.UTF_8)))
+                    .updatedChecksum(calculateChecksum(contentBytes))
                     .build();
         }
         catch (Exception e) {

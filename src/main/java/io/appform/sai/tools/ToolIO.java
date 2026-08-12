@@ -192,7 +192,7 @@ public class ToolIO {
     public static class WriteResponse {
         @JsonPropertyDescription("Whether the write was successful.")
         boolean success;
-        @JsonPropertyDescription("The number of bytes written to the file.")
+        @JsonPropertyDescription("The number of characters written to the file.")
         long charsWritten;
         @JsonPropertyDescription("Error message if any.")
         String error;

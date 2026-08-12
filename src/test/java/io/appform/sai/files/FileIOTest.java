@@ -492,6 +492,32 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void writeNewFileExactlyAtLimitSucceeds() {
+        final var newFile = tempDir.resolve("at-limit.txt");
+        final var content = "x".repeat(1024 * 1024);
+
+        final var response = FileIO.write(newFile.toString(), content, "");
+
+        assertNull(response.getError());
+        assertTrue(Files.exists(newFile));
+        assertEquals(1024L * 1024L, Files.size(newFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void writeNewFileTooLargeReturnsError() {
+        final var newFile = tempDir.resolve("too-large-new.txt");
+        final var content = "x".repeat(1024 * 1024 + 1);
+
+        final var response = FileIO.write(newFile.toString(), content, "");
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("1 MB"), response.getError());
+        assertFalse(Files.exists(newFile));
+    }
+
+    @Test
+    @SneakyThrows
     void writeOverwritesWithCorrectChecksum() {
         final var original = "original content";
         Files.writeString(testFile, original, StandardCharsets.UTF_8);

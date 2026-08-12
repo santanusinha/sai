@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.appform.sai.Printer;
+import io.appform.sai.files.FileIO;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,10 +34,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Tests for the read() method in CoreToolBox, particularly the checksum-based
- * change detection logic introduced to optimize file reads.
+ * Tests for the read() and writeFile() methods in CoreToolBox.
  */
-class CoreToolBoxReadTest {
+class CoreToolBoxTest {
 
     private CoreToolBox toolBox;
     private Path tempDir;
@@ -48,12 +48,10 @@ class CoreToolBoxReadTest {
         final var firstRead = toolBox.readFile("first read", testFile.toString(), "");
         final var checksum = firstRead.getChecksum();
 
-        // Verify file is unchanged with correct checksum
         final var unchanged = toolBox.readFile("check unchanged", testFile.toString(), checksum);
         assertFalse(unchanged.isChanged());
         assertNull(unchanged.getContent());
 
-        // Force re-read with empty checksum — should return content even though file is unchanged
         final var forced = toolBox.readFile("force re-read", testFile.toString(), "");
         assertTrue(forced.isChanged());
         assertNotNull(forced.getContent());
@@ -75,6 +73,8 @@ class CoreToolBoxReadTest {
         assertTrue(response.isChanged());
     }
 
+    // ---- read tests ----
+
     @Test
     void firstReadNullChecksum() throws IOException {
         final var content = "Hello, World!";
@@ -95,12 +95,10 @@ class CoreToolBoxReadTest {
         final var firstRead = toolBox.readFile("first read", testFile.toString(), "");
         final var checksum = firstRead.getChecksum();
 
-        // Verify file is unchanged with correct checksum
         final var unchanged = toolBox.readFile("check unchanged", testFile.toString(), checksum);
         assertFalse(unchanged.isChanged());
         assertNull(unchanged.getContent());
 
-        // Force re-read with null checksum — should return content even though file is unchanged
         final var forced = toolBox.readFile("force re-read", testFile.toString(), null);
         assertTrue(forced.isChanged());
         assertNotNull(forced.getContent());
@@ -228,15 +226,87 @@ class CoreToolBoxReadTest {
     @BeforeEach
     void setUp() throws IOException {
         toolBox = new CoreToolBox((Printer) null);
-        tempDir = Files.createTempDirectory(Path.of("target"), "coretoolbox-read-test");
+        tempDir = Files.createTempDirectory(Path.of("target"), "coretoolbox-test");
         testFile = tempDir.resolve("test.txt");
     }
 
     @AfterEach
     void tearDown() throws IOException {
-        if (Files.exists(testFile)) {
-            Files.delete(testFile);
+        try (var entries = Files.list(tempDir)) {
+            for (var entry : entries.toList()) {
+                Files.deleteIfExists(entry);
+            }
         }
-        Files.delete(tempDir);
+        Files.deleteIfExists(tempDir);
+    }
+
+    // ---- write tests ----
+
+    @Test
+    void writeCreatesNewFile() throws IOException {
+        final var newFile = tempDir.resolve("new.txt");
+        final var content = "hello world";
+
+        final var response = toolBox.writeFile(newFile.toString(), content, "write test", "");
+
+        assertNull(response.getError());
+        assertTrue(response.isSuccess());
+        assertTrue(Files.exists(newFile));
+        assertEquals(content, Files.readString(newFile));
+        assertEquals(content.length(), response.getCharsWritten());
+    }
+
+    @Test
+    void writeMultibyteContentReportsCharacters() throws IOException {
+        final var newFile = tempDir.resolve("multibyte.txt");
+        final var content = "héllo wörld 😀";
+
+        final var response = toolBox.writeFile(newFile.toString(), content, "write test", "");
+
+        assertNull(response.getError());
+        assertTrue(response.isSuccess());
+        assertEquals(content.length(), response.getCharsWritten());
+        assertEquals(content, Files.readString(newFile));
+    }
+
+    @Test
+    void writeNewFileTooLargeReturnsError() throws IOException {
+        final var newFile = tempDir.resolve("too-large.txt");
+        final var content = "x".repeat(1024 * 1024 + 1);
+
+        final var response = toolBox.writeFile(newFile.toString(), content, "write test", "");
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("1 MB"), response.getError());
+        assertFalse(Files.exists(newFile));
+    }
+
+    @Test
+    void writeOverwritesWithCorrectChecksum() throws IOException {
+        final var file = tempDir.resolve("existing.txt");
+        final var original = "original content";
+        Files.writeString(file, original, StandardCharsets.UTF_8);
+        final var newContent = "new content";
+
+        final var response = toolBox.writeFile(file.toString(),
+                                               newContent,
+                                               "write test",
+                                               FileIO.calculateChecksum(original.getBytes(StandardCharsets.UTF_8)));
+
+        assertNull(response.getError());
+        assertTrue(response.isSuccess());
+        assertEquals(newContent, Files.readString(file));
+    }
+
+    @Test
+    void writeWrongChecksumReturnsError() throws IOException {
+        final var file = tempDir.resolve("existing.txt");
+        Files.writeString(file, "some content", StandardCharsets.UTF_8);
+
+        final var response = toolBox.writeFile(file.toString(), "new content", "write test", "wrong-checksum");
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("Checksum mismatch"), response.getError());
+        assertEquals("some content", Files.readString(file));
     }
 }

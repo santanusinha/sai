@@ -374,8 +374,7 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-
-    @Tool("Create or completely rewrite a file with the specified content.")
+    @Tool("Create a new file or completely rewrite a file with the specified content.")
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                           @JsonPropertyDescription("The content to write to the file.") String content,
                                           @JsonPropertyDescription("Reason for writing the file.") String requestReason,
