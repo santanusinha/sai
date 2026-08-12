@@ -8,7 +8,7 @@ This page documents all command-line options available in SAI. Options can be sp
 |--------|-------|-------------|---------|
 | `--model` | `-m` | AI model to use | `copilot/claude-haiku-4.5` |
 | `--persona` | `-p` | Persona configuration file | - |
-| `--session-id` | `-s` | Session identifier | Auto-generated |
+| `--session` | `-s` | Session identifier | Auto-generated |
 | `--input` | `-i` | Input file or command | - |
 | `--skill` | - | Enable specific skill | - |
 | `--data-dir` | - | Data directory path | `~/.local/state/sai/` |
@@ -87,9 +87,10 @@ The mode segment is optional. When omitted, the model's default mode (if any) is
 
 ### Session Management
 
-#### `--session-id`, `-s`
+#### `--session`, `-s`
 
 Specifies a session identifier to resume an existing session or create a new one with a specific ID.
+Without a parameter, resumes the last session in the current directory.
 
 **Default:** Auto-generated UUID
 
@@ -97,7 +98,12 @@ Specifies a session identifier to resume an existing session or create a new one
 
 === "Resume Session"
     ```bash
-    sai --session-id abc123-def456
+    sai --session abc123-def456
+    ```
+
+=== "Resume Last Session in Current Directory"
+    ```bash
+    sai -s
     ```
 
 === "Named Session"
@@ -410,7 +416,7 @@ Displays the SAI version number.
 
 === "Resume with Custom Model"
     ```bash
-    sai --session-id abc123 \
+    sai --session abc123 \
         --model azure/gpt-4 \
         --persona code-reviewer.yaml
     ```
@@ -434,7 +440,7 @@ SAI options work seamlessly with environment variables. See [Environment Variabl
     ```bash
     export AZURE_ENDPOINT="https://..."
     export AZURE_API_KEY="..."
-    sai --model azure/gpt-4 --session-id project-x
+    sai --model azure/gpt-4 --session project-x
     ```
 
 ---

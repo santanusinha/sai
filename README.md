@@ -321,8 +321,16 @@ The transforms are applied in order by the `RequestTransformInterceptor` before 
 Resume an existing session by ID:
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
+java -jar target/sai-1.0-SNAPSHOT.jar --session <session-id>
 ```
+
+Resume the last session in the current directory (no parameter needed):
+
+```bash
+java -jar target/sai-1.0-SNAPSHOT.jar -s
+```
+
+If no previous session exists in the current directory, an error is shown.
 
 Single-input mode (run once and exit):
 
@@ -521,7 +529,7 @@ See the [Agent Skills specification](https://agentskills.io/specification) for c
 Help output:
 ```text
 Usage: sai [-dhV] [--headless] [-m[=<model>]] [--config-dir=<configDir>]
-           [--data-dir=<dataDir>] [-i=<input>] [-p=<persona>] [-s=<sessionId>]
+           [--data-dir=<dataDir>] [-i=<input>] [-p=<persona>] [-s[=<sessionId>]]
            [--skill=<skill>] [COMMAND]
 Sai AI Agent
       --config-dir=<configDir>
@@ -537,8 +545,10 @@ Sai AI Agent
                                (e.g. 'copilot/claude-haiku-4.5'). Overrides
                                model specified in persona file.
   -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
-  -s, --session-id=<sessionId>
-                             Resume a specific session
+  -s, --session[=<sessionId>]
+                             Resume a specific session. Without a parameter,
+                               resumes the last session in the current
+                               directory.
       --skill=<skill>        Path to a single skill directory to load. When
                                specified, only this skill is loaded and skill
                                discovery is disabled.

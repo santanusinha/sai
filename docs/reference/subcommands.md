@@ -165,14 +165,14 @@ Display a summary of a specific session, including metadata, message count, pers
 **Usage:**
 
 ```bash
-sai session-summary --session-id=<session-id> [--data-dir=<path>]
+sai session-summary <sessionId> [--data-dir=<path>]
 ```
 
-**Options:**
+**Arguments:**
 
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `-s, --session-id` | Session ID to summarize | Yes | - |
+| Argument | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `<sessionId>` | Session ID to summarize | Yes | - |
 | `--data-dir` | Override default data directory | No | `~/.local/state/sai/` |
 
 **Output:**
@@ -189,10 +189,10 @@ The command displays:
 
 ```bash
 # Display summary for a specific session
-sai session-summary --session-id=docs-2024-01-15
+sai session-summary docs-2024-01-15
 
 # Summary with custom data directory
-sai session-summary -s review-abc123 --data-dir=/custom/path/to/data
+sai session-summary review-abc123 --data-dir=/custom/path/to/data
 ```
 
 **Sample Output:**
@@ -219,47 +219,42 @@ I've successfully created all four CLI reference pages and updated the navigatio
 
 ### delete-sessions
 
-Delete one or more sessions by their session IDs.
+Delete a session by its session ID.
 
 **Usage:**
 
 ```bash
-sai delete-sessions --session-id=<id1> [--session-id=<id2>...] [--data-dir=<path>]
+sai delete-sessions <sessionId> [--data-dir=<path>]
 ```
 
-**Options:**
+**Arguments:**
 
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `-s, --session-id` | Session ID(s) to delete (can be specified multiple times) | Yes | - |
+| Argument | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `<sessionId>` | Session ID to delete | Yes | - |
 | `--data-dir` | Override default data directory | No | `~/.local/state/sai/` |
 
 **Behavior:**
 
-- Permanently deletes the specified session(s) from the data directory
+- Permanently deletes the specified session from the data directory
 - Removes all messages, metadata, and associated files
-- Displays confirmation of deleted sessions
-- Fails gracefully if a session ID doesn't exist
+- Displays confirmation of the deleted session
+- Fails gracefully if the session ID does not exist
 
 **Examples:**
 
 ```bash
 # Delete a single session
-sai delete-sessions --session-id=old-session-123
+sai delete-sessions old-session-123
 
-# Delete multiple sessions at once
-sai delete-sessions -s session1 -s session2 -s session3
-
-# Delete sessions from custom data directory
-sai delete-sessions --session-id=test-session --data-dir=/custom/path/to/data
+# Delete a session from custom data directory
+sai delete-sessions test-session --data-dir=/custom/path/to/data
 ```
 
 **Sample Output:**
 
 ```
 Deleted session: old-session-123
-Deleted session: test-session-456
-Successfully deleted 2 session(s)
 ```
 
 !!! warning "Destructive Operation"
@@ -360,83 +355,79 @@ Space reclaimed: 12.4 MB
 
 ### export-session
 
-Export a session to a JSON file for backup, sharing, or analysis.
+Export a session to a Markdown file for backup, sharing, or analysis.
 
 **Usage:**
 
 ```bash
-sai export-session --session-id=<session-id> [--output=<file>] [--data-dir=<path>]
+sai export-session <sessionId> [<outputFile>] [--data-dir=<path>]
 ```
 
-**Options:**
+**Arguments:**
 
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `-s, --session-id` | Session ID to export | Yes | - |
-| `-o, --output` | Output file path | No | `<session-id>.json` |
+| Argument | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `<sessionId>` | Session ID to export | Yes | - |
+| `[<outputFile>]` | Output file path | No | Stdout |
 | `--data-dir` | Override default data directory | No | `~/.local/state/sai/` |
 
 **Output Format:**
 
-The exported JSON file contains:
+The exported Markdown file contains:
 
 - **Metadata**: Session ID, creation time, last modified time, persona, model
 - **Messages**: Complete conversation history with timestamps, roles, and content
 - **Configuration**: Model settings, persona configuration used during the session
 - **Statistics**: Message counts, token usage (if available)
 
+**Markdown Structure:**
+
+The exported file is a formatted Markdown document with headers for metadata, messages, and statistics.
+
 **Examples:**
 
 ```bash
-# Export session with default filename (session-id.json)
-sai export-session --session-id=docs-2024-01-15
+# Export session to stdout
+sai export-session docs-2024-01-15
 
-# Export session with custom filename
-sai export-session -s review-abc123 -o reviews/code-review.json
+# Export session to a file
+sai export-session review-abc123 reviews/code-review.md
 
 # Export from custom data directory
-sai export-session --session-id=test-session --data-dir=/custom/path --output=backup.json
+sai export-session test-session backup.md --data-dir=/custom/path
 ```
 
 **Sample Output:**
 
 ```bash
-$ sai export-session --session-id=docs-2024-01-15
-
-Exported session 'docs-2024-01-15' to docs-2024-01-15.json
+$ sai export-session docs-2024-01-15
+Exported session 'docs-2024-01-15' to docs-2024-01-15.md
 Size: 124.5 KB (42 messages)
 ```
 
-**Exported JSON Structure:**
+**Exported Markdown Structure:**
 
-```json
-{
-  "sessionId": "docs-2024-01-15",
-  "created": "2024-01-15T09:30:15Z",
-  "lastModified": "2024-01-15T14:22:30Z",
-  "persona": {
-    "agentId": "sai-coder",
-    "name": "Sai Coder",
-    "model": "copilot/claude-sonnet-4.6"
-  },
-  "messages": [
-    {
-      "role": "user",
-      "content": "Create comprehensive CLI reference documentation...",
-      "timestamp": "2024-01-15T09:30:15Z"
-    },
-    {
-      "role": "assistant",
-      "content": "I'll help you create comprehensive CLI reference documentation...",
-      "timestamp": "2024-01-15T09:31:02Z"
-    }
-  ],
-  "statistics": {
-    "messageCount": 42,
-    "userMessages": 21,
-    "assistantMessages": 21
-  }
-}
+```markdown
+# Session: docs-2024-01-15
+
+## Metadata
+- **Created**: 2024-01-15T09:30:15Z
+- **Last Modified**: 2024-01-15T14:22:30Z
+- **Persona**: sai-coder
+- **Model**: copilot/claude-sonnet-4.6
+
+## Messages
+
+### User (2024-01-15T09:30:15Z)
+Create comprehensive CLI reference documentation...
+
+### Assistant (2024-01-15T09:31:02Z)
+I'll help you create comprehensive CLI reference documentation...
+
+## Statistics
+- **Message Count**: 42
+- **User Messages**: 21
+- **Assistant Messages**: 21
 ```
 
 **Use Cases:**
@@ -454,8 +445,8 @@ Size: 124.5 KB (42 messages)
     sai list-sessions --all
     
     # 2. Export important sessions before cleanup
-    sai export-session -s important-session-1 -o archives/session-1.json
-    sai export-session -s important-session-2 -o archives/session-2.json
+    sai export-session important-session-1 archives/session-1.md
+    sai export-session important-session-2 archives/session-2.md
     
     # 3. Preview what will be deleted
     sai prune-sessions --older-than=30d --dry-run
@@ -485,7 +476,7 @@ sai prune-sessions --help
 
 # Enable debug logging for troubleshooting
 sai list-sessions --debug
-sai delete-sessions -s test-session --debug
+sai delete-sessions test-session --debug
 ```
 
 ---
@@ -514,7 +505,7 @@ sai list-sessions --data-dir=/tmp/sai-test
 sai list-sessions --data-dir=/mnt/shared/sai-sessions
 
 # Backup sessions to external drive
-sai export-session -s important-session --data-dir=~/.local/state/sai -o /media/backup/session.json
+sai export-session important-session /media/backup/session.md --data-dir=~/.local/state/sai
 ```
 
 ---

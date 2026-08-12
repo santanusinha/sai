@@ -70,7 +70,7 @@ java -jar target/sai-1.0-SNAPSHOT.jar list-sessions --all
 ### Resume Session
 
 ```bash
-java -jar target/sai-1.0-SNAPSHOT.jar --session-id <session-id>
+java -jar target/sai-1.0-SNAPSHOT.jar --session <session-id>
 ```
 
 ### Export Session

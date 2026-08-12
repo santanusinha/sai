@@ -168,7 +168,7 @@ sai list-sessions
 Resume one:
 
 ```bash
-sai --session-id <session-id>
+sai --session <session-id>
 ```
 
 ---

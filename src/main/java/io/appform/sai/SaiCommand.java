@@ -63,6 +63,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -94,8 +95,8 @@ import picocli.CommandLine.Option;
 })
 public class SaiCommand implements Callable<Integer> {
     @Option(names = {
-            "-s", "--session-id"
-    }, description = "Resume a specific session")
+            "-s", "--session"
+    }, description = "Resume a specific session. Without a parameter, resumes the last session in the current directory.", arity = "0..1")
     private String sessionId;
 
     @Option(names = {
@@ -159,6 +160,22 @@ public class SaiCommand implements Callable<Integer> {
     @Override
     @SuppressWarnings("java:S106")
     public Integer call() throws Exception {
+        // If -s was passed without a parameter, resolve the last session in the current directory.
+        if (isSessionFlagPresent() && Strings.isNullOrEmpty(sessionId)) {
+            final var tempSettings = resolveSettings(this);
+            final var sessionDataPath = Paths.get(tempSettings.getDataDir(), "sessions");
+            final var resolvedSessionId = resolveLastSessionId(
+                                                               JsonUtils.createMapper(),
+                                                               sessionDataPath,
+                                                               tempSettings.getWorkDir());
+            if (resolvedSessionId == null) {
+                System.err.println("Error: No previous session found in the current directory."
+                        + " Use 'sai list-sessions --all' to see available sessions.");
+                return 1;
+            }
+            sessionId = resolvedSessionId;
+        }
+
         final var sessionIdProvided = !Strings.isNullOrEmpty(sessionId);
         final var effectiveSessionId = Objects.requireNonNullElseGet(sessionId,
                                                                      () -> UUID.randomUUID().toString());
@@ -488,6 +505,16 @@ public class SaiCommand implements Callable<Integer> {
         return settingsBuilder.build();
     }
 
+    /**
+     * Returns {@code true} when the {@code -s}/{@code --session} flag was present on the
+     * command line, even if no parameter value was supplied.
+     *
+     * @return {@code true} if the flag was present
+     */
+    private boolean isSessionFlagPresent() {
+        return sessionId != null;
+    }
+
     private SettingsConfig loadSettings(final String configDir,
                                         final ObjectMapper mapper) {
         final var settingsConfig = SettingsConfigLoader.load(configDir);
@@ -674,6 +701,41 @@ public class SaiCommand implements Callable<Integer> {
             return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
         }
         return input.replaceAll("@(\\S+)", "$1");
+    }
+
+    /**
+     * Resolves the most recently updated session for the given working directory.
+     *
+     * @param mapper          the Jackson ObjectMapper to use for the session store
+     * @param sessionDataPath the path to the sessions data directory
+     * @param workDir         the current working directory to filter sessions by
+     * @return the session ID of the most recent session in this directory, or {@code null} if none exists
+     */
+    private String resolveLastSessionId(final ObjectMapper mapper,
+                                        final Path sessionDataPath,
+                                        final String workDir) {
+        if (!Files.exists(sessionDataPath)) {
+            return null;
+        }
+        final var probeStore = FileSystemSessionStore.builder()
+                .baseDir(sessionDataPath.toString())
+                .mapper(mapper)
+                .cacheSize(1)
+                .build();
+        final var scrollable = probeStore.sessions(Integer.MAX_VALUE, null, QueryDirection.NEWER);
+        return scrollable.getItems()
+                .stream()
+                .filter(s -> {
+                    final var extra = s.getExtra();
+                    if (extra == null) {
+                        return false;
+                    }
+                    final var val = extra.get("workDir");
+                    return val != null && workDir.equals(val.toString());
+                })
+                .max(Comparator.comparingLong(SessionSummary::getUpdatedAt))
+                .map(SessionSummary::getSessionId)
+                .orElse(null);
     }
 
     @SneakyThrows
