@@ -160,7 +160,8 @@ public class AgentFactory {
                                           agentSetup,
                                           systemPrompt + cwd,
                                           sessionExtensions,
-                                          Map.of());
+                                          Map.of(),
+                                          new ToolCallLoopTerminationStrategy());
         registerMCPTools(saiAgent, config);
         registerHttpTools(saiAgent, config);
         return saiAgent;

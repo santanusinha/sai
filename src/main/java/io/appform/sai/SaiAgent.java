@@ -18,6 +18,7 @@ package io.appform.sai;
 import com.phonepe.sentinelai.core.agent.Agent;
 import com.phonepe.sentinelai.core.agent.AgentExtension;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
+import com.phonepe.sentinelai.core.earlytermination.EarlyTerminationStrategy;
 import com.phonepe.sentinelai.core.tools.ExecutableTool;
 
 import java.util.List;
@@ -51,14 +52,31 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                     final Settings settings,
                     @NonNull AgentSetup setup,
                     final String systemPrompt,
-                    List<AgentExtension<String, String, SaiAgent>> extensions,
-                    Map<String, ExecutableTool> knownTools) {
+                    final List<AgentExtension<String, String, SaiAgent>> extensions,
+                    final Map<String, ExecutableTool> knownTools) {
+        this(name, config, settings, setup, systemPrompt, extensions, knownTools, null);
+    }
+
+    @SuppressWarnings("java:S107") // Parameter count mirrors the Agent constructor it delegates to
+    public SaiAgent(
+                    final String name,
+                    final AgentConfig config,
+                    final Settings settings,
+                    @NonNull AgentSetup setup,
+                    final String systemPrompt,
+                    final List<AgentExtension<String, String, SaiAgent>> extensions,
+                    final Map<String, ExecutableTool> knownTools,
+                    final EarlyTerminationStrategy earlyTerminationStrategy) {
         super(
               String.class,
               augmentPrompt(systemPrompt, config, settings),
               setup,
               extensions,
-              knownTools
+              knownTools,
+              null,
+              null,
+              null,
+              earlyTerminationStrategy
         );
         this.name = name;
     }

@@ -184,6 +184,27 @@ providers:
           maxTokens: 16384
           contextWindowSize: 131072
 
+      # ── Kimi K3 — Moonshot frontier reasoning model ────────────────────────
+      # K3: temperature fixed at 1.0, top_p fixed at 0.95 — do NOT pass these
+      # (API returns HTTP 400 if you do). K3 always reasons; control effort via
+      # reasoning_effort (SAI maps Reasoning enum → reasoning_effort API field).
+      # Context window: 1,048,576 tokens. Decide reasoning effort before the
+      # conversation starts — switching mid-session invalidates prefix-cache.
+      kimi-k3:
+        tuning:
+          maxTokens: 32768
+          #contextWindowSize: 1048576
+          contextWindowSize: 548576
+          reasoning: HIGH
+          toolChoice: AUTO
+        modes:
+          medium:
+            tuning:
+              reasoning: MEDIUM
+          low:
+            tuning:
+              reasoning: LOW
+
       # ── DeepSeek V4 Pro — highest-quality DeepSeek model ────────────────────
       # DeepSeek: coding/math → 0.0; web maps API 1.0 → model 0.3.
       deepseek-v4-pro:
