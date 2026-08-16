@@ -54,6 +54,7 @@ import io.appform.sai.tools.CoreToolBox;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
+import org.slf4j.MDC;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -179,9 +180,10 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionIdProvided = !Strings.isNullOrEmpty(sessionId);
         final var effectiveSessionId = Objects.requireNonNullElseGet(sessionId,
                                                                      () -> UUID.randomUUID().toString());
+        MDC.put("sessionId", effectiveSessionId);
 
         final var mapper = JsonUtils.createMapper();
-        final var executorService = Executors.newCachedThreadPool();
+        final var executorService = new MdcPropagatingExecutorService(Executors.newCachedThreadPool());
         final var eventBus = new EventBus(executorService);
 
         final var pipedInput = readPipedInput();
@@ -405,6 +407,7 @@ public class SaiCommand implements Callable<Integer> {
             if (settings.isNoSession()) {
                 sessionStore.deleteSession(effectiveSessionId);
             }
+            MDC.remove("sessionId");
         }
         return 0;
     }

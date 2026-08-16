@@ -705,6 +705,18 @@ Commands:
 
 Logging is configured via `src/main/resources/logback.xml` and is initialized on startup. Adjust levels and appenders as needed.
 
+Each interactive session writes its own log file under the log directory (default `~/.local/state/sai/logs`):
+
+```text
+~/.local/state/sai/logs/session-<session-id>.log
+```
+
+The session ID is injected into the SLF4J MDC as the `sessionId` key and propagated to all worker threads spawned for that session, so every log line from a session lands in its own file. Logs emitted before a session ID is resolved (for example during startup) go to `session-default.log`.
+
+Log files are rotated by size and date, keeping up to 30 days of history with a total size cap of 1 GB.
+
+You can override the log directory with the `LOGPATH` environment variable and the log level with `LOGLEVEL` (for example `LOGLEVEL=DEBUG`).
+
 ## Development
 
 - Java release level: 17

@@ -54,3 +54,4 @@ site/
 __pycache__/
 *.py[cod]
 .scannerwork
+evals/
