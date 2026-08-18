@@ -339,19 +339,29 @@ EOF
 
 install_self() {
     # BASH_SOURCE is unbound when the script is piped through bash (e.g. curl | bash).
-    # In that case we cannot copy ourselves, so skip the self-install step.
+    # When piped, BASH_SOURCE[0] is empty, so we cannot copy ourselves from disk.
+    # Instead, fall back to the freshly cloned repo's copy of the installer.
     local script_source="${BASH_SOURCE[0]:-}"
-    if [[ -z "${script_source}" ]]; then
-        warn "Installer run via pipe — cannot save installer to ${INSTALLER_PATH}. Download and save it manually if needed."
+    if [[ -n "${script_source}" ]]; then
+        local src
+        src="$(cd "$(dirname "${script_source}")" && pwd)/$(basename "${script_source}")"
+        if [[ "${src}" != "${INSTALLER_PATH}" ]]; then
+            cp "${src}" "${INSTALLER_PATH}"
+            chmod +x "${INSTALLER_PATH}"
+            log_event "installer_saved" "path" "${INSTALLER_PATH}" "source" "${src}"
+            success "Installer saved → ${INSTALLER_PATH}"
+        fi
         return
     fi
-    local src
-    src="$(cd "$(dirname "${script_source}")" && pwd)/$(basename "${script_source}")"
-    if [[ "${src}" != "${INSTALLER_PATH}" ]]; then
-        cp "${src}" "${INSTALLER_PATH}"
+    # Piped execution: copy the installer from the cloned repo if available.
+    local repo_installer="${REPO_DIR}/sai-installer"
+    if [[ -f "${repo_installer}" ]]; then
+        cp "${repo_installer}" "${INSTALLER_PATH}"
         chmod +x "${INSTALLER_PATH}"
-        log_event "installer_saved" "path" "${INSTALLER_PATH}"
-        success "Installer saved → ${INSTALLER_PATH}"
+        log_event "installer_saved" "path" "${INSTALLER_PATH}" "source" "${repo_installer}"
+        success "Installer saved → ${INSTALLER_PATH} (from cloned repo)"
+    else
+        warn "Installer run via pipe and repo installer not found — cannot save installer to ${INSTALLER_PATH}. Download and save it manually if needed."
     fi
 }
 
