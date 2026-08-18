@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -52,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
  * one agent loop at a time per session.
  */
 @Slf4j
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class ToolCallLoopTerminationStrategy implements EarlyTerminationStrategy {
 
     /**
@@ -67,6 +69,7 @@ public class ToolCallLoopTerminationStrategy implements EarlyTerminationStrategy
         private int count;
     }
 
+    @EqualsAndHashCode.Include
     private final int maxIdenticalToolCalls;
 
     /**
@@ -83,17 +86,6 @@ public class ToolCallLoopTerminationStrategy implements EarlyTerminationStrategy
             throw new IllegalArgumentException("maxIdenticalToolCalls must be a positive integer");
         }
         this.maxIdenticalToolCalls = maxIdenticalToolCalls;
-    }
-
-    @Override
-    public boolean equals(final Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!(obj instanceof ToolCallLoopTerminationStrategy other)) {
-            return false;
-        }
-        return maxIdenticalToolCalls == other.maxIdenticalToolCalls;
     }
 
     @Override
