@@ -73,6 +73,13 @@ mcp:
         - tool1
         - tool2
 
+
+tools:
+  - bash
+  - readFile
+  - editFile
+  - writeFile
+
 skillDirectories:
   - /path/to/skills/directory
 
@@ -489,6 +496,31 @@ skillNames:
 2. Each skill in `skillNames` is loaded and activated
 3. The skill's instructions are injected into the agent's context
 4. The agent has access to the skill's tools and reference docs
+
+
+### tools (optional)
+
+**Type**: Array of Strings
+**Description**: Allow-list of local (built-in) toolbox tools to expose
+**Default**: All local tools exposed (when empty or omitted)
+
+The local toolbox provides these built-in tools: `bash`, `editFile`,
+`readFile`, and `writeFile`. When the `tools` list is set, only the listed
+tools are exposed to the model for this persona. When empty or omitted, all
+local tools are exposed.
+
+Matching is case-insensitive. Blank entries are ignored.
+
+```yaml
+tools:
+  - readFile
+  - bash
+```
+
+In this example, `editFile` and `writeFile` are not exposed, so the persona
+cannot modify files.
+
+---
 
 ---
 

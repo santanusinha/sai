@@ -92,4 +92,11 @@ public class AgentConfig {
     @Nullable
     List<String> skillNames;
 
+    /**
+     * Allow-list of local toolbox tool names to expose (e.g. {@code bash}, {@code readFile},
+     * {@code editFile}, {@code writeFile}). Empty or {@code null} exposes all local tools.
+     */
+    @Nullable
+    List<String> tools;
+
 }

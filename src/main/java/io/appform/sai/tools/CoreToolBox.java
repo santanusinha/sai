@@ -17,9 +17,11 @@ package io.appform.sai.tools;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.google.common.base.Strings;
+import com.phonepe.sentinelai.core.tools.ExecutableTool;
 import com.phonepe.sentinelai.core.tools.Tool;
 import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
+import com.phonepe.sentinelai.core.utils.ToolUtils;
 
 import io.appform.sai.Printer;
 import io.appform.sai.files.FileIO;
@@ -31,11 +33,17 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,14 +58,32 @@ public class CoreToolBox implements ToolBox {
 
     private final UnaryOperator<String> messageConsumer;
 
+    private final Set<String> allowedTools;
+
     public CoreToolBox(Printer printer) {
+        this(printer, null);
+    }
+
+    public CoreToolBox(Printer printer, @Nullable Collection<String> allowedTools) {
         this.printer = printer;
+        this.allowedTools = normalize(allowedTools);
         this.messageConsumer = line -> {
             printer.print(Printer.raw(Printer.Colours.GRAY
                     + line
                     + Printer.Colours.RESET));
             return line;
         };
+    }
+
+    private static Set<String> normalize(@Nullable Collection<String> allowedTools) {
+        if (allowedTools == null || allowedTools.isEmpty()) {
+            return Set.of();
+        }
+        return allowedTools.stream()
+                .filter(tool -> !Strings.isNullOrEmpty(tool))
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
     }
 
     @Tool(value = "Run bash commands on the system where the agent is running. This is the core tool and should be used for any command execution needs. Use this tool to run any bash command, including those that interact with the file system, network, or other system resources. Be cautious while using this tool, as it can execute any command on the system. Do not operate on files mentioned in .gitignore", timeoutSeconds = Integer.MAX_VALUE)
@@ -374,6 +400,13 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
+    @Override
+    public Map<String, ExecutableTool> tools() {
+        return ToolUtils.readTools(this).entrySet().stream()
+                .filter(entry -> isAllowed(entry.getValue()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     @Tool("Create a new file or completely rewrite a file with the specified content.")
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                           @JsonPropertyDescription("The content to write to the file.") String content,
@@ -457,6 +490,14 @@ public class CoreToolBox implements ToolBox {
                     .error(errorMessage)
                     .build();
         }
+    }
+
+    private boolean isAllowed(ExecutableTool tool) {
+        if (allowedTools.isEmpty()) {
+            return true;
+        }
+        final var name = tool.getToolDefinition().getName().toLowerCase();
+        return allowedTools.contains(name);
     }
 
     /**

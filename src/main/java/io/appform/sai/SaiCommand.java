@@ -283,7 +283,7 @@ public class SaiCommand implements Callable<Integer> {
                 .build()
                 .start()) {
             // Setup rest of the connections
-            agent.registerToolbox(new CoreToolBox(printer));
+            agent.registerToolbox(new CoreToolBox(printer, agentConfig.getTools()));
             printer.updateContextInfo(agentConfig.getName(), modelPointer);
             final var eventPrinter = new EventPrinter(printer, mapper);
             eventBus.onEvent().connect(event -> {
@@ -308,7 +308,8 @@ public class SaiCommand implements Callable<Integer> {
                     .sessionExtension(sessionExtension)
                     .build();
             slashContext.setOnAgentRebuilt(newAgent -> {
-                newAgent.registerToolbox(new CoreToolBox(printer));
+                newAgent.registerToolbox(new CoreToolBox(printer,
+                                                         slashContext.getCurrentAgentConfig().get().getTools()));
                 printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
                                           slashContext.getCurrentModel().get());
             });
@@ -639,7 +640,6 @@ public class SaiCommand implements Callable<Integer> {
             sb.append("\n");
         }
         sb.append("\n");
-
         printer.print(Printer.raw(sb.toString()));
     }
 

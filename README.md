@@ -490,6 +490,27 @@ skillNames:
 
 - `skillDirectories`: List of directories to scan for skills (relative to config dir or absolute)
 - `skillNames`: Optional list of specific skills to pre-load (if omitted, discovers all)
+### Filtering Local Tools in Personas
+
+You can restrict which local (built-in) tools a persona can use with the `tools`
+allow-list. When set, only the listed tool names are exposed to the model for
+that persona. When empty or omitted, all local tools are exposed.
+
+The local tools are `bash`, `editFile`, `readFile`, and `writeFile`. Matching is
+case-insensitive. Blank entries are ignored.
+
+```yaml
+agentId: read-only-agent
+name: Read-Only Agent
+description: Can read files but not modify the system.
+tools:
+  - readFile
+  - bash        # still allows shell access; omit to restrict further
+```
+
+In the example above, `editFile` and `writeFile` are not exposed, so the persona
+cannot modify files. Omit the `tools` field entirely to expose all local tools.
+
 
 ### How Skills Work
 
