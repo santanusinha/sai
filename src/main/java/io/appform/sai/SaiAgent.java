@@ -18,7 +18,6 @@ package io.appform.sai;
 import com.phonepe.sentinelai.core.agent.Agent;
 import com.phonepe.sentinelai.core.agent.AgentExtension;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
-import com.phonepe.sentinelai.core.earlytermination.EarlyTerminationStrategy;
 import com.phonepe.sentinelai.core.tools.ExecutableTool;
 
 import java.util.List;
@@ -46,17 +45,13 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
 
     private final String name;
 
-    public SaiAgent(
-                    final String name,
-                    final AgentConfig config,
-                    final Settings settings,
-                    @NonNull AgentSetup setup,
-                    final String systemPrompt,
-                    final List<AgentExtension<String, String, SaiAgent>> extensions,
-                    final Map<String, ExecutableTool> knownTools) {
-        this(name, config, settings, setup, systemPrompt, extensions, knownTools, null);
-    }
-
+    /**
+     * Constructs the agent.
+     *
+     * <p>Loop detection lives in the sentinel core tool runner
+     * ({@code RepeatedToolCallGuard} via {@code AgentSetup.maxIdenticalToolCalls}).
+     * No early termination strategy is installed here.
+     */
     @SuppressWarnings("java:S107") // Parameter count mirrors the Agent constructor it delegates to
     public SaiAgent(
                     final String name,
@@ -65,8 +60,7 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                     @NonNull AgentSetup setup,
                     final String systemPrompt,
                     final List<AgentExtension<String, String, SaiAgent>> extensions,
-                    final Map<String, ExecutableTool> knownTools,
-                    final EarlyTerminationStrategy earlyTerminationStrategy) {
+                    final Map<String, ExecutableTool> knownTools) {
         super(
               String.class,
               augmentPrompt(systemPrompt, config, settings),
@@ -76,7 +70,7 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
               null,
               null,
               null,
-              earlyTerminationStrategy
+              null
         );
         this.name = name;
     }

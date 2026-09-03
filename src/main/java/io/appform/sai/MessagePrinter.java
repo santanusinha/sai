@@ -118,6 +118,15 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             public List<Update> visit(ToolCallResponse toolCallResponse) {
                 final var messages = new ArrayList<Update>();
+                if (!toolCallResponse.isSuccess()) {
+                    // The response is a plain error message, not tool JSON.
+                    // Print it directly and skip the tool-specific parsers.
+                    messages.add(Printer.systemMessage("Error: %s - %s"
+                            .formatted(toolCallResponse.getErrorType(),
+                                       toolCallResponse.getResponse()))
+                            .withSeverity(Severity.ERROR));
+                    return messages;
+                }
                 try {
                     switch (toolCallResponse.getToolName()) {
                         case KnownToolNames.PRINT_TOOL -> {
