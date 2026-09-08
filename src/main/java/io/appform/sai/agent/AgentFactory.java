@@ -39,7 +39,6 @@ import io.appform.sai.Settings;
 import io.appform.sai.config.ModelTuning;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
-import io.appform.sai.transform.ReasoningNormalizationInterceptor;
 import io.appform.sai.transform.RequestTransformInterceptor;
 
 import java.nio.file.Paths;
@@ -204,12 +203,8 @@ public class AgentFactory {
     /**
      * Resolves the {@link ChatCompletionServiceFactory} to use for this agent.
      *
-     * <p>Always wraps the shared {@link OkHttpClient} with a
-     * {@link ReasoningNormalizationInterceptor} so that reasoning/thinking fields
-     * from different providers are normalised to {@code reasoning_content}.
-     *
-     * <p>If the agent config additionally contains {@code requestTransforms}, a
-     * {@link RequestTransformInterceptor} is also added, and a fresh
+     * <p>If the agent config contains {@code requestTransforms}, a
+     * {@link RequestTransformInterceptor} is added, and a fresh
      * {@link ConfigurableProviderFactory} is created.
      */
     private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
@@ -224,15 +219,15 @@ public class AgentFactory {
         final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
         final var hasRequestTransforms = requestTransforms != null && !requestTransforms.isEmpty();
 
-        var clientBuilder = httpClient.newBuilder()
-                .addInterceptor(new ReasoningNormalizationInterceptor(mapper));
-
-        if (hasRequestTransforms) {
-            log.info("Applying {} request transform(s) for agent {}",
-                     requestTransforms.size(),
-                     config.getAgentId());
-            clientBuilder.addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
+        if (!hasRequestTransforms) {
+            return modelProviderFactory;
         }
+
+        log.info("Applying {} request transform(s) for agent {}",
+                 requestTransforms.size(),
+                 config.getAgentId());
+        var clientBuilder = httpClient.newBuilder()
+                .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
 
         return new ConfigurableProviderFactory(factory.getProvider(),
                                                mapper,
