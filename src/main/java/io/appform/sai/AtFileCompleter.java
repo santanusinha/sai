@@ -32,6 +32,8 @@ import java.util.List;
  */
 public class AtFileCompleter implements Completer {
 
+    private static final List<String> MEDIA_PREFIXES = List.of("image:", "image-url:", "audio:");
+
     /**
      * Wraps a {@link ParsedLine} replacing the current word with a stripped version
      * (i.e. without the leading {@code @}) so that {@link FileNameCompleter} sees a
@@ -86,6 +88,51 @@ public class AtFileCompleter implements Completer {
         final var word = line.word();
         if (!word.startsWith("@")) {
             return;
+        }
+
+        // Check for media type prefix: @image:, @image-url:, @audio:
+        String mediaPrefix = null;
+        for (final var prefix : MEDIA_PREFIXES) {
+            if (word.startsWith("@" + prefix)) {
+                mediaPrefix = prefix;
+                break;
+            }
+        }
+
+        if (mediaPrefix != null) {
+            // Strip @prefix: and complete the file path
+            final var pathFragment = word.substring(1 + mediaPrefix.length() + 1);
+            final var strippedLine = new AtParsedLine(line, pathFragment);
+            final var delegateCandidates = new ArrayList<Candidate>();
+            delegate.complete(reader, strippedLine, delegateCandidates);
+
+            for (final var c : delegateCandidates) {
+                candidates.add(new Candidate(
+                                             "@" + mediaPrefix + c.value(),
+                                             "@" + mediaPrefix + c.displ(),
+                                             c.group(),
+                                             c.descr(),
+                                             c.suffix(),
+                                             c.key(),
+                                             c.complete()
+                ));
+            }
+            return;
+        }
+
+        // Suggest media prefixes when user types just "@"
+        if (word.equals("@")) {
+            for (final var prefix : MEDIA_PREFIXES) {
+                candidates.add(new Candidate(
+                                             "@" + prefix,
+                                             "@" + prefix,
+                                             "media",
+                                             "Media: " + prefix,
+                                             null,
+                                             "media-" + prefix,
+                                             false
+                ));
+            }
         }
 
         final var pathFragment = word.substring(1);

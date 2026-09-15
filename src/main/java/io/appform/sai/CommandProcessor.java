@@ -47,7 +47,8 @@ public class CommandProcessor implements AutoCloseable {
 
     public record InputCommand(
             String runId,
-            String input
+            String input,
+            java.util.List<com.phonepe.sentinelai.core.agent.MediaInput> media
     ) {
     }
 
@@ -107,6 +108,7 @@ public class CommandProcessor implements AutoCloseable {
 
     private void handleInput(final InputCommand input) {
         final var prompt = input.input();
+        final var media = input.media();
         final var messages = new ArrayList<Update>();
         final var elapsedTimeCoounter = Stopwatch.createStarted();
         var errorMessage = "";
@@ -128,6 +130,7 @@ public class CommandProcessor implements AutoCloseable {
                                                                                   .userId(user)
                                                                                   .build())
                                                                           .request(prompt)
+                                                                          .media(media)
                                                                           .build(),
                                                                   streamHandler);
             runningTask = responseF;

@@ -135,7 +135,7 @@ public class AgentFactory {
                                                mapper,
                                                modelOptions))
                 .autoCompactionSetup(AutoCompactionSetup.builder()
-                        .compactionTriggerThresholdPercentage(50) //TODO::CONFIG?
+                        .compactionTriggerThresholdPercentage(resolveCompactionTriggerThreshold(resolved.getTuning()))
                         .skipToolMessages(false) //Keep tool i/o in summaries for now; flip when validated
                         .build())
                 .build();
@@ -198,6 +198,20 @@ public class AgentFactory {
             return;
         }
         agent.registerToolbox(new ComposingMCPToolBox(mapper, config.getMcp(), "mcp"));
+    }
+
+    /**
+     * Resolves the auto-compaction trigger threshold for an agent.
+     *
+     * <p>Uses the {@code compactionTriggerThresholdPercentage} from the resolved
+     * {@link ModelTuning} when set. Falls back to {@code 50} otherwise. A value of {@code 0}
+     * means compact on every run.
+     */
+    private int resolveCompactionTriggerThreshold(@Nullable ModelTuning tuning) {
+        if (tuning != null && tuning.getCompactionTriggerThresholdPercentage() != null) {
+            return tuning.getCompactionTriggerThresholdPercentage();
+        }
+        return 50;
     }
 
     /**

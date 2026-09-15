@@ -188,8 +188,10 @@ public class SaiCommand implements Callable<Integer> {
 
         final var pipedInput = readPipedInput();
         // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
+        // Note: raw input is passed as-is; media parsing (@image:, @audio:) and text
+        // resolution (@file refs) are handled in the input loop via MediaParser + resolveInput.
         final var effectiveInput = !Strings.isNullOrEmpty(input)
-                ? resolveInput(input)
+                ? input
                 : !Strings.isNullOrEmpty(pipedInput)
                         ? pipedInput
                 : null;
@@ -370,11 +372,12 @@ public class SaiCommand implements Callable<Integer> {
                             userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                             continue;
                         }
-                        final var resolvedInput = resolveInput(userInput);
+                        final var parsedInput = MediaParser.parse(userInput);
+                        final var resolvedInput = resolveInput(parsedInput.getTextPrompt());
                         final var command = CommandProcessor.Command.builder()
                                 .command(CommandType.INPUT)
                                 .input(new InputCommand("run-" + UUID.randomUUID()
-                                        .toString(), resolvedInput))
+                                        .toString(), resolvedInput, parsedInput.getMedia()))
                                 .build();
                         try {
                             commandProcessor.handle(command);
@@ -696,14 +699,15 @@ public class SaiCommand implements Callable<Integer> {
 
     @SneakyThrows
     private String resolveInput(String input) {
-        if (input.startsWith("@")) {
+        if (input.startsWith("@") && !input.startsWith("@image:") && !input.startsWith("@image-url:") && !input
+                .startsWith("@audio:")) {
             final var filePath = input.substring(1);
             if (Strings.isNullOrEmpty(filePath)) {
                 throw new IllegalArgumentException("--input '@' requires a file path");
             }
             return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
         }
-        return input.replaceAll("@(\\S+)", "$1");
+        return input.replaceAll("@(?!image:|image-url:|audio:)(\\S+)", "$1");
     }
 
     /**

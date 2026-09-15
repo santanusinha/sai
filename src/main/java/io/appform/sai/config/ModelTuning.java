@@ -89,6 +89,9 @@ public class ModelTuning {
     @Nullable
     Reasoning reasoning;
 
+    @Nullable
+    Boolean disableTools;
+
     // ── ModelAttributes fields ────────────────────────────────────────────
 
     @Nullable
@@ -111,6 +114,15 @@ public class ModelTuning {
      */
     @Nullable
     OutputGenerationMode compactionOutputGenerationMode;
+
+    /**
+     * Percentage of the model context window at which auto-compaction triggers. When {@code null},
+     * the caller falls back to the framework default
+     * ({@code AutoCompactionSetup.DEFAULT_COMPACTION_TRIGGER_THRESHOLD}). Set to {@code 0} to
+     * compact on every run.
+     */
+    @Nullable
+    Integer compactionTriggerThresholdPercentage;
 
     // ── Free-form passthrough ─────────────────────────────────────────────
 
@@ -153,6 +165,7 @@ public class ModelTuning {
                 .frequencyPenalty(mergedSettings.getFrequencyPenalty())
                 .logitBias(mergedSettings.getLogitBias())
                 .reasoning(mergedSettings.getReasoning())
+                .disableTools(mergedSettings.getDisableTools())
                 .encodingType(rhs.getEncodingType() != null ? rhs.getEncodingType() : lhs.getEncodingType())
                 .contextWindowSize(rhs.getContextWindowSize() != null
                         ? rhs.getContextWindowSize()
@@ -161,6 +174,9 @@ public class ModelTuning {
                 .compactionOutputGenerationMode(rhs.getCompactionOutputGenerationMode() != null
                         ? rhs.getCompactionOutputGenerationMode()
                         : lhs.getCompactionOutputGenerationMode())
+                .compactionTriggerThresholdPercentage(rhs.getCompactionTriggerThresholdPercentage() != null
+                        ? rhs.getCompactionTriggerThresholdPercentage()
+                        : lhs.getCompactionTriggerThresholdPercentage())
                 .extraArgs(rhs.getExtraArgs() != null ? rhs.getExtraArgs() : lhs.getExtraArgs())
                 .requestTransforms(rhs.getRequestTransforms() != null
                         ? rhs.getRequestTransforms()
@@ -183,10 +199,12 @@ public class ModelTuning {
                 && frequencyPenalty == null
                 && logitBias == null
                 && reasoning == null
+                && disableTools == null
                 && encodingType == null
                 && contextWindowSize == null
                 && toolChoice == null
                 && compactionOutputGenerationMode == null
+                && compactionTriggerThresholdPercentage == null
                 && (extraArgs == null || extraArgs.isEmpty())
                 && (requestTransforms == null || requestTransforms.isEmpty());
     }
@@ -251,6 +269,7 @@ public class ModelTuning {
                 .frequencyPenalty(frequencyPenalty)
                 .logitBias(logitBias)
                 .reasoning(reasoning)
+                .disableTools(disableTools)
                 .modelAttributes(toModelAttributes())
                 .build();
     }
