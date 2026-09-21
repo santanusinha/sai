@@ -45,7 +45,6 @@ import io.appform.sai.transform.MdcSessionInterceptor;
 import io.appform.sai.transform.RequestTransformInterceptor;
 import io.appform.sai.transform.SessionAffinityInterceptor;
 
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,10 +61,10 @@ import okhttp3.OkHttpClient;
 /**
  * Factory responsible for constructing and configuring {@link SaiAgent} instances.
  *
- * <p>Each call to {@link #createAgent(String, AgentConfig)} creates a fresh agent bound to the
- * provided model name and {@link AgentConfig}, wires all session and skill extensions, registers
- * any configured MCP or HTTP toolboxes, and injects a sanitised current-working-directory hint
- * into the system prompt.
+ * <p>Each call to {@link #createAgent(String, String, String, AgentConfig)} creates a fresh agent
+ * bound to the provided model name and {@link AgentConfig}, wires all session and skill extensions,
+ * and registers any configured MCP or HTTP toolboxes. {@link SaiAgent} augments the system prompt
+ * itself (terminal hints, working directory, scratch directory).
  */
 public class AgentFactory {
 
@@ -88,9 +87,8 @@ public class AgentFactory {
      * Creates a new {@link SaiAgent} configured for the given provider/model/mode and agent config.
      *
      * <p>The system prompt is taken from {@link AgentConfig#getPrompt()} (falling back to a
-     * built-in default) and is augmented with the sanitised name of the current working directory
-     * so the agent has implicit path context. Control characters and path separators in the
-     * directory name are replaced with {@code _} to prevent prompt-injection via malicious paths.
+     * built-in default). {@link SaiAgent} augments it with terminal hints and the current
+     * working directory.
      *
      * <p>Effective model settings are resolved through {@link SettingsResolver} using the
      * provider → model → mode hierarchy from {@code settings.yaml}, merged with the persona's
@@ -144,16 +142,11 @@ public class AgentFactory {
                         .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);
-        final var rawCwdName = Paths.get("").toAbsolutePath().getFileName();
-        final var safeCwdName = rawCwdName != null
-                ? rawCwdName.toString().replaceAll("[\\p{Cntrl}/\\\\]", "_")
-                : "_tmp";
-        final var cwd = "\nCurrent working directory: " + safeCwdName + "\n";
         final var saiAgent = new SaiAgent(config.getName(),
                                           config,
                                           settings,
                                           agentSetup,
-                                          systemPrompt + cwd,
+                                          systemPrompt,
                                           sessionExtensions,
                                           Map.of());
         registerMCPTools(saiAgent, config);

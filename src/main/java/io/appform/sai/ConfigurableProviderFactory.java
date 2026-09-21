@@ -28,6 +28,7 @@ import io.github.sashirestela.openai.SimpleOpenAI;
 import io.github.sashirestela.openai.SimpleOpenAIAzure;
 import io.github.sashirestela.openai.service.ChatCompletionServices;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import lombok.Getter;
@@ -59,22 +60,6 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
     private CopilotDirectProvider copilotDirectProvider = null;
 
     /**
-     * Constructs a factory without a settings config (env-var fallback only).
-     *
-     * <p>This constructor is retained for backward compatibility and for call sites that
-     * do not yet have a loaded {@link SettingsConfig} (e.g.
-     * {@link io.appform.sai.agent.AgentFactory#resolveProviderFactory}
-     * when creating a transform-injected factory).
-     *
-     * @param provider     the provider name
-     * @param mapper       the shared Jackson {@link ObjectMapper}
-     * @param okHttpClient the shared {@link OkHttpClient}
-     */
-    public ConfigurableProviderFactory(String provider, ObjectMapper mapper, OkHttpClient okHttpClient) {
-        this(provider, mapper, okHttpClient, null);
-    }
-
-    /**
      * Constructs a factory with a loaded {@link SettingsConfig} for config-driven providers.
      *
      * @param provider       the provider name (e.g. "openai", "azure", "copilot")
@@ -90,31 +75,12 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         this.mapper = mapper;
         this.okHttpClient = okHttpClient;
         this.settingsConfig = settingsConfig != null ? settingsConfig : SettingsConfig.builder().build();
-
-        /* if (Providers.COPILOT.equals(provider)) {
-            if (this.settingsConfig.getProvider(Providers.COPILOT) != null) {
-                log.warn("Provider 'copilot' is listed in settings.yaml but is always handled by the built-in "
-                        + "CopilotDirectProvider. The config entry (connection details) is ignored. "
-                        + "Model/mode tuning entries may still be used by SettingsResolver.");
-            }
-            try {
-                this.copilotDirectProvider = new CopilotDirectProvider(mapper, okHttpClient, RETRY_CONFIG);
-            }
-            catch (java.io.IOException e) {
-                throw new IllegalStateException("Failed to initialise Copilot direct provider", e);
-            }
-        } */
     }
 
     @Override
     public ChatCompletionServices get(String modelName) {
-        // Copilot is always handled by the built-in CopilotDirectProvider — never config-driven.
-        //       if (Providers.COPILOT.equals(provider)) {
-        //           return copilotDirectProvider.get(modelName);
-        //       }
-        // All other providers (including built-in names like openai/azure/copilot-proxy) check
-        // settings.yaml first. If a config entry exists, build from it. If not, fall back to
-        // env-var behavior for backward compatibility.
+        // Check settings.yaml first. If a config entry exists, build from it. If not,
+        // fall back to env-var behavior for backward compatibility.
         final var providerEntry = settingsConfig.getProvider(provider).orElse(null);
         if (providerEntry != null) {
             return buildFromConfig(providerEntry, modelName);
@@ -131,39 +97,13 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
     }
 
     /**
-     * Applies extra headers from a comma-delimited env-var string (legacy format).
-     *
-     * @param client       the base OkHttpClient
-     * @param extraHeaders comma-delimited "Key:Value,Key2:Value2" string, or null
-     * @return the client with headers injected, or the original client if no headers
-     */
-    private OkHttpClient applyExtraHeaders(OkHttpClient client, String extraHeaders) {
-        if (Strings.isNullOrEmpty(extraHeaders)) {
-            return client;
-        }
-        return client.newBuilder()
-                .addInterceptor(chain -> {
-                    var requestBuilder = chain.request().newBuilder();
-                    for (String header : extraHeaders.split(",")) {
-                        String[] parts = header.split(":", 2);
-                        if (parts.length == 2) {
-                            requestBuilder.addHeader(parts[0].trim(), parts[1].trim());
-                            log.debug("Adding extra header to OpenAI request: {}", parts[0].trim());
-                        }
-                    }
-                    return chain.proceed(requestBuilder.build());
-                })
-                .build();
-    }
-
-    /**
-     * Applies extra headers from a Map (config-driven format).
+     * Applies extra headers to every request made through the client.
      *
      * @param client       the base OkHttpClient
      * @param extraHeaders map of header name to value, or null
      * @return the client with headers injected, or the original client if no headers
      */
-    private OkHttpClient applyExtraHeadersFromMap(OkHttpClient client, Map<String, String> extraHeaders) {
+    private OkHttpClient applyExtraHeaders(OkHttpClient client, Map<String, String> extraHeaders) {
         if (extraHeaders == null || extraHeaders.isEmpty()) {
             return client;
         }
@@ -172,7 +112,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                     var requestBuilder = chain.request().newBuilder();
                     extraHeaders.forEach((key, value) -> {
                         requestBuilder.addHeader(key, value);
-                        log.debug("Adding extra header from config: {}", key);
+                        log.debug("Adding extra header: {}", key);
                     });
                     return chain.proceed(requestBuilder.build());
                 })
@@ -185,10 +125,23 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                                      "AZURE_ENDPOINT environment variable must be set");
         final var apiKey = readEnv("AZURE_API_KEY",
                                    "AZURE_API_KEY environment variable must be set");
+        final var apiVersion = EnvLoader.readEnv("AZURE_API_VERSION", "2024-10-21");
+        return azureModel(endpoint, apiKey, apiVersion);
+    }
+
+    /**
+     * Builds Azure {@link ChatCompletionServices} from resolved connection values.
+     *
+     * @param endpoint   the Azure endpoint / base URL
+     * @param apiKey     the Azure API key
+     * @param apiVersion the Azure API version
+     * @return the built {@link ChatCompletionServices}
+     */
+    private ChatCompletionServices azureModel(String endpoint, String apiKey, String apiVersion) {
         return SimpleOpenAIAzure.builder()
                 .baseUrl(endpoint)
                 .apiKey(apiKey)
-                .apiVersion(EnvLoader.readEnv("AZURE_API_VERSION", "2024-10-21"))
+                .apiVersion(apiVersion)
                 .objectMapper(mapper)
                 .clientAdapter(new OkHttpClientAdapter(okHttpClient))
                 .retryConfig(RETRY_CONFIG)
@@ -204,14 +157,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                                         "AZURE_API_KEY",
                                         "Azure API key must be set in settings.yaml or AZURE_API_KEY env var");
         final var apiVersion = resolveValueWithDefault(entry.getApiVersion(), "AZURE_API_VERSION", "2024-10-21");
-        return SimpleOpenAIAzure.builder()
-                .baseUrl(endpoint)
-                .apiKey(apiKey)
-                .apiVersion(apiVersion)
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
-                .retryConfig(RETRY_CONFIG)
-                .build();
+        return azureModel(endpoint, apiKey, apiVersion);
     }
 
     /**
@@ -243,6 +189,7 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                                                                   + provider + "'. Use 'openai' or 'azure'.");
         };
     }
+
 
     private ChatCompletionServices copilotDirectModel(String modelName) {
         log.debug("Creating Copilot Direct ChatCompletionServices for model: {}", modelName);
@@ -277,6 +224,28 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         final var projectId = EnvLoader.readEnv("OPENAI_PROJECT_ID", null);
         final var extraHeaders = EnvLoader.readEnv("OPENAI_EXTRA_HEADERS", null);
         log.debug("Using OpenAI endpoint: {}", endpoint);
+        return openAIModel(endpoint,
+                           apiKey,
+                           organizationId,
+                           projectId,
+                           parseExtraHeaders(extraHeaders));
+    }
+
+    /**
+     * Builds OpenAI-compatible {@link ChatCompletionServices} from resolved connection values.
+     *
+     * @param endpoint       the API base URL
+     * @param apiKey         the API key
+     * @param organizationId the OpenAI organization ID (may be null)
+     * @param projectId      the OpenAI project ID (may be null)
+     * @param extraHeaders   extra headers to inject into every request (may be null or empty)
+     * @return the built {@link ChatCompletionServices}
+     */
+    private ChatCompletionServices openAIModel(String endpoint,
+                                               String apiKey,
+                                               String organizationId,
+                                               String projectId,
+                                               Map<String, String> extraHeaders) {
         var httpClient = applyExtraHeaders(okHttpClient, extraHeaders);
         return SimpleOpenAI.builder()
                 .baseUrl(endpoint)
@@ -301,18 +270,30 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                                         "API key must be set in settings.yaml or OPENAI_API_KEY env var");
         final var organizationId = resolveValueOrNull(entry.getOrganizationId(), "OPENAI_ORGANIZATION");
         final var projectId = resolveValueOrNull(entry.getProjectId(), "OPENAI_PROJECT_ID");
-        var httpClient = applyExtraHeadersFromMap(okHttpClient, entry.getExtraHeaders());
         log.debug("Using OpenAI endpoint: {} for provider: {}", endpoint, provider);
-        return SimpleOpenAI.builder()
-                .baseUrl(endpoint)
-                .apiKey(apiKey)
-                .objectMapper(mapper)
-                .organizationId(organizationId)
-                .projectId(projectId)
-                .clientAdapter(new OkHttpClientAdapter(httpClient))
-                .retryConfig(RETRY_CONFIG)
-                .build();
+        return openAIModel(endpoint, apiKey, organizationId, projectId, entry.getExtraHeaders());
     }
+
+    /**
+     * Parses a comma-delimited "Key:Value,Key2:Value2" env-var string into a header map.
+     *
+     * @param extraHeaders comma-delimited header string, or null
+     * @return the parsed headers, or an empty map if the string is null or empty
+     */
+    private Map<String, String> parseExtraHeaders(String extraHeaders) {
+        if (Strings.isNullOrEmpty(extraHeaders)) {
+            return Map.of();
+        }
+        final var headers = new LinkedHashMap<String, String>();
+        for (String header : extraHeaders.split(",")) {
+            String[] parts = header.split(":", 2);
+            if (parts.length == 2) {
+                headers.put(parts[0].trim(), parts[1].trim());
+            }
+        }
+        return headers;
+    }
+
 
     private String readEnv(String key, String errorMessage) {
         return EnvLoader.readEnv(key)
