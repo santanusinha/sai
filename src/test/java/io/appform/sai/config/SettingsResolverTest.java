@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.knuddels.jtokkit.api.EncodingType;
+import com.phonepe.sentinelai.core.model.Reasoning;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +47,56 @@ class SettingsResolverTest {
                 .build();
         final var result = SettingsResolver.resolve("openai", "gpt-4o", null, config, null);
         assertNull(result.getModelSettings());
+    }
+
+    @Test
+    void resolveCommonModelDefaultsAppliedWithoutProviderEntry() {
+        final var commonTuning = ModelTuning.builder()
+                .temperature(0.6f)
+                .topP(0.95f)
+                .build();
+        final var config = SettingsConfig.builder()
+                .models(Map.of("kimi-k3", ModelEntry.builder().tuning(commonTuning).build()))
+                .build();
+        final var result = SettingsResolver.resolve("copilot", "kimi-k3", null, config, null);
+        assertNotNull(result.getModelSettings());
+        assertEquals(0.6f, result.getModelSettings().getTemperature());
+        assertEquals(0.95f, result.getModelSettings().getTopP());
+    }
+
+    @Test
+    void resolveCommonModelModeApplied() {
+        final var commonTuning = ModelTuning.builder()
+                .temperature(0.6f)
+                .build();
+        final var codingTuning = ModelTuning.builder()
+                .temperature(0.3f)
+                .reasoning(Reasoning.HIGH)
+                .build();
+        final var config = SettingsConfig.builder()
+                .models(Map.of("kimi-k3",
+                               ModelEntry.builder()
+                                       .tuning(commonTuning)
+                                       .modes(Map.of("coding", ModeEntry.builder().tuning(codingTuning).build()))
+                                       .build()))
+                .build();
+        final var result = SettingsResolver.resolve("copilot", "kimi-k3", "coding", config, null);
+        assertNotNull(result.getModelSettings());
+        assertEquals(0.3f, result.getModelSettings().getTemperature());
+        assertEquals(Reasoning.HIGH, result.getModelSettings().getReasoning());
+    }
+
+    @Test
+    void resolveCommonModelUnknownProviderStillAppliesCommonDefaults() {
+        final var commonTuning = ModelTuning.builder()
+                .temperature(0.6f)
+                .build();
+        final var config = SettingsConfig.builder()
+                .models(Map.of("glm-5.2", ModelEntry.builder().tuning(commonTuning).build()))
+                .build();
+        final var result = SettingsResolver.resolve("unknown-provider", "glm-5.2", null, config, null);
+        assertNotNull(result.getModelSettings());
+        assertEquals(0.6f, result.getModelSettings().getTemperature());
     }
 
     @Test
@@ -205,6 +256,36 @@ class SettingsResolverTest {
     }
 
     @Test
+    void resolveProviderModeOverridesCommonModelMode() {
+        final var commonCodingTuning = ModelTuning.builder()
+                .temperature(0.3f)
+                .build();
+        final var providerCodingTuning = ModelTuning.builder()
+                .temperature(0.0f)
+                .build();
+        final var config = SettingsConfig.builder()
+                .models(Map.of("ds4f",
+                               ModelEntry.builder()
+                                       .modes(Map.of("coding",
+                                                     ModeEntry.builder().tuning(commonCodingTuning).build()))
+                                       .build()))
+                .providers(Map.of("openrouter",
+                                  ProviderEntry.builder()
+                                          .models(Map.of("ds4f",
+                                                         ModelEntry.builder()
+                                                                 .modes(Map.of("coding",
+                                                                               ModeEntry.builder()
+                                                                                       .tuning(providerCodingTuning)
+                                                                                       .build()))
+                                                                 .build()))
+                                          .build()))
+                .build();
+        final var result = SettingsResolver.resolve("openrouter", "ds4f", "coding", config, null);
+        assertNotNull(result.getModelSettings());
+        assertEquals(0.0f, result.getModelSettings().getTemperature());
+    }
+
+    @Test
     void resolveProviderModelAndModeTuning() {
         final var providerTuning = ModelTuning.builder()
                 .temperature(0.5f)
@@ -233,6 +314,31 @@ class SettingsResolverTest {
         assertNotNull(result.getModelSettings());
         assertEquals(0.5f, result.getModelSettings().getTemperature());
         assertEquals(8192, result.getModelSettings().getMaxTokens());
+    }
+
+    @Test
+    void resolveProviderModelOverridesCommonModelDefaults() {
+        final var commonTuning = ModelTuning.builder()
+                .temperature(0.6f)
+                .contextWindowSize(200_000)
+                .build();
+        final var providerModelTuning = ModelTuning.builder()
+                .contextWindowSize(256_000)
+                .build();
+        final var config = SettingsConfig.builder()
+                .models(Map.of("glm-5.2", ModelEntry.builder().tuning(commonTuning).build()))
+                .providers(Map.of("godric",
+                                  ProviderEntry.builder()
+                                          .models(Map.of("glm-5.2",
+                                                         ModelEntry.builder()
+                                                                 .tuning(providerModelTuning)
+                                                                 .build()))
+                                          .build()))
+                .build();
+        final var result = SettingsResolver.resolve("godric", "glm-5.2", null, config, null);
+        assertNotNull(result.getModelSettings());
+        assertEquals(0.6f, result.getModelSettings().getTemperature());
+        assertEquals(256_000, result.getModelSettings().getModelAttributes().getContextWindowSize());
     }
 
     @Test

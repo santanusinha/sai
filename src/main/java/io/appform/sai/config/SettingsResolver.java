@@ -18,6 +18,7 @@ package io.appform.sai.config;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
 
+import java.util.Map;
 import java.util.Objects;
 
 import javax.annotation.Nullable;
@@ -27,12 +28,13 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Resolves effective model settings through the hierarchical provider → model → mode merge,
- * then applies persona tuning and CLI overrides on top.
+ * Resolves effective model settings through the hierarchical common-model ⊕ provider → model → mode
+ * merge, then applies persona tuning and CLI overrides on top.
  *
  * <p>The merge order (bottom-up, rhs wins if non-null):
  * <pre>
- * provider-level defaults (ModelTuning)
+ * common-model defaults from the top-level {@code models} section (ModelTuning)
+ * ⊕ provider-level defaults (ModelTuning)
  * ⊕ model-level settings
  * ⊕ mode-level overrides
  * ⊕ persona tuning (fallback if no settings.yaml entry)
@@ -99,9 +101,26 @@ public class SettingsResolver {
         String effectiveModelId = null;
         var foundInSettings = false;
 
+        // Start with common-model defaults from the top-level `models` section, if any
+        final var commonModelEntry = getModelEntry(config.getModels(), model);
+        if (commonModelEntry != null) {
+            foundInSettings = true;
+            effectiveTuning = commonModelEntry.getTuning();
+            final var commonResolvedMode = commonModelEntry.resolveModeName(mode);
+            if (commonResolvedMode != null) {
+                final var commonModeEntry = commonModelEntry.getMode(commonResolvedMode);
+                if (commonModeEntry != null) {
+                    effectiveTuning = ModelTuning.merge(effectiveTuning, commonModeEntry.getTuning());
+                }
+                else if (mode != null) {
+                    log.debug("Mode '{}' not found in common model entry for '{}'", mode, model);
+                }
+            }
+        }
+
         if (providerEntry != null) {
-            // Start with provider-level defaults
-            effectiveTuning = providerEntry.getTuning();
+            // Merge provider-level defaults on top of common-model defaults
+            effectiveTuning = ModelTuning.merge(effectiveTuning, providerEntry.getTuning());
 
             final var modelEntry = providerEntry.getModel(model);
             if (modelEntry != null) {
@@ -155,5 +174,13 @@ public class SettingsResolver {
                 .tuning(effectiveTuning)
                 .effectiveModelId(effectiveModelId)
                 .build();
+    }
+
+    @Nullable
+    private static ModelEntry getModelEntry(@Nullable Map<String, ModelEntry> models, @Nullable String model) {
+        if (models == null || model == null) {
+            return null;
+        }
+        return models.get(model);
     }
 }

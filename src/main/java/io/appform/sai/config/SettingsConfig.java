@@ -40,11 +40,23 @@ import lombok.extern.jackson.Jacksonized;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class SettingsConfig {
 
-    public static final SettingsConfig DEFAULT = new SettingsConfig(Map.of());
+    public static final SettingsConfig DEFAULT = new SettingsConfig(Map.of(), Map.of());
 
     @JsonProperty("providers")
     @Nullable
     Map<String, ProviderEntry> providers;
+
+    /**
+     * Common model settings shared across all providers, keyed by model name.
+     *
+     * <p>Each entry uses the {@link ModelEntry} shape ({@code tuning} plus optional {@code modes}).
+     * These settings form the base of the merge chain — the provider → model → mode entries in
+     * {@code providers} override them. Use this section to define a model once and override only
+     * provider-specific quirks under {@code providers}.
+     */
+    @JsonProperty("models")
+    @Nullable
+    Map<String, ModelEntry> models;
 
     /**
      * Returns the provider entry for the given name, or {@code null} if not found.

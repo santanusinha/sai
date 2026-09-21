@@ -4,26 +4,25 @@ SAI supports a hierarchical settings file — `settings.yaml` — that defines L
 
 ## Overview
 
-`settings.yaml` lives in your config directory (`~/.config/sai/settings.yaml`) and organises settings as a three-level hierarchy:
+`settings.yaml` lives in your config directory (`~/.config/sai/settings.yaml`) and organises settings as a common model section plus a three-level provider hierarchy:
 
 ```
+models (common, top-level)
 provider
   └── model
         └── mode
 ```
 
-Each level can carry a `tuning` block. Resolution is a **bottom-up merge** — mode settings override model settings, which override provider-level defaults. The merge uses **rhs-wins-if-non-null** semantics: if a field is set at a higher level, it overrides the lower level; if not, the lower level's value applies.
+The top-level `models` section defines common model settings shared across all providers. Each level can carry a `tuning` block. Resolution is a **bottom-up merge** — mode settings override model settings, which override provider-level defaults, which override common model settings. The merge uses **rhs-wins-if-non-null** semantics: if a field is set at a higher level, it overrides the lower level; if not, the lower level's value applies.
 
 | Level | Keyed by | Owns |
 |-------|----------|------|
+| **Common model** | model name (top-level `models`) | `tuning` (common defaults), `defaultMode`, `modes` |
 | **Provider** | name (`openai`, `azure`, `openrouter`, …) | `type`, `endpoint`, `apiKey`, `apiVersion` (Azure), `organizationId`, `projectId`, `extraHeaders`, `tuning` (provider defaults), `models` |
-| **Model** | `modelId` (nested inside provider) | `tuning` (model overrides), `defaultMode`, `modes` |
+| **Model** | `modelId` (nested inside provider) | `tuning` (model overrides), `defaultMode`, `modes`, `effectiveModelId` |
 | **Mode** | name (`coding`, `planning`, …) (nested inside model) | `tuning` (sparse overrides) |
 
-!!! tip "When to use settings.yaml vs environment variables"
-    Use `settings.yaml` when you need multiple providers configured simultaneously, per-model tuning, or modes. Use environment variables (`.env`) for simple single-provider setups — they continue to work as a fallback.
-
----
+Use the top-level `models` section to define a model once when the same model is served by multiple providers. Then override only provider-specific quirks (e.g. `effectiveModelId`, `contextWindowSize`) under `providers`.
 
 ## Provider Types
 
@@ -43,6 +42,22 @@ Each level can carry a `tuning` block. Resolution is a **bottom-up merge** — m
 ```yaml
 # ~/.config/sai/settings.yaml
 # Secrets via ${ENV} interpolation; never commit keys.
+
+# Common model settings — shared across ALL providers. Define a model once
+# here, then override only provider-specific quirks under `providers`.
+models:
+  glm-5.2:
+    tuning:
+      temperature: 1.0
+      topP: 0.95
+      presencePenalty: 0
+      frequencyPenalty: 0
+      toolChoice: AUTO
+      contextWindowSize: 200000
+    modes:
+      coding:
+        tuning:
+          temperature: 0.6
 
 providers:
   openai:
@@ -117,6 +132,17 @@ providers:
 ---
 
 ## Field Reference
+
+### Common Model Fields (top-level `models`)
+
+The top-level `models` map is keyed by model name. Each value uses the `ModelEntry` shape — the same as a model entry under a provider. Common model settings apply to every provider that serves the model. `effectiveModelId` here has no effect; provider entries own it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `tuning` | ModelTuning | No | Common tuning defaults for this model |
+| `defaultMode` | String | No | Default mode name (used when no mode is specified) |
+| `modes` | Map\\<String, ModeEntry\\> | No | Common modes for this model |
+
 
 ### Provider Fields
 
@@ -245,13 +271,16 @@ Splitting uses `/` with **limit 3**:
 Effective settings are built by **bottom-up merge** through the hierarchy, then the persona tuning is applied on top:
 
 ```
-provider-level defaults (ModelTuning)
-   ⊕ model-level settings  (ModelTuning.merge: provider ⊕ model)
-   ⊕ mode-level overrides  (ModelTuning.merge: above ⊕ mode)
-   ⊕ persona tuning        (ModelTuning.merge: above ⊕ personaTuning)
+common-model defaults from the top-level `models` section (ModelTuning)
+   ⊕ provider-level defaults  (ModelTuning.merge: common ⊕ provider)
+   ⊕ model-level settings     (ModelTuning.merge: above ⊕ model)
+   ⊕ mode-level overrides     (ModelTuning.merge: above ⊕ mode)
+   ⊕ persona tuning           (ModelTuning.merge: above ⊕ personaTuning)
 ```
 
 Where `⊕` denotes `ModelTuning.merge(lhs, rhs)` — **rhs wins if non-null**.
+
+Common-model modes merge in the same way. If a model is requested with a mode that exists in both the common entry and the provider entry, the provider entry's mode tuning wins. `effectiveModelId` comes only from the provider entry under `providers`; a common entry cannot set it.
 
 ### Fallback behavior
 
@@ -337,6 +366,19 @@ Personas with `modelSettings` / `modelOptions` (legacy) continue to work. The `t
 
 ```yaml
 # ~/.config/sai/settings.yaml
+
+# Common model settings — shared across ALL providers.
+models:
+  glm-5.2:
+    tuning:
+      temperature: 1.0
+      topP: 0.95
+      contextWindowSize: 200000
+    modes:
+      coding:
+        tuning:
+          temperature: 0.6
+          toolChoice: AUTO
 
 providers:
   # OpenAI with provider-level defaults

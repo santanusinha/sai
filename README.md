@@ -178,6 +178,20 @@ Providers can be configured via environment variables (see below) or via a `sett
 For multi-provider setups, per-model tuning, and modes, create `~/.config/sai/settings.yaml`:
 
 ```yaml
+# Common model settings — shared across ALL providers. Define a model once
+# here; every provider that serves it merges these as the tuning base.
+models:
+  glm-5.2:
+    tuning:
+      temperature: 1.0
+      topP: 0.95
+      contextWindowSize: 200000
+    modes:
+      coding:
+        tuning:
+          temperature: 0.6
+          toolChoice: AUTO
+
 providers:
   openai:
     type: openai
@@ -213,7 +227,7 @@ providers:
 # copilot is NOT listed — it is always available as a built-in provider.
 ```
 
-See [Settings Configuration](docs/reference/settings.md) for the full format reference, including `${ENV}` interpolation, `provider/model[/mode]` string format, hierarchical tuning merge, modes, and opt-in session cache affinity (`sessionAffinity`).
+See [Settings Configuration](docs/reference/settings.md) for the full format reference, including `${ENV}` interpolation, `provider/model[/mode]` string format, the top-level `models` section for common model settings shared across providers, hierarchical tuning merge, modes, and opt-in session cache affinity (`sessionAffinity`).
 
 Provider-specific environment variables (fallback when no settings.yaml entry exists):
 **OpenAI**

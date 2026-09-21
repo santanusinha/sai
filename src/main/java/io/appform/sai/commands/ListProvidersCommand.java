@@ -43,18 +43,38 @@ import picocli.CommandLine.ParentCommand;
 @SuppressWarnings("java:S106")
 public class ListProvidersCommand implements Callable<Integer> {
 
+    private static final String COPILOT_PROVIDER = "copilot";
+
     @ParentCommand
     private SaiCommand parent;
+
+    private static Map<String, io.appform.sai.config.ModelEntry> mergeEntries(
+                                                                              Map<String, io.appform.sai.config.ModelEntry> providerModels,
+                                                                              Map<String, io.appform.sai.config.ModelEntry> commonModels) {
+        if (commonModels == null || commonModels.isEmpty()) {
+            return providerModels;
+        }
+        final var merged = new TreeMap<>(Objects.requireNonNullElse(
+                                                                    providerModels,
+                                                                    Map.<String, io.appform.sai.config.ModelEntry>of()));
+        commonModels.forEach(merged::putIfAbsent);
+        return merged;
+    }
 
     @Override
     public Integer call() {
         final var settings = SaiCommand.resolveSettings(parent);
         final var config = SettingsConfigLoader.load(settings.getConfigDir());
 
-        // copilot built-in — no extra models to enumerate unless configured
-        printModels("copilot",
-                    config.isEmpty() ? null
-                            : config.getProvider("copilot").map(e -> e.getModels()).orElse(null));
+        final var commonModels = config.getModels();
+
+        // copilot built-in — models from the provider entry plus common entries
+        // copilot built-in — models from the provider entry plus common entries
+        printModels(COPILOT_PROVIDER,
+                    config.isEmpty() ? null : mergeEntries(config.getProvider(COPILOT_PROVIDER)
+                            .map(e -> e.getModels())
+                            .orElse(null),
+                                                           commonModels));
 
         if (config.isEmpty()) {
             return 0;
@@ -65,10 +85,10 @@ public class ListProvidersCommand implements Callable<Integer> {
                                                          Map.<String, io.appform.sai.config.ProviderEntry>of());
 
         new TreeMap<>(providers).forEach((providerName, entry) -> {
-            if ("copilot".equalsIgnoreCase(providerName)) {
+            if (COPILOT_PROVIDER.equalsIgnoreCase(providerName)) {
                 return;
             }
-            printModels(providerName, entry.getModels());
+            printModels(providerName, mergeEntries(entry.getModels(), commonModels));
         });
 
         return 0;
