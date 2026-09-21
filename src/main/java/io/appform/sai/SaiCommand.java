@@ -51,6 +51,7 @@ import io.appform.sai.config.SettingsConfigLoader;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
 import io.appform.sai.tools.CoreToolBox;
+import io.appform.sai.transform.MdcSessionInterceptor;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
@@ -191,7 +192,7 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionIdProvided = !Strings.isNullOrEmpty(sessionId);
         final var effectiveSessionId = Objects.requireNonNullElseGet(sessionId,
                                                                      () -> UUID.randomUUID().toString());
-        MDC.put("sessionId", effectiveSessionId);
+        MDC.put(MdcSessionInterceptor.MDC_SESSION_ID_KEY, effectiveSessionId);
 
         final var mapper = JsonUtils.createMapper();
         final var executorService = new MdcPropagatingExecutorService(Executors.newCachedThreadPool());
@@ -422,7 +423,7 @@ public class SaiCommand implements Callable<Integer> {
             if (settings.isNoSession()) {
                 sessionStore.deleteSession(effectiveSessionId);
             }
-            MDC.remove("sessionId");
+            MDC.remove(MdcSessionInterceptor.MDC_SESSION_ID_KEY);
         }
         return 0;
     }

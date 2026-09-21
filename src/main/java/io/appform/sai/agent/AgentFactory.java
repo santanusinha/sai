@@ -41,6 +41,7 @@ import io.appform.sai.config.ProviderEntry;
 import io.appform.sai.config.SessionAffinityConfig;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
+import io.appform.sai.transform.MdcSessionInterceptor;
 import io.appform.sai.transform.RequestTransformInterceptor;
 import io.appform.sai.transform.SessionAffinityInterceptor;
 
@@ -240,6 +241,9 @@ public class AgentFactory {
         }
 
         var clientBuilder = httpClient.newBuilder();
+        // Stamp the session id onto OkHttp threads first so that all
+        // interceptor log lines route to the per-session log file.
+        clientBuilder = clientBuilder.addInterceptor(new MdcSessionInterceptor(settings.getSessionId()));
         if (hasRequestTransforms) {
             log.info("Applying {} request transform(s) for agent {}",
                      requestTransforms.size(),
