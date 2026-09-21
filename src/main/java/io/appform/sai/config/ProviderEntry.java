@@ -84,6 +84,14 @@ public class ProviderEntry {
     Map<String, String> extraHeaders;
 
     /**
+     * Opt-in session cache affinity settings — send the current session id to
+     * the provider as a cache-affinity signal (header and/or body field).
+     * Disabled unless configured.
+     */
+    @Nullable
+    SessionAffinityConfig sessionAffinity;
+
+    /**
      * Provider-level tuning defaults — apply to all models under this provider.
      */
     @Nullable

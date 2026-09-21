@@ -196,10 +196,13 @@ providers:
               temperature: 0.2
               toolChoice: AUTO
 
-  openrouter:
-    type: openai
-    endpoint: https://openrouter.ai/api/v1
-    apiKey: ${OPENROUTER_API_KEY}
+    openrouter:
+      type: openai
+      endpoint: https://openrouter.ai/api/v1
+      apiKey: ${OPENROUTER_API_KEY}
+      sessionAffinity:
+        header: x-session-id
+        bodyField: session_id
 
   azure:
     type: azure
@@ -210,7 +213,7 @@ providers:
 # copilot is NOT listed — it is always available as a built-in provider.
 ```
 
-See [Settings Configuration](docs/reference/settings.md) for the full format reference, including `${ENV}` interpolation, `provider/model[/mode]` string format, hierarchical tuning merge, and modes.
+See [Settings Configuration](docs/reference/settings.md) for the full format reference, including `${ENV}` interpolation, `provider/model[/mode]` string format, hierarchical tuning merge, modes, and opt-in session cache affinity (`sessionAffinity`).
 
 Provider-specific environment variables (fallback when no settings.yaml entry exists):
 **OpenAI**

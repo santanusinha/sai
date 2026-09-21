@@ -95,6 +95,17 @@ import picocli.CommandLine.Option;
         ListProvidersCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
+
+    /**
+     * User agent that identifies SAI to providers. Some providers ask clients
+     * to identify with their own agent name instead of a generic
+     * HTTP-library name.
+     */
+    private static final String USER_AGENT = "sai/"
+            + Objects.requireNonNullElse(
+                                         SaiCommand.class.getPackage().getImplementationVersion(),
+                                         "dev");
+
     @Option(names = {
             "-s", "--session"
     }, description = "Resume a specific session. Without a parameter, resumes the last session in the current directory.", arity = "0..1")
@@ -463,7 +474,11 @@ public class SaiCommand implements Callable<Integer> {
     }
 
     /**
-     * Builds the shared {@link OkHttpClient} with project-standard timeouts.
+     * Builds the shared {@link OkHttpClient} with project-standard timeouts and
+     * a {@code User-Agent} that identifies SAI to providers.
+     *
+     * <p>Some providers (for example OpenCode Go) ask clients to identify with
+     * their own user agent instead of a generic HTTP-library name.
      *
      * @return a configured {@code OkHttpClient}
      */
@@ -472,6 +487,10 @@ public class SaiCommand implements Callable<Integer> {
                 .readTimeout(Duration.ofSeconds(300))
                 .callTimeout(Duration.ofSeconds(300))
                 .connectTimeout(Duration.ofSeconds(10))
+                .addInterceptor(chain -> chain.proceed(
+                                                       chain.request().newBuilder()
+                                                               .header("User-Agent", USER_AGENT)
+                                                               .build()))
                 .build();
     }
 

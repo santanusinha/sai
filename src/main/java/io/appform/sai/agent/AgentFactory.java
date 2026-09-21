@@ -37,9 +37,12 @@ import io.appform.sai.ConfigurableProviderFactory;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
 import io.appform.sai.config.ModelTuning;
+import io.appform.sai.config.ProviderEntry;
+import io.appform.sai.config.SessionAffinityConfig;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
 import io.appform.sai.transform.RequestTransformInterceptor;
+import io.appform.sai.transform.SessionAffinityInterceptor;
 
 import java.nio.file.Paths;
 import java.util.List;
@@ -223,29 +226,54 @@ public class AgentFactory {
      */
     private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
                                                                 ModelTuning tuning) {
-        if (modelProviderFactory instanceof ConfigurableProviderFactory factory) {
-            log.trace("Using ConfigurableProviderFactory for agent {}: {}", config.getAgentId(), factory);
-        }
-        else {
-            log.warn("modelProviderFactory is not a ConfigurableProviderFactory; request transforms may not be applied");
+        if (!(modelProviderFactory instanceof ConfigurableProviderFactory factory)) {
+            log.warn("modelProviderFactory is not a ConfigurableProviderFactory; "
+                    + "request transforms and session affinity may not be applied");
             return modelProviderFactory;
         }
         final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
         final var hasRequestTransforms = requestTransforms != null && !requestTransforms.isEmpty();
+        final var sessionAffinity = sessionAffinityConfig(factory.getProvider());
 
-        if (!hasRequestTransforms) {
+        if (!hasRequestTransforms && !sessionAffinity.enabled()) {
             return modelProviderFactory;
         }
 
-        log.info("Applying {} request transform(s) for agent {}",
-                 requestTransforms.size(),
-                 config.getAgentId());
-        var clientBuilder = httpClient.newBuilder()
-                .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
+        var clientBuilder = httpClient.newBuilder();
+        if (hasRequestTransforms) {
+            log.info("Applying {} request transform(s) for agent {}",
+                     requestTransforms.size(),
+                     config.getAgentId());
+            clientBuilder = clientBuilder
+                    .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
+        }
+        if (sessionAffinity.enabled()) {
+            log.info("Enabling session affinity for provider {} (header: {}, bodyField: {})",
+                     factory.getProvider(),
+                     sessionAffinity.getHeader(),
+                     sessionAffinity.getBodyField());
+            clientBuilder = clientBuilder
+                    .addInterceptor(new SessionAffinityInterceptor(mapper,
+                                                                   sessionAffinity,
+                                                                   settings.getSessionId()));
+        }
 
         return new ConfigurableProviderFactory(factory.getProvider(),
                                                mapper,
                                                clientBuilder.build(),
                                                settingsConfig);
+    }
+
+    /**
+     * Resolves the opt-in session cache affinity config for a provider.
+     *
+     * @param provider the provider name
+     * @return the session affinity config, or a disabled config when not set
+     */
+    private SessionAffinityConfig sessionAffinityConfig(String provider) {
+        return settingsConfig.getProvider(provider)
+                .map(ProviderEntry::getSessionAffinity)
+                .filter(SessionAffinityConfig::enabled)
+                .orElseGet(() -> SessionAffinityConfig.builder().build());
     }
 }

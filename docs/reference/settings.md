@@ -128,15 +128,48 @@ providers:
 | `apiVersion` | String | Azure only | Azure API version (default: `2024-10-21`) |
 | `organizationId` | String | No | OpenAI organization ID |
 | `projectId` | String | No | OpenAI project ID |
-| `extraHeaders` | Map\<String, String\> | No | Extra HTTP headers injected into every request |
+| `extraHeaders` | Map\\<String, String\\> | No | Extra HTTP headers injected into every request |
+| `sessionAffinity` | SessionAffinity | No | Opt-in session cache affinity (see below) |
 | `tuning` | ModelTuning | No | Provider-level tuning defaults (apply to all models) |
-| `models` | Map\<String, ModelEntry\> | No | Models defined under this provider |
+| `models` | Map\\<String, ModelEntry\\> | No | Models defined under this provider |
 
-### Model Fields
+### Session Affinity Fields
+
+Opt-in. When set, SAI sends the current session id to the provider as a
+cache-affinity signal so provider-side prompt caches stay warm. Providers use
+different mechanisms, so both fields are configurable. Both are optional; set
+only the mechanism the provider supports.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `tuning` | ModelTuning | No | Model-level tuning (overrides provider defaults) |
+| `header` | String | No | HTTP header name that carries the session id (added to every request) |
+| `bodyField` | String | No | Top-level JSON body field injected into `/v1/chat/completions` requests |
+
+Common values:
+
+| Provider | `header` | `bodyField` |
+|----------|----------|-------------|
+| OpenRouter | `x-session-id` | `session_id` |
+| OpenAI API | — | `prompt_cache_key` |
+| Fireworks AI | `x-session-affinity` | — |
+| Anthropic-compatible gateways | `X-Session-Id` | — |
+
+```yaml
+providers:
+  openrouter:
+    type: openai
+    endpoint: https://openrouter.ai/api/v1
+    apiKey: ${OPENROUTER_API_KEY}
+    sessionAffinity:
+      header: x-session-id
+      bodyField: session_id
+  openai:
+    type: openai
+    endpoint: https://api.openai.com/v1
+    apiKey: ${OPENAI_API_KEY}
+    sessionAffinity:
+      bodyField: prompt_cache_key
+```
 | `defaultMode` | String | No | Default mode name (used when no mode is specified) |
 | `modes` | Map\<String, ModeEntry\> | No | Modes defined under this model |
 
