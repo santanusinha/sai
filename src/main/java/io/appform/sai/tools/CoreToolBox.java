@@ -36,11 +36,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
@@ -49,10 +46,6 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class CoreToolBox implements ToolBox {
-
-
-    private static final Pattern HUNK_PATTERN = Pattern.compile(
-                                                                "^@@\\s+-(\\d+)(?:,(\\d+))?\\s+\\+(\\d+)(?:,(\\d+))?\\s+@@");
 
     private final Printer printer;
 
@@ -415,82 +408,6 @@ public class CoreToolBox implements ToolBox {
         return FileIO.write(filePath, content, expectedChecksum);
     }
 
-    // Patch-based edit - kept for internal use but not exposed to LLM due to formatting issues
-    @SuppressWarnings("java:S3776")
-    private ToolIO.EditResponse edit(ToolIO.EditRequest request) {
-        log.info("Editing file: {}", request.getPath());
-        try {
-            final var path = Path.of(request.getPath());
-            if (!Files.exists(path)) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("File not found: " + request.getPath())
-                        .build();
-            }
-
-            final var content = Files.readString(path, StandardCharsets.UTF_8);
-            final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
-
-            if (!currentChecksum.equals(request.getExpectedChecksum())) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("Checksum mismatch. Expected: " + request.getExpectedChecksum()
-                                + ", Actual: " + currentChecksum)
-                        .build();
-            }
-
-            // Validate patch format before applying
-            final var validationError = validatePatchFormat(request.getPatchContent());
-            if (validationError.isPresent()) {
-                return ToolIO.EditResponse.builder()
-                        .success(false)
-                        .error("Invalid patch format: " + validationError.get())
-                        .build();
-            }
-
-            // Create temporary patch file
-            final var patchFile = Files.createTempFile("sai-patch-", ".diff");
-            Files.writeString(patchFile,
-                              request.getPatchContent(),
-                              StandardOpenOption.CREATE,
-                              StandardOpenOption.TRUNCATE_EXISTING);
-
-            try {
-                final var command = String.format("patch %s %s", path.toAbsolutePath(), patchFile.toAbsolutePath());
-                final var commandOutput = new BashCommandRunner(command, Duration.ofSeconds(30), line -> line).call();
-
-                if (commandOutput.getStatusCode() != 0) {
-                    return ToolIO.EditResponse.builder()
-                            .success(false)
-                            .error("Patch failed: " + commandOutput.getStderr() + "\nStdout: " + commandOutput
-                                    .getStdout())
-                            .build();
-                }
-
-                // Verify and return new checksum
-                final var newContent = Files.readString(path, StandardCharsets.UTF_8);
-                final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
-
-                return ToolIO.EditResponse.builder()
-                        .success(true)
-                        .newChecksum(newChecksum)
-                        .build();
-
-            }
-            finally {
-                Files.deleteIfExists(patchFile);
-            }
-
-        }
-        catch (Exception e) {
-            final var errorMessage = "Error editing file: " + AgentUtils.rootCause(e).getMessage();
-            log.error(errorMessage, e);
-            return ToolIO.EditResponse.builder()
-                    .success(false)
-                    .error(errorMessage)
-                    .build();
-        }
-    }
 
     private boolean isAllowed(ExecutableTool tool) {
         if (allowedTools.isEmpty()) {
@@ -499,92 +416,4 @@ public class CoreToolBox implements ToolBox {
         final var name = tool.getToolDefinition().getName().toLowerCase();
         return allowedTools.contains(name);
     }
-
-    /**
-     * Validates unified diff patch format.
-     * Returns an error message if validation fails, empty otherwise.
-     */
-    @SuppressWarnings("java:S3776")
-    private Optional<String> validatePatchFormat(String patchContent) {
-        if (patchContent == null || patchContent.isBlank()) {
-            return Optional.of("Patch content is empty");
-        }
-
-        final var lines = patchContent.split("\n", -1);
-        boolean hasHunkHeader = false;
-        int expectedOldLines = 0;
-        int expectedNewLines = 0;
-        int actualOldLines = 0;
-        int actualNewLines = 0;
-
-        for (int i = 0; i < lines.length; i++) {
-            final var line = lines[i];
-
-            // Skip file headers
-            if (line.startsWith("---") || line.startsWith("+++")) {
-                continue;
-            }
-
-            // Check for hunk header
-            final Matcher matcher = HUNK_PATTERN.matcher(line);
-            if (matcher.find()) {
-                // Verify previous hunk was complete
-                if (hasHunkHeader && (actualOldLines != expectedOldLines || actualNewLines != expectedNewLines)) {
-                    return Optional.of(String.format(
-                                                     "Hunk line count mismatch. Expected %d old/%d new lines, got %d old/%d new lines. "
-                                                             + "Make sure context lines start with a space character.",
-                                                     expectedOldLines,
-                                                     expectedNewLines,
-                                                     actualOldLines,
-                                                     actualNewLines));
-                }
-                hasHunkHeader = true;
-                expectedOldLines = matcher.group(2) != null ? Integer.parseInt(matcher.group(2)) : 1;
-                expectedNewLines = matcher.group(4) != null ? Integer.parseInt(matcher.group(4)) : 1;
-                actualOldLines = 0;
-                actualNewLines = 0;
-                continue;
-            }
-
-            if (hasHunkHeader) {
-                if (line.startsWith(" ")) {
-                    // Context line - counts for both old and new
-                    actualOldLines++;
-                    actualNewLines++;
-                }
-                else if (line.startsWith("-")) {
-                    actualOldLines++;
-                }
-                else if (line.startsWith("+")) {
-                    actualNewLines++;
-                }
-                else if (!line.isEmpty()) {
-                    // Line doesn't start with space, -, or + and is not empty
-                    return Optional.of(String.format(
-                                                     "Line %d in patch is malformed. Context lines MUST start with a space character, "
-                                                             + "removed lines with '-', added lines with '+'. Got: '%s'",
-                                                     i + 1,
-                                                     line.length() > 50 ? line.substring(0, 50) + "..." : line));
-                }
-            }
-        }
-
-        // Verify final hunk
-        if (hasHunkHeader && (actualOldLines != expectedOldLines || actualNewLines != expectedNewLines)) {
-            return Optional.of(String.format(
-                                             "Hunk line count mismatch. Expected %d old/%d new lines, got %d old/%d new lines. "
-                                                     + "Make sure context lines start with a space character.",
-                                             expectedOldLines,
-                                             expectedNewLines,
-                                             actualOldLines,
-                                             actualNewLines));
-        }
-
-        if (!hasHunkHeader) {
-            return Optional.of("No hunk header (@@ ... @@) found in patch");
-        }
-
-        return Optional.empty();
-    }
-
 }

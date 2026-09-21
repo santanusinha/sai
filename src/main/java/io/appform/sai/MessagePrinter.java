@@ -68,9 +68,6 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String READ_TOOL = "core_tool_box_read_file";
         public static final String WRITE_TOOL = "core_tool_box_write_file";
         public static final String FILE_EDIT_TOOL = "core_tool_box_edit_file";
-
-        //Unused
-        public static final String EDIT_TOOL = "core_tool_box_edit";
         public static final String LINE_EDIT_TOOL = "core_tool_box_line_edit";
         public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
     }
@@ -134,9 +131,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         }
                         case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
                         case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
-                        case KnownToolNames.EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
                         case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolResponse(toolCallResponse, messages);
-                        case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.LINE_EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
                                                                                                   messages);
                         case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
@@ -242,9 +238,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         }
                         case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                         case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
-                        case KnownToolNames.EDIT_TOOL -> printEditToolRequest(toolCall, messages);
                         case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolRequest(toolCall, messages);
-                        case KnownToolNames.LINE_EDIT_TOOL -> printLineEditToolRequest(toolCall, messages);
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
                         case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
                         case Agent.OUTPUT_GENERATOR_ID -> messages.add(Printer.debug(Actor.ASSISTANT,
@@ -458,17 +452,9 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         }
         if (response.isChanged()) {
             if (!Strings.isNullOrEmpty(content)) {
-                final var lines = content.split("\n", -1);
-                final String displayContent;
-                if (lines.length <= 8) {
-                    displayContent = content;
-                }
-                else {
-                    final var head = String.join("\n", Arrays.copyOfRange(lines, 0, 5));
-                    final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - 3, lines.length));
-                    displayContent = head + "\n...\n" + tail;
-                }
-                messages.add(Printer.raw(Printer.Colours.GRAY + displayContent + Printer.Colours.RESET));
+                messages.add(Printer.raw(Printer.Colours.GRAY + truncatePreview(content, 8, 5, 3)
+                        + Printer.Colours.RESET));
+                messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
                 messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
             }
         }
@@ -521,42 +507,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
     }
 
     @SneakyThrows
-    private void printEditToolRequest(ToolCall toolCall, ArrayList<Update> messages) {
-        final var node = mapper.readTree(toolCall.getArguments());
-        if (node.size() > 1) {
-            log.warn("Malformed request by LLM. Expected only one field in the arguments but found {}. Arguments: {}",
-                     node.size(),
-                     toolCall.getArguments());
-            return;
-        }
-        final var fieldName = node.fieldNames().next();
-        // there is only one paramter in this node which is the request.
-        final var request = mapper.treeToValue(node.get(fieldName), ToolIO.EditRequest.class);
-        log.info("Received edit tool call with arguments: {}. Request: {}",
-                 toolCall.getArguments(),
-                 request);
-        messages.add(Printer.assistantMessage(request.getRequestReason()));
-        messages.add(Printer.empty());
-        messages.add(Printer.raw(Printer.Colours.YELLOW + "Edit: " + Printer.Colours.WHITE
-                + request.getPath() + Printer.Colours.RESET));
-        messages.add(Printer.empty());
-        messages.add(Printer.raw(Printer.Colours.GRAY
-                + request.getPatchContent() + Printer.Colours.RESET));
-    }
-
-    @SneakyThrows
     private void printEditToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
         final var response = mapper.readValue(toolCallResponse.getResponse(),
-                                              ToolIO.EditResponse.class);
-        final var success = response.isSuccess();
-        final var error = response.getError();
-        if (success) {
-            messages.add(Printer.systemMessage("File edited successfully."));
-        }
-        else {
-            messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
-                    .withSeverity(Severity.ERROR));
-        }
+                                              ToolIO.LineEditResponse.class);
+        messages.add(Printer.systemMessage(response.isSuccess()
+                ? "File edited successfully."
+                : "Error editing file: %s".formatted(response.getError()))
+                .withSeverity(response.isSuccess() ? Severity.NORMAL : Severity.ERROR));
     }
 
     @SneakyThrows
@@ -590,19 +547,19 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         messages.add(Printer.raw(Printer.Colours.GRAY + symbol + Printer.Colours.RESET));
     }
 
-    @SneakyThrows
-    private void printLineEditToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
-        final var response = mapper.readValue(toolCallResponse.getResponse(),
-                                              ToolIO.LineEditResponse.class);
-        final var success = response.isSuccess();
-        final var error = response.getError();
-        if (success) {
-            messages.add(Printer.systemMessage("File edited successfully."));
+    /**
+     * Builds a compact head/tail preview of multi-line content. Content of up to
+     * {@code maxLines} lines is returned as-is; longer content keeps the first
+     * {@code headLines} and last {@code tailLines} lines joined by an ellipsis.
+     */
+    private static String truncatePreview(String content, int maxLines, int headLines, int tailLines) {
+        final var lines = content.split("\n", -1);
+        if (lines.length <= maxLines) {
+            return content;
         }
-        else {
-            messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))
-                    .withSeverity(Severity.ERROR));
-        }
+        final var head = String.join("\n", Arrays.copyOfRange(lines, 0, headLines));
+        final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - tailLines, lines.length));
+        return head + "\n...\n" + tail;
     }
 
     @SneakyThrows
@@ -618,17 +575,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 + node.get("filePath").asText() + Printer.Colours.RESET));
         messages.add(Printer.empty());
         final var content = node.get("content").asText();
-        final var lines = content.split("\n", -1);
-        final String displayContent;
-        if (lines.length <= 8) {
-            displayContent = content;
-        }
-        else {
-            final var head = String.join("\n", Arrays.copyOfRange(lines, 0, 5));
-            final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - 3, lines.length));
-            displayContent = head + "\n...\n" + tail;
-        }
-        messages.add(Printer.raw(Printer.Colours.GRAY + displayContent + Printer.Colours.RESET));
+        messages.add(Printer.raw(Printer.Colours.GRAY + truncatePreview(content, 8, 5, 3)
+                + Printer.Colours.RESET));
     }
 
     @SneakyThrows

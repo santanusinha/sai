@@ -42,33 +42,6 @@ public class ToolIO {
     }
 
     @Value
-    @JsonClassDescription("Input for the edit tool.")
-    @Builder
-    @Jacksonized
-    public static class EditRequest {
-        @JsonPropertyDescription("The absolute path to the file to edit.")
-        String path;
-        @JsonPropertyDescription("The patch content in unified diff format. CRITICAL: Every context line (unchanged lines) MUST start with a single space character. Lines starting with '-' are removed, lines starting with '+' are added. Example: ' unchanged line' (note the leading space), '-old line', '+new line'. The hunk header line counts must match actual lines.")
-        String patchContent;
-        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing.")
-        String expectedChecksum;
-        @JsonPropertyDescription("Reason for editing the file.")
-        String requestReason;
-    }
-
-    @Value
-    @Builder
-    @Jacksonized
-    public static class EditResponse {
-        @JsonPropertyDescription("Whether the edit was successful.")
-        boolean success;
-        @JsonPropertyDescription("The new SHA-256 checksum of the file after editing.")
-        String newChecksum;
-        @JsonPropertyDescription("Error message if any.")
-        String error;
-    }
-
-    @Value
     @Builder
     @Jacksonized
     @JsonClassDescription("""
@@ -123,19 +96,6 @@ public class ToolIO {
         String newChecksum;
         @JsonPropertyDescription("Error message if any.")
         String error;
-    }
-
-    @Value
-    @JsonClassDescription("Input for the read tool.")
-    @Builder
-    @Jacksonized
-    public static class ReadRequest {
-        @JsonPropertyDescription("The absolute path to the file to read.")
-        String path;
-        @JsonPropertyDescription("Reason for reading the file.")
-        String requestReason;
-        @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty")
-        String knownChecksum;
     }
 
     @Value
