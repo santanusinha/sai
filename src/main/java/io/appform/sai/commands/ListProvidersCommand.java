@@ -69,7 +69,6 @@ public class ListProvidersCommand implements Callable<Integer> {
         final var commonModels = config.getModels();
 
         // copilot built-in — models from the provider entry plus common entries
-        // copilot built-in — models from the provider entry plus common entries
         printModels(COPILOT_PROVIDER,
                     config.isEmpty() ? null : mergeEntries(config.getProvider(COPILOT_PROVIDER)
                             .map(e -> e.getModels())
