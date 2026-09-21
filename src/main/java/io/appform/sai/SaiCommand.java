@@ -287,7 +287,7 @@ public class SaiCommand implements Callable<Integer> {
 
         final var agent = agentFactory.createAgent(modelDetails.provider(),
                                                    modelDetails.modelName(),
-                                                   modelDetails.modelName(),
+                                                   modelDetails.mode(),
                                                    agentConfig);
         final var agentRef = new AtomicReference<>(agent);
 
