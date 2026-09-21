@@ -65,7 +65,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -177,10 +176,7 @@ public class SaiCommand implements Callable<Integer> {
         if (isSessionFlagPresent() && Strings.isNullOrEmpty(sessionId)) {
             final var tempSettings = resolveSettings(this);
             final var sessionDataPath = Paths.get(tempSettings.getDataDir(), "sessions");
-            final var resolvedSessionId = resolveLastSessionId(
-                                                               JsonUtils.createMapper(),
-                                                               sessionDataPath,
-                                                               tempSettings.getWorkDir());
+            final var resolvedSessionId = resolveLastSessionId(sessionDataPath, tempSettings.getWorkDir());
             if (resolvedSessionId == null) {
                 System.err.println("Error: No previous session found in the current directory."
                         + " Use 'sai list-sessions --all' to see available sessions.");
@@ -733,36 +729,49 @@ public class SaiCommand implements Callable<Integer> {
     /**
      * Resolves the most recently updated session for the given working directory.
      *
-     * @param mapper          the Jackson ObjectMapper to use for the session store
+     * <p>Reads only each session's {@code summary.json} directly instead of paging through the
+     * session store, so no message data is touched. Sessions whose summary is missing or unreadable
+     * are skipped.
+     *
      * @param sessionDataPath the path to the sessions data directory
      * @param workDir         the current working directory to filter sessions by
      * @return the session ID of the most recent session in this directory, or {@code null} if none exists
      */
-    private String resolveLastSessionId(final ObjectMapper mapper,
-                                        final Path sessionDataPath,
+    private String resolveLastSessionId(final Path sessionDataPath,
                                         final String workDir) {
-        if (!Files.exists(sessionDataPath)) {
+        if (!Files.isDirectory(sessionDataPath)) {
             return null;
         }
-        final var probeStore = FileSystemSessionStore.builder()
-                .baseDir(sessionDataPath.toString())
-                .mapper(mapper)
-                .cacheSize(1)
-                .build();
-        final var scrollable = probeStore.sessions(Integer.MAX_VALUE, null, QueryDirection.NEWER);
-        return scrollable.getItems()
-                .stream()
-                .filter(s -> {
-                    final var extra = s.getExtra();
-                    if (extra == null) {
-                        return false;
+        String bestSessionId = null;
+        long bestUpdatedAt = Long.MIN_VALUE;
+        try (final var sessionDirs = Files.list(sessionDataPath)) {
+            for (final var dir : sessionDirs.filter(Files::isDirectory).toList()) {
+                final var summaryFile = dir.resolve("summary.json");
+                if (!Files.isRegularFile(summaryFile)) {
+                    continue;
+                }
+                try {
+                    final var summary = JsonUtils.createMapper()
+                            .readValue(summaryFile.toFile(), SessionSummary.class);
+                    final var extra = summary.getExtra();
+                    final var workDirValue = extra == null ? null : extra.get("workDir");
+                    if (workDirValue == null || !workDir.equals(workDirValue.toString())) {
+                        continue;
                     }
-                    final var val = extra.get("workDir");
-                    return val != null && workDir.equals(val.toString());
-                })
-                .max(Comparator.comparingLong(SessionSummary::getUpdatedAt))
-                .map(SessionSummary::getSessionId)
-                .orElse(null);
+                    if (summary.getUpdatedAt() > bestUpdatedAt) {
+                        bestUpdatedAt = summary.getUpdatedAt();
+                        bestSessionId = summary.getSessionId();
+                    }
+                }
+                catch (IOException | IllegalArgumentException e) {
+                    log.warn("Skipping unreadable session summary: {}", summaryFile, e);
+                }
+            }
+        }
+        catch (IOException e) {
+            log.warn("Failed to list sessions under {}", sessionDataPath, e);
+        }
+        return bestSessionId;
     }
 
     @SneakyThrows
