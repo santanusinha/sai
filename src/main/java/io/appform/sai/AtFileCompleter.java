@@ -66,8 +66,12 @@ public class AtFileCompleter implements Completer {
 
         @Override
         public int wordCursor() {
+            // Shift the cursor by the number of stripped characters so that it stays
+            // within the stripped word. FileNameCompleter does word().substring(0, wordCursor())
+            // and throws when wordCursor exceeds the stripped word length.
+            final var stripLength = delegate.word().length() - strippedWord.length();
             final var originalCursor = delegate.wordCursor();
-            return originalCursor > 0 ? originalCursor - 1 : 0;
+            return originalCursor > stripLength ? originalCursor - stripLength : 0;
         }
 
         @Override
@@ -100,8 +104,12 @@ public class AtFileCompleter implements Completer {
         }
 
         if (mediaPrefix != null) {
-            // Strip @prefix: and complete the file path
-            final var pathFragment = word.substring(1 + mediaPrefix.length() + 1);
+            // Strip "@prefix:" and complete the file path. Guard against partial input like
+            // "@image" or "@image:" so substring stays in bounds while the user types.
+            final var prefixLength = 1 + mediaPrefix.length() + 1; // '@' + prefix + ':'
+            final var pathFragment = prefixLength <= word.length()
+                    ? word.substring(prefixLength)
+                    : "";
             final var strippedLine = new AtParsedLine(line, pathFragment);
             final var delegateCandidates = new ArrayList<Candidate>();
             delegate.complete(reader, strippedLine, delegateCandidates);
@@ -134,6 +142,7 @@ public class AtFileCompleter implements Completer {
                 ));
             }
         }
+
 
         final var pathFragment = word.substring(1);
         final var strippedLine = new AtParsedLine(line, pathFragment);
