@@ -17,25 +17,31 @@ package io.appform.sai;
 
 import org.jline.terminal.Terminal.Signal;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Monitors for Ctrl-C (SIGINT) and Ctrl-Z (SIGTSTP) during agent execution.
+ * Single owner of SIGINT/SIGCONT behaviour outside the input prompt.
  *
- * <p>Ctrl-C cancels any in-flight agent task. Ctrl-Z cancels the task and then
- * re-raises SIGTSTP so the shell can background the process; on resume (SIGCONT)
- * the terminal is refreshed back to idle.
+ * <p>While an agent run is in flight, Ctrl-C cancels the run. While the REPL
+ * is idle (waiting at the prompt), the JLine {@code LineReader} owns SIGINT
+ * and raises {@code UserInterruptException}, which the REPL loop treats as an
+ * exit request. This monitor registers its INT handler only while a run is
+ * active, so the two paths never race.
+ *
+ * <p>On SIGCONT (resume after Ctrl-Z) the terminal is refreshed back to idle.
  */
 @Slf4j
 public class InterruptMonitor implements AutoCloseable {
     private final CommandProcessor commandProcessor;
     private final Printer printer;
+    @Getter
+    private volatile boolean runInFlight;
 
     public InterruptMonitor(CommandProcessor commandProcessor, Printer printer) {
         this.commandProcessor = commandProcessor;
-        this.printer = printer
-                .registerSignalHandler(Signal.INT, this::handleCtrlC)
-                .registerSignalHandler(Signal.CONT, this::handleCont);
+        this.printer = printer;
+        printer.registerSignalHandler(Signal.CONT, this::handleCont);
         log.info("Interrupt monitor initialized");
     }
 
@@ -43,6 +49,27 @@ public class InterruptMonitor implements AutoCloseable {
     public void close() {
         printer.unregisterSignalHandler(Signal.INT);
         printer.unregisterSignalHandler(Signal.CONT);
+    }
+
+    /**
+     * Unregisters the INT handler after a run completes so Ctrl-C at the
+     * prompt falls back to the JLine {@code UserInterruptException} path.
+     */
+    public void runFinished() {
+        printer.unregisterSignalHandler(Signal.INT);
+        runInFlight = false;
+    }
+
+    /**
+     * Registers the INT handler for the duration of one agent run.
+     *
+     * <p>Call before the run starts and pair with {@link #runFinished()} in a
+     * {@code finally} block. While the handler is registered, Ctrl-C cancels
+     * the in-flight run instead of exiting.
+     */
+    public void runStarted() {
+        runInFlight = true;
+        printer.registerSignalHandler(Signal.INT, this::handleCtrlC);
     }
 
     private void handleCont(Signal signal) {

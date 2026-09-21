@@ -28,7 +28,6 @@ import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionExtraDataOperator;
 import com.phonepe.sentinelai.session.SessionSummary;
 
-import io.appform.sai.CommandProcessor.CommandType;
 import io.appform.sai.CommandProcessor.InputCommand;
 import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
@@ -382,15 +381,15 @@ public class SaiCommand implements Callable<Integer> {
                         }
                         final var parsedInput = MediaParser.parse(userInput);
                         final var resolvedInput = resolveInput(parsedInput.getTextPrompt());
-                        final var command = CommandProcessor.Command.builder()
-                                .command(CommandType.INPUT)
-                                .input(new InputCommand("run-" + UUID.randomUUID()
-                                        .toString(), resolvedInput, parsedInput.getMedia()))
-                                .build();
+                        final var inputCommand = new InputCommand("run-" + UUID.randomUUID().toString(),
+                                                                  resolvedInput,
+                                                                  parsedInput.getMedia());
                         try {
-                            commandProcessor.handle(command);
+                            interruptMonitor.runStarted();
+                            commandProcessor.handleInput(inputCommand);
                         }
                         finally {
+                            interruptMonitor.runFinished();
                             userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                         }
                     }
@@ -466,9 +465,9 @@ public class SaiCommand implements Callable<Integer> {
                 .sessionId(currentSettings.getSessionId())
                 .agent(saiAgent)
                 .printer(printer)
-                .build()
-                .start();
+                .build();
     }
+
 
     /**
      * Builds the shared {@link OkHttpClient} with project-standard timeouts and

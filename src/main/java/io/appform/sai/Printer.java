@@ -38,10 +38,10 @@ import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -107,9 +107,7 @@ public class Printer implements AutoCloseable {
     @Getter
     private final LineReader lineReader;
 
-
     private final LinkedBlockingQueue<List<Update>> printingQueue = new LinkedBlockingQueue<>();
-    private final Map<Signal, Consumer<Signal>> signalHandlers = new ConcurrentHashMap<>();
     private final AtomicReference<String> contextInfo = new AtomicReference<>("");
     private Future<?> printerTask = null;
 
@@ -176,13 +174,11 @@ public class Printer implements AutoCloseable {
     }
 
     public Printer registerSignalHandler(Signal signal, Consumer<Signal> handler) {
-        signalHandlers.put(signal, handler);
         terminal.handle(signal, handler::accept);
         return this;
     }
 
     public Printer unregisterSignalHandler(Signal signal) {
-        signalHandlers.remove(signal);
         terminal.handle(signal, Terminal.SignalHandler.SIG_DFL);
         return this;
     }
@@ -373,7 +369,20 @@ public class Printer implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        // Drain any queued output before stopping the printer thread so the
+        // final messages of a session are not lost. Bounded so a stuck
+        // terminal cannot hang shutdown.
         if (null != printerTask) {
+            final var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (!printingQueue.isEmpty() && System.nanoTime() < deadline) {
+                try {
+                    Thread.sleep(10);
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
             printerTask.cancel(true);
         }
         if (!settings.isHeadless()) {
@@ -381,11 +390,6 @@ public class Printer implements AutoCloseable {
             terminal.close();
         }
         log.info("Printer closed");
-    }
-
-    @SneakyThrows
-    private static Terminal createTerminal() {
-        return TerminalBuilder.builder().system(true).build();
     }
 
     private static String defaultColour(final Severity severity) {
