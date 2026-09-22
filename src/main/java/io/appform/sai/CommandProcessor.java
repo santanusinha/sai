@@ -52,7 +52,7 @@ public class CommandProcessor implements AutoCloseable {
 
     private final String sessionId;
 
-    private final SaiAgent agent;
+    private final AtomicReference<SaiAgent> agent;
     private final Printer printer;
 
     private final AtomicReference<Future<?>> runningTask = new AtomicReference<>();
@@ -65,7 +65,7 @@ public class CommandProcessor implements AutoCloseable {
                             @NonNull final SaiAgent agent,
                             @NonNull final Printer printer) {
         this.sessionId = sessionId;
-        this.agent = agent;
+        this.agent = new AtomicReference<>(agent);
         this.printer = printer;
     }
 
@@ -122,18 +122,18 @@ public class CommandProcessor implements AutoCloseable {
                                       Printer.Colours.CYAN + "\u23F3 " + Printer.Colours.GRAY + "Processing "
                                               + Printer.Colours.WHITE + input.runId()
                                               + Printer.Colours.GRAY + "\u2026" + Printer.Colours.RESET));
-            final var responseF = agent.executeAsyncTextStreaming(
-                                                                  AgentInput.<String>builder()
-                                                                          .requestMetadata(AgentRequestMetadata
-                                                                                  .builder()
-                                                                                  .sessionId(sessionId)
-                                                                                  .runId(input.runId())
-                                                                                  .userId(user)
-                                                                                  .build())
-                                                                          .request(prompt)
-                                                                          .media(media)
-                                                                          .build(),
-                                                                  streamHandler);
+            final var responseF = agent.get().executeAsyncTextStreaming(
+                                                                        AgentInput.<String>builder()
+                                                                                .requestMetadata(AgentRequestMetadata
+                                                                                        .builder()
+                                                                                        .sessionId(sessionId)
+                                                                                        .runId(input.runId())
+                                                                                        .userId(user)
+                                                                                        .build())
+                                                                                .request(prompt)
+                                                                                .media(media)
+                                                                                .build(),
+                                                                        streamHandler);
             // Register the future before blocking so a Ctrl-C that arrives
             // between submission and get() still finds something to cancel.
             runningTask.set(responseF);
@@ -190,6 +190,18 @@ public class CommandProcessor implements AutoCloseable {
         messages.add(Printer.markIdleStatus());
         messages.add(Printer.empty());
         printer.print(messages);
+    }
+
+    /**
+     * Points this processor at a rebuilt agent so one processor instance serves
+     * the whole session. The interrupt monitor holds this processor, so a swap
+     * here keeps Ctrl-C cancellation working after a {@code /model} or
+     * {@code /persona} rebuild.
+     *
+     * @param agent the new active agent
+     */
+    public void setAgent(@NonNull final SaiAgent agent) {
+        this.agent.set(agent);
     }
 
 }

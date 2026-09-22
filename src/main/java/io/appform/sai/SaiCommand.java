@@ -15,70 +15,37 @@
  */
 package io.appform.sai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.utils.JsonUtils;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
-import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
-import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionExtraDataOperator;
 import com.phonepe.sentinelai.session.SessionSummary;
 
-import io.appform.sai.CommandProcessor.InputCommand;
-import io.appform.sai.Printer.Update;
 import io.appform.sai.agent.AgentFactory;
-import io.appform.sai.cli.CliCommandRegistry;
-import io.appform.sai.cli.handlers.ShellCommandHandler;
-import io.appform.sai.cli.handlers.SlashCommandHandler;
-import io.appform.sai.cli.slash.SlashCommandContext;
-import io.appform.sai.cli.slash.SlashCommandDispatcher;
 import io.appform.sai.commands.CopilotCommand;
 import io.appform.sai.commands.DeleteSessionsCommand;
 import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListProvidersCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
-import io.appform.sai.config.AgentConfigLoader;
-import io.appform.sai.config.ModelEntry;
-import io.appform.sai.config.ProviderEntry;
-import io.appform.sai.config.SettingsConfig;
-import io.appform.sai.config.SettingsConfigLoader;
-import io.appform.sai.models.Actor;
-import io.appform.sai.models.Severity;
-import io.appform.sai.tools.CoreToolBox;
 import io.appform.sai.transform.MdcSessionInterceptor;
 
-import org.jline.reader.EndOfFileException;
-import org.jline.reader.UserInterruptException;
 import org.slf4j.MDC;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import lombok.Getter;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.OkHttpClient;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -94,16 +61,6 @@ import picocli.CommandLine.Option;
         ListProvidersCommand.class
 })
 public class SaiCommand implements Callable<Integer> {
-
-    /**
-     * User agent that identifies SAI to providers. Some providers ask clients
-     * to identify with their own agent name instead of a generic
-     * HTTP-library name.
-     */
-    private static final String USER_AGENT = "sai/"
-            + Objects.requireNonNullElse(
-                                         SaiCommand.class.getPackage().getImplementationVersion(),
-                                         "dev");
 
     @Option(names = {
             "-s", "--session"
@@ -175,7 +132,8 @@ public class SaiCommand implements Callable<Integer> {
         if (isSessionFlagPresent() && Strings.isNullOrEmpty(sessionId)) {
             final var tempSettings = resolveSettings(this);
             final var sessionDataPath = Paths.get(tempSettings.getDataDir(), "sessions");
-            final var resolvedSessionId = resolveLastSessionId(sessionDataPath, tempSettings.getWorkDir());
+            final var resolvedSessionId = SessionResolver.resolveLastSessionId(sessionDataPath,
+                                                                               tempSettings.getWorkDir());
             if (resolvedSessionId == null) {
                 System.err.println("Error: No previous session found in the current directory."
                         + " Use 'sai list-sessions --all' to see available sessions.");
@@ -193,37 +151,49 @@ public class SaiCommand implements Callable<Integer> {
         final var executorService = new MdcPropagatingExecutorService(Executors.newCachedThreadPool());
         final var eventBus = new EventBus(executorService);
 
-        final var pipedInput = readPipedInput();
+        final var pipedInput = InputResolver.readPipedInput(input, headless);
         // Resolve the effective input: explicit --input flag takes priority, then piped stdin.
         // Note: raw input is passed as-is; media parsing (@image:, @audio:) and text
-        // resolution (@file refs) are handled in the input loop via MediaParser + resolveInput.
+        // resolution (@file refs) are handled in the input loop via MediaParser + InputResolver.
         final var effectiveInput = !Strings.isNullOrEmpty(input)
                 ? input
                 : !Strings.isNullOrEmpty(pipedInput)
                         ? pipedInput
                 : null;
 
-        final var settings = buildSettings(effectiveSessionId, effectiveInput);
+        final var settings = AgentRuntimeBuilder.buildSettings(dataDir,
+                                                               configDir,
+                                                               debug,
+                                                               headless,
+                                                               effectiveSessionId,
+                                                               effectiveInput);
 
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
         Files.createDirectories(Paths.get("/tmp", "sai", effectiveSessionId, "scratch"));
 
-        // On resume: restore model, mode, and persona from the saved session extra data.
+        // On resume: restore model and persona from the saved session extra data.
         // CLI flags (--model / --persona) always take priority over saved values.
         if (sessionIdProvided) {
-            populateDataFromSession(effectiveSessionId,
-                                    mapper,
-                                    sessionDataPath,
-                                    settings);
+            final var restored = SessionResolver.populateDataFromSession(effectiveSessionId,
+                                                                         sessionDataPath,
+                                                                         settings,
+                                                                         model,
+                                                                         persona);
+            if (restored.hasModel()) {
+                model = restored.getModel();
+            }
+            if (restored.hasPersona()) {
+                persona = restored.getPersona();
+            }
         }
 
-        final var settingsConfig = loadSettings(settings.getConfigDir(), mapper);
+        final var settingsConfig = AgentRuntimeBuilder.loadSettings(settings.getConfigDir(), mapper);
 
         AgentConfig agentConfig;
         try {
-            agentConfig = resolveAgentConfig(persona, settings.getConfigDir(), mapper);
+            agentConfig = AgentRuntimeBuilder.resolveAgentConfig(persona, settings.getConfigDir(), mapper);
         }
         catch (Exception e) {
             log.error("Error loading persona: {}", persona, e);
@@ -234,9 +204,9 @@ public class SaiCommand implements Callable<Integer> {
         final var modelPointer = Strings.isNullOrEmpty(model)
                 ? agentConfig.getModel()
                 : model;
-        final var modelDetails = resolveModelFactory(modelPointer,
-                                                     mapper,
-                                                     settingsConfig);
+        final var modelDetails = AgentRuntimeBuilder.resolveModelFactory(modelPointer,
+                                                                         mapper,
+                                                                         settingsConfig);
         log.info("Settings path: {}, data path: {}, persona: {}, model: {}, mode: {}",
                  settings.getConfigDir(),
                  settings.getDataDir(),
@@ -270,7 +240,9 @@ public class SaiCommand implements Callable<Integer> {
                 .sessionStore(sessionStore)
                 .mapper(mapper)
                 .build();
-        final var agentSkillsExtension = buildAgentSkillsExtension(settings, agentConfig);
+        final var agentSkillsExtension = AgentRuntimeBuilder.buildAgentSkillsExtension(settings,
+                                                                                       agentConfig,
+                                                                                       skill);
         final var agentFactory = new AgentFactory(settings,
                                                   List.of(sessionExtension, agentSkillsExtension),
                                                   executorService,
@@ -280,128 +252,22 @@ public class SaiCommand implements Callable<Integer> {
                                                   modelDetails.httpClient(),
                                                   settingsConfig);
 
-        final var agent = agentFactory.createAgent(modelDetails.provider(),
-                                                   modelDetails.modelName(),
-                                                   modelDetails.mode(),
-                                                   agentConfig);
-        final var agentRef = new AtomicReference<>(agent);
-
-        try (final var printer = Printer.builder()
-                .settings(settings)
-                .executorService(executorService)
-                .build()
-                .start()) {
-            // Setup rest of the connections
-            agent.registerToolbox(new CoreToolBox(printer, agentConfig.getTools()));
-            printer.updateContextInfo(agentConfig.getName(), modelPointer);
-            final var eventPrinter = new EventPrinter(printer, mapper);
-            eventBus.onEvent().connect(event -> {
-                final var eventSessionId = event.getSessionId();
-                // There might be events for other LLM events like for example compaction,
-                // memory extraction etc, so we filter based on session id to avoid printing irrelevant events
-                if (!Strings.isNullOrEmpty(eventSessionId) && effectiveSessionId.equals(eventSessionId)) {
-                    event.accept(eventPrinter);
-                }
-            });
-
-            final var slashContext = SlashCommandContext.builder()
-                    .currentModel(new AtomicReference<>(modelPointer))
-                    .currentMode(new AtomicReference<>(modelDetails.mode()))
-                    .currentAgentConfig(new AtomicReference<>(agentConfig))
-                    .currentAgent(agentRef)
-                    .agentFactory(agentFactory)
-                    .printer(printer)
-                    .settings(settings)
-                    .mapper(mapper)
-                    .agentSkillsExtension(agentSkillsExtension)
-                    .sessionExtension(sessionExtension)
-                    .build();
-            slashContext.setOnAgentRebuilt(newAgent -> {
-                newAgent.registerToolbox(new CoreToolBox(printer,
-                                                         slashContext.getCurrentAgentConfig().get().getTools()));
-                printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
-                                          slashContext.getCurrentModel().get());
-            });
-
-            var commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
-            final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
-            try {
-                if (!settings.isHeadless()) {
-                    printer.print(Update.builder()
-                            .actor(Actor.SYSTEM)
-                            .severity(Severity.INFO)
-                            .colour(Printer.Colours.BOLD_YELLOW)
-                            .data("Welcome to SAI! Session ID: [%s] Type 'exit' to quit...."
-                                    .formatted(effectiveSessionId))
-                            .build());
-                    printStartupBanner(agent, agentSkillsExtension, printer);
-                }
-                if (sessionIdProvided) {
-                    if (!settings.isHeadless()) {
-                        printer.print(Update.builder()
-                                .actor(Actor.SYSTEM)
-                                .severity(Severity.INFO)
-                                .colour(Printer.Colours.BOLD_YELLOW)
-                                .data("Resumed with \u2014 model: %s, persona: %s"
-                                        .formatted(modelPointer,
-                                                   Strings.isNullOrEmpty(persona) ? "(default)" : persona))
-                                .build());
-                    }
-                    final var response = sessionStore.readMessages(effectiveSessionId,
-                                                                   Integer.MAX_VALUE,
-                                                                   true,
-                                                                   null,
-                                                                   QueryDirection.OLDER);
-                    final var messagePrinter = new MessagePrinter(printer, mapper, true);
-                    response.getItems().forEach(message -> {
-                        final var updates = message.accept(messagePrinter);
-                        printer.print(updates);
-                    });
-                }
-
-                var userInput = effectiveInput;
-                final var dispatcher = new SlashCommandDispatcher(slashContext);
-                final var cliCommandRegistry = new CliCommandRegistry(List.of(new ShellCommandHandler(),
-                                                                              new SlashCommandHandler(dispatcher)));
-                printer.addCompleter(new SlashCommandCompleter(dispatcher.getCommandLine()));
-                while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
-                    if (Strings.isNullOrEmpty(userInput)) {
-                        userInput = readInput(printer).orElse("exit");
-                    }
-                    else {
-                        // Check for client-side CLI commands (e.g. ! for shell, / for slash) before forwarding to agent
-                        if (cliCommandRegistry.tryHandle(userInput, printer)) {
-                            if (slashContext.isAgentChanged()) {
-                                commandProcessor.close();
-                                commandProcessor = buildCommandProcessor(agentRef.get(), settings, printer);
-                                slashContext.resetAgentChanged();
-                            }
-                            userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
-                            continue;
-                        }
-                        final var parsedInput = MediaParser.parse(userInput);
-                        final var resolvedInput = resolveInput(parsedInput.getTextPrompt());
-                        final var inputCommand = new InputCommand("run-" + UUID.randomUUID().toString(),
-                                                                  resolvedInput,
-                                                                  parsedInput.getMedia());
-                        try {
-                            interruptMonitor.runStarted();
-                            commandProcessor.handleInput(inputCommand);
-                        }
-                        finally {
-                            interruptMonitor.runFinished();
-                            userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
-                        }
-                    }
-                }
-                if (!settings.isHeadless() && !Strings.isNullOrEmpty(userInput) && userInput.equalsIgnoreCase("exit")) {
-                    printer.print(Printer.systemMessage("Resume: -s %s".formatted(effectiveSessionId)));
-                }
-            }
-            finally {
-                interruptMonitor.close();
-                commandProcessor.close();
-            }
+        try {
+            new ReplRunner(new ReplRunner.Runtime(settings,
+                                                  mapper,
+                                                  eventBus,
+                                                  executorService,
+                                                  sessionStore,
+                                                  sessionExtension,
+                                                  agentSkillsExtension,
+                                                  agentFactory,
+                                                  modelDetails,
+                                                  agentConfig,
+                                                  effectiveSessionId,
+                                                  effectiveInput,
+                                                  modelPointer,
+                                                  persona,
+                                                  sessionIdProvided)).run();
         }
         catch (Exception e) {
             log.error("Error processing input", e);
@@ -423,110 +289,6 @@ public class SaiCommand implements Callable<Integer> {
         return 0;
     }
 
-    private record ResolvedModelDetails(
-            String provider,
-            String modelName,
-            String mode,
-            OkHttpClient httpClient,
-            ChatCompletionServiceFactory factory
-    ) {
-    }
-
-    @SneakyThrows
-    private AgentSkillsExtension<String, String, SaiAgent> buildAgentSkillsExtension(final Settings settings,
-                                                                                     AgentConfig agentConfig) {
-        if (!Strings.isNullOrEmpty(skill)) {
-            //Single skill specified. pass ojnly this ane remove other stuff
-            return AgentSkillsExtension.<String, String, SaiAgent>withSingleSkill()
-                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
-                    .singleSkill(skill)
-                    .build();
-        }
-        else {
-            var skillDirs = agentConfig.getSkillDirectories();
-            if (skillDirs == null || skillDirs.isEmpty()) {
-                final var path = Paths.get(settings.getConfigDir(), "skills");
-                Files.createDirectories(path);
-                skillDirs = List.of(path.toString());
-            }
-            var skillNames = Objects.requireNonNullElseGet(agentConfig.getSkillNames(), List::<String>of);
-            return AgentSkillsExtension.<String, String, SaiAgent>withMultipleSkills()
-                    .baseDir(Paths.get(settings.getConfigDir(), "skills").toString())
-                    .skillsDirectories(skillDirs)
-                    .skillsToLoad(skillNames)
-                    .build();
-        }
-
-
-    }
-
-    private CommandProcessor buildCommandProcessor(SaiAgent saiAgent, Settings currentSettings, Printer printer) {
-        return CommandProcessor.builder()
-                .sessionId(currentSettings.getSessionId())
-                .agent(saiAgent)
-                .printer(printer)
-                .build();
-    }
-
-
-    /**
-     * Builds the shared {@link OkHttpClient} with project-standard timeouts and
-     * a {@code User-Agent} that identifies SAI to providers.
-     *
-     * <p>Some providers (for example OpenCode Go) ask clients to identify with
-     * their own user agent instead of a generic HTTP-library name.
-     *
-     * @return a configured {@code OkHttpClient}
-     */
-    private OkHttpClient buildOkHttpClient() {
-        return new OkHttpClient.Builder()
-                .readTimeout(Duration.ofSeconds(300))
-                .callTimeout(Duration.ofSeconds(300))
-                .connectTimeout(Duration.ofSeconds(10))
-                .addInterceptor(chain -> chain.proceed(
-                                                       chain.request().newBuilder()
-                                                               .header("User-Agent", USER_AGENT)
-                                                               .build()))
-                .build();
-    }
-
-    /**
-     * Constructs the {@link Settings} object for this invocation, applying CLI overrides and
-     * routing to a temporary data directory when a one-shot {@code effectiveInput} is provided.
-     *
-     * @param effectiveSessionId the resolved session ID to embed in settings
-     * @param effectiveInput     the resolved input string (may be {@code null} for interactive mode)
-     * @return a fully-built {@code Settings} instance
-     * @throws java.io.IOException if a temporary data directory cannot be created
-     */
-    @SneakyThrows
-    private Settings buildSettings(String effectiveSessionId, String effectiveInput) {
-        final var settingsBuilder = Settings.builder()
-                .sessionId(effectiveSessionId)
-                .debug(debug)
-                .headless(headless || !Strings.isNullOrEmpty(effectiveInput))
-                .noSession(!Strings.isNullOrEmpty(effectiveInput));
-        if (!Strings.isNullOrEmpty(configDir)) {
-            settingsBuilder.configDir(configDir);
-        }
-        if (Strings.isNullOrEmpty(effectiveInput)) {
-            if (!Strings.isNullOrEmpty(dataDir)) {
-                settingsBuilder.dataDir(dataDir);
-            }
-        }
-        else {
-            // If input is provided (via --input or piped stdin), we don't care about session persistence,
-            // so we can skip setting up data dir. However we do care about compaction etc so we provide
-            // the session extension a temporary directory
-            final var tempDataDir = Files.createTempDirectory("sai-data-")
-                    .toAbsolutePath()
-                    .normalize()
-                    .toString();
-            settingsBuilder.dataDir(tempDataDir);
-        }
-        return settingsBuilder.build();
-    }
-
     /**
      * Returns {@code true} when the {@code -s}/{@code --session} flag was present on the
      * command line, even if no parameter value was supplied.
@@ -535,275 +297,5 @@ public class SaiCommand implements Callable<Integer> {
      */
     private boolean isSessionFlagPresent() {
         return sessionId != null;
-    }
-
-    private SettingsConfig loadSettings(final String configDir,
-                                        final ObjectMapper mapper) {
-        final var settingsConfig = SettingsConfigLoader.load(configDir);
-        if (log.isDebugEnabled()) {
-            try {
-                log.debug("Loaded settings config: {}",
-                          mapper.writerWithDefaultPrettyPrinter()
-                                  .writeValueAsString(settingsConfig));
-            }
-            catch (Exception e) {
-                log.warn("Failed to pretty-print settings config: {}. Settings: {}", e.getMessage(), settingsConfig);
-            }
-        }
-        else {
-            log.info("Loaded settings config with {} providers", settingsConfig.getProviders().size());
-        }
-        return settingsConfig;
-    }
-
-    private void populateDataFromSession(final String sessionId,
-                                         final ObjectMapper mapper,
-                                         final Path sessionDataPath,
-                                         final Settings settings) {
-        final var probeStore = FileSystemSessionStore.builder()
-                .baseDir(sessionDataPath.toString())
-                .mapper(mapper)
-                .cacheSize(1)
-                .build(); // no extraDataOperator — read-only probe
-        final var existingSession = probeStore.session(sessionId)
-                .orElse(null);
-        if (existingSession == null) {
-            log.warn("No existing session found for session ID: {}", sessionId);
-            return;
-        }
-        final var savedExtra = existingSession.getExtra();
-        if (savedExtra == null) {
-            return; // older session with no extra data — backwards compat
-        }
-        // Restore model only when --model was not supplied on the CLI
-        if (Strings.isNullOrEmpty(model)) {
-            final var savedModel = (String) savedExtra.get("model");
-            if (!Strings.isNullOrEmpty(savedModel)) {
-                model = savedModel;
-            }
-        }
-        // Restore persona only when --persona was not supplied on the CLI,
-        // and only if the persona file is still resolvable/readable.
-        if (Strings.isNullOrEmpty(persona)) {
-            final var savedPersona = (String) savedExtra.get("persona");
-            if (!Strings.isNullOrEmpty(savedPersona)) {
-                try {
-                    AgentConfigLoader.resolvePersonaPath(savedPersona, settings.getConfigDir());
-                    persona = savedPersona; // file still exists → restore
-                }
-                catch (Exception e) {
-                    log.warn("Saved persona '{}' is no longer accessible, using default: {}",
-                             savedPersona,
-                             e.getMessage());
-                    // persona stays null → resolveAgentConfig falls back to built-in default
-                }
-            }
-        }
-
-    }
-
-    /**
-     * Prints a compact startup banner listing tool and skill names as aligned columns.
-     * Shown on both new sessions and resumed sessions (when not in headless mode).
-     */
-    private void printStartupBanner(final SaiAgent agent,
-                                    final AgentSkillsExtension<String, String, SaiAgent> skillsExtension,
-                                    final Printer printer) {
-        final var C = Printer.Colours.CYAN;
-        final var G = Printer.Colours.GRAY;
-        final var W = Printer.Colours.WHITE;
-        final var R = Printer.Colours.RESET;
-
-        final var toolNames = agent.tools().values().stream()
-                .map(t -> t.getToolDefinition().getName())
-                .sorted()
-                .toList();
-
-        final var skillNames = new java.util.ArrayList<String>();
-        if (skillsExtension != null) {
-            final var catalog = skillsExtension.listSkills();
-            if (!Strings.isNullOrEmpty(catalog) && !catalog.startsWith("No skills")) {
-                catalog.lines()
-                        .filter(l -> l.startsWith("- **"))
-                        .map(l -> l.replaceFirst("^- \\*\\*(.+?)\\*\\*.*", "$1"))
-                        .sorted()
-                        .forEach(skillNames::add);
-            }
-        }
-
-        // Render two aligned columns: tools on the left, skills on the right
-        final var sb = new StringBuilder("\n");
-        final int rows = Math.max(toolNames.size(), skillNames.size());
-        final int colWidth = toolNames.stream().mapToInt(String::length).max().orElse(0) + 4;
-
-        final var toolHeader = "\uD83D\uDEE0  Tools";
-        final var skillHeader = skillNames.isEmpty() ? "" : "\uD83C\uDFA8  Skills";
-        // header — emoji adds 1 extra visual char, compensate with -1 padding
-        sb.append(C).append(toolHeader).append(R);
-        if (!skillHeader.isEmpty()) {
-            // pad to column width (emoji counts as 1 char in length but 2 visually, so -1)
-            final int pad = colWidth - toolHeader.length() + 1;
-            sb.append(" ".repeat(Math.max(1, pad))).append(C).append(skillHeader).append(R);
-        }
-        sb.append("\n");
-
-        for (int i = 0; i < rows; i++) {
-            final var tool = i < toolNames.size() ? "  \u2022 " + toolNames.get(i) : "";
-            final var skil = i < skillNames.size() ? "  \u2022 " + skillNames.get(i) : "";
-            sb.append(G).append(tool).append(R);
-            if (!skil.isEmpty()) {
-                final int pad = colWidth - tool.length();
-                sb.append(" ".repeat(Math.max(1, pad))).append(G).append(skil).append(R);
-            }
-            sb.append("\n");
-        }
-        sb.append("\n");
-        printer.print(Printer.raw(sb.toString()));
-    }
-
-    private Optional<String> readInput(final Printer printer) {
-        try {
-            printer.getTerminal().writer().print("\007");
-            printer.getTerminal().writer().flush();
-            return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
-        }
-        catch (EndOfFileException | UserInterruptException e) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Reads all of {@code System.in} when stdin is piped (non-interactive, no explicit
-     * {@code --input} flag) and returns the content as a single string. Returns {@code null} when
-     * running interactively, in headless mode, or when {@code --input} was already specified.
-     *
-     * @return the piped stdin content, or {@code null} if not applicable
-     * @throws IllegalStateException if stdin appears to be piped but is empty, or on read failure
-     */
-    private String readPipedInput() {
-        if (!headless && System.console() == null && Strings.isNullOrEmpty(input)) {
-            try {
-                if (System.in.available() == 0) {
-                    throw new IllegalStateException("No TTY detected and no input provided. " +
-                            "Please run interactively with a TTY, pipe input via stdin, or use the --input flag.");
-                }
-                return new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))
-                        .lines()
-                        .collect(Collectors.joining("\n"))
-                        .strip();
-            }
-            catch (IOException e) {
-                throw new IllegalStateException("Failed to read from standard input", e);
-            }
-        }
-        return null;
-    }
-
-    private AgentConfig resolveAgentConfig(String persona, String configDir, ObjectMapper mapper) {
-        if (Strings.isNullOrEmpty(persona)) {
-            return AgentConfig.builder()
-                    .agentId("sai-agent")
-                    .name("Sai Agent")
-                    .description("An AI agent that can execute tasks and answer questions.")
-                    .model("copilot/claude-haiku-4.5")
-                    .build();
-        }
-        final var resolvedPath = AgentConfigLoader.resolvePersonaPath(persona, configDir);
-        return AgentConfigLoader.load(resolvedPath, mapper);
-    }
-
-    @SneakyThrows
-    private String resolveInput(String input) {
-        if (input.startsWith("@") && !input.startsWith("@image:") && !input.startsWith("@image-url:") && !input
-                .startsWith("@audio:")) {
-            final var filePath = input.substring(1);
-            if (Strings.isNullOrEmpty(filePath)) {
-                throw new IllegalArgumentException("--input '@' requires a file path");
-            }
-            return Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
-        }
-        return input.replaceAll("@(?!image:|image-url:|audio:)(\\S+)", "$1");
-    }
-
-    /**
-     * Resolves the most recently updated session for the given working directory.
-     *
-     * <p>Reads only each session's {@code summary.json} directly instead of paging through the
-     * session store, so no message data is touched. Sessions whose summary is missing or unreadable
-     * are skipped.
-     *
-     * @param sessionDataPath the path to the sessions data directory
-     * @param workDir         the current working directory to filter sessions by
-     * @return the session ID of the most recent session in this directory, or {@code null} if none exists
-     */
-    private String resolveLastSessionId(final Path sessionDataPath,
-                                        final String workDir) {
-        if (!Files.isDirectory(sessionDataPath)) {
-            return null;
-        }
-        String bestSessionId = null;
-        long bestUpdatedAt = Long.MIN_VALUE;
-        try (final var sessionDirs = Files.list(sessionDataPath)) {
-            for (final var dir : sessionDirs.filter(Files::isDirectory).toList()) {
-                final var summaryFile = dir.resolve("summary.json");
-                if (!Files.isRegularFile(summaryFile)) {
-                    continue;
-                }
-                try {
-                    final var summary = JsonUtils.createMapper()
-                            .readValue(summaryFile.toFile(), SessionSummary.class);
-                    final var extra = summary.getExtra();
-                    final var workDirValue = extra == null ? null : extra.get("workDir");
-                    if (workDirValue == null || !workDir.equals(workDirValue.toString())) {
-                        continue;
-                    }
-                    if (summary.getUpdatedAt() > bestUpdatedAt) {
-                        bestUpdatedAt = summary.getUpdatedAt();
-                        bestSessionId = summary.getSessionId();
-                    }
-                }
-                catch (IOException | IllegalArgumentException e) {
-                    log.warn("Skipping unreadable session summary: {}", summaryFile, e);
-                }
-            }
-        }
-        catch (IOException e) {
-            log.warn("Failed to list sessions under {}", sessionDataPath, e);
-        }
-        return bestSessionId;
-    }
-
-    @SneakyThrows
-    private ResolvedModelDetails resolveModelFactory(final String modelPointer,
-                                                     final ObjectMapper mapper,
-                                                     final SettingsConfig settingsConfig) {
-        final var parts = modelPointer.split("/", 3);
-        Preconditions.checkArgument(parts.length >= 2,
-                                    "Model name must be in the format 'provider/model[/mode]'. Provided: "
-                                            + modelPointer);
-        final var provider = parts[0].toLowerCase();
-        final var modelName = parts[1];
-        final var mode = parts.length == 3 ? parts[2] : null;
-        final var providers = Objects.requireNonNullElseGet(settingsConfig.getProviders(),
-                                                            Map::<String, ProviderEntry>of);
-        if (log.isDebugEnabled()) {
-            log.debug("Available model providers: {}", providers);
-            providers
-                    .forEach((key, config) -> Objects.requireNonNullElseGet(config.getModels(),
-                                                                            Map::<String, ModelEntry>of)
-                            .keySet()
-                            .forEach(m -> log.info("Loaded config for: {}, Model: {}", key, m)));
-        }
-        log.debug("Loaded settings config: {}", settingsConfig);
-        log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
-        final var okHttpClient = buildOkHttpClient();
-        return new ResolvedModelDetails(provider,
-                                        modelName,
-                                        mode,
-                                        okHttpClient,
-                                        new ConfigurableProviderFactory(provider,
-                                                                        mapper,
-                                                                        okHttpClient,
-                                                                        settingsConfig));
     }
 }
