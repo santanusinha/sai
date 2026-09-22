@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.render;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.phonepe.sentinelai.core.compaction.ExtractedSummary;
+
+import io.appform.sai.term.Printer;
 
 import lombok.extern.slf4j.Slf4j;
 

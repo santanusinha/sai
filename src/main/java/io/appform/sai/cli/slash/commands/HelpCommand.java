@@ -15,8 +15,8 @@
  */
 package io.appform.sai.cli.slash.commands;
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
+import io.appform.sai.term.Printer;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;

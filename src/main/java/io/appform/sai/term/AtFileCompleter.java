@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.term;
 
 import org.jline.builtins.Completers.FileNameCompleter;
 import org.jline.reader.Candidate;

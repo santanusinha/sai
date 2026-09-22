@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.repl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
@@ -23,8 +23,12 @@ import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 import com.phonepe.sentinelai.session.QueryDirection;
 
-import io.appform.sai.CommandProcessor.InputCommand;
-import io.appform.sai.Printer.Update;
+import io.appform.sai.AgentConfig;
+import io.appform.sai.AgentRuntimeBuilder;
+import io.appform.sai.InputResolver;
+import io.appform.sai.MediaParser;
+import io.appform.sai.SaiAgent;
+import io.appform.sai.Settings;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.CliCommandRegistry;
 import io.appform.sai.cli.handlers.ShellCommandHandler;
@@ -33,6 +37,13 @@ import io.appform.sai.cli.slash.SlashCommandContext;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.render.EventPrinter;
+import io.appform.sai.render.MessagePrinter;
+import io.appform.sai.repl.CommandProcessor.InputCommand;
+import io.appform.sai.term.Printer;
+import io.appform.sai.term.Printer.Update;
+import io.appform.sai.term.SlashCommandCompleter;
+import io.appform.sai.term.StartupBanner;
 import io.appform.sai.tools.CoreToolBox;
 
 import java.util.List;

@@ -30,6 +30,7 @@ import io.appform.sai.commands.ExportSessionCommand;
 import io.appform.sai.commands.ListProvidersCommand;
 import io.appform.sai.commands.ListSessionsCommand;
 import io.appform.sai.commands.PruneSessionsCommand;
+import io.appform.sai.repl.ReplRunner;
 import io.appform.sai.transform.MdcSessionInterceptor;
 
 import org.slf4j.MDC;

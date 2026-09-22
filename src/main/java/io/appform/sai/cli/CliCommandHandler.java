@@ -15,7 +15,7 @@
  */
 package io.appform.sai.cli;
 
-import io.appform.sai.Printer;
+import io.appform.sai.term.Printer;
 
 /**
  * Interface for client-side CLI command handlers. Implementations intercept user input before it

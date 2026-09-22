@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.repl;
 
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.StreamConsumer;

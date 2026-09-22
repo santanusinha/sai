@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.appform.sai.Printer;
+import io.appform.sai.term.Printer;
 
 import org.junit.jupiter.api.Test;
 

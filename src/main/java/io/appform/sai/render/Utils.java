@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.render;
 
 import com.google.common.base.Stopwatch;
 import com.phonepe.sentinelai.core.model.ModelUsageStats;
+
+import io.appform.sai.term.Printer;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;

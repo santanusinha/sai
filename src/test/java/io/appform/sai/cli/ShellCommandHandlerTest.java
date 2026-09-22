@@ -19,9 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.appform.sai.Printer;
 import io.appform.sai.Settings;
 import io.appform.sai.cli.handlers.ShellCommandHandler;
+import io.appform.sai.term.Printer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

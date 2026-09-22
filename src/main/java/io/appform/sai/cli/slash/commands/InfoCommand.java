@@ -25,8 +25,8 @@ import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
+import io.appform.sai.term.Printer;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;

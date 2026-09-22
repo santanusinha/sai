@@ -26,6 +26,8 @@ import io.appform.sai.config.ModelEntry;
 import io.appform.sai.config.ProviderEntry;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsConfigLoader;
+import io.appform.sai.repl.CommandProcessor;
+import io.appform.sai.term.Printer;
 
 import java.io.IOException;
 import java.nio.file.Files;

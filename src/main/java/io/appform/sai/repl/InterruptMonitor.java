@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.repl;
+
+import io.appform.sai.term.Printer;
 
 import org.jline.terminal.Terminal.Signal;
 

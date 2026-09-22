@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.repl;
 
-import static io.appform.sai.Utils.elapsedTimeInSeconds;
+import static io.appform.sai.render.Utils.elapsedTimeInSeconds;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
@@ -24,9 +24,12 @@ import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
 import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
-import io.appform.sai.Printer.Update;
+import io.appform.sai.SaiAgent;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.render.Utils;
+import io.appform.sai.term.Printer;
+import io.appform.sai.term.Printer.Update;
 
 import java.util.ArrayList;
 import java.util.List;

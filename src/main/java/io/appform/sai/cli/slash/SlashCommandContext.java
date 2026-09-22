@@ -20,10 +20,10 @@ import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
 
 import io.appform.sai.AgentConfig;
-import io.appform.sai.Printer;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
 import io.appform.sai.agent.AgentFactory;
+import io.appform.sai.term.Printer;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;

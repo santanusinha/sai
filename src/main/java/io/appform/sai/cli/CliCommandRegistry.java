@@ -15,8 +15,8 @@
  */
 package io.appform.sai.cli;
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.handlers.ShellCommandHandler;
+import io.appform.sai.term.Printer;
 
 import java.util.List;
 import java.util.Optional;

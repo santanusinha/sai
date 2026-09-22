@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.render;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.core.errors.ErrorType;
@@ -29,9 +29,10 @@ import com.phonepe.sentinelai.core.events.ToolCallApprovalDeniedAgentEvent;
 import com.phonepe.sentinelai.core.events.ToolCallCompletedAgentEvent;
 import com.phonepe.sentinelai.core.events.ToolCalledAgentEvent;
 
-import io.appform.sai.Printer.Update;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.term.Printer;
+import io.appform.sai.term.Printer.Update;
 
 import lombok.SneakyThrows;
 

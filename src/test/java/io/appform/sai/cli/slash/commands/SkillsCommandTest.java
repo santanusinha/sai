@@ -24,12 +24,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 
 import io.appform.sai.AgentConfig;
-import io.appform.sai.Printer;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.slash.SlashCommandContext;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
+import io.appform.sai.term.Printer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

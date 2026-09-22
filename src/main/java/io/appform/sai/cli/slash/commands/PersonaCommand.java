@@ -15,9 +15,9 @@
  */
 package io.appform.sai.cli.slash.commands;
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.slash.SlashRootCommand;
 import io.appform.sai.config.AgentConfigLoader;
+import io.appform.sai.term.Printer;
 
 import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine.Command;

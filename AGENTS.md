@@ -30,6 +30,9 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │   │   │   │   ├── ModeEntry.java            # Mode-level tuning overrides
     │   │   │   │   └── AgentConfigLoader.java    # Persona file loader
     │   │   │   ├── models/    # Data models (Session, Actor, Severity)
+    │   │   │   ├── render/    # Output rendering (MessagePrinter, EventPrinter, MarkdownRenderer)
+    │   │   │   ├── repl/      # REPL loop (ReplRunner, CommandProcessor, InterruptMonitor, BufferedOutputPrinter)
+    │   │   │   ├── term/      # Terminal I/O (Printer, AtFileCompleter, SlashCommandCompleter, StartupBanner)
     │   │   │   ├── skills/    # Agent Skills extension
     │   │   │   ├── transform/ # Jolt-based request payload transforms
     │   │   │   └── tools/     # Tool implementations (Bash, CoreToolBox)
@@ -38,12 +41,14 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │       └── java/io/appform/sai/  # Test classes
     │   └── resources/     # Logging config (logback.xml)
     └── test/
-        └── java/io/appform/sai/  # Test classes
-```
-
 **Key Entry Points:**
 - `App.java` → Main entry point, calls `SaiCommand`
 - `SaiCommand.java` → Picocli CLI entrypoint
+- `SaiAgent.java` → Agent orchestration logic
+- `ReplRunner.java` (repl/) → REPL loop; `CommandProcessor` routes input, `InterruptMonitor` owns SIGINT
+- `AgentRuntimeBuilder.java`, `SessionResolver.java`, `InputResolver.java` → CLI assembly helpers
+- `CoreToolBox.java` → File/system tools (read, write, edit, search-replace)
+- `BashCommandRunner.java` → Shell command execution
 - `SaiAgent.java` → Agent orchestration logic
 - `CoreToolBox.java` → File/system tools (read, write, edit, search-replace)
 - `BashCommandRunner.java` → Shell command execution

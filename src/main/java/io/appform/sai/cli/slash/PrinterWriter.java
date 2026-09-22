@@ -15,7 +15,7 @@
  */
 package io.appform.sai.cli.slash;
 
-import io.appform.sai.Printer;
+import io.appform.sai.term.Printer;
 
 import java.io.Writer;
 

@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import io.appform.sai.Printer;
 import io.appform.sai.Settings;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
+import io.appform.sai.term.Printer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

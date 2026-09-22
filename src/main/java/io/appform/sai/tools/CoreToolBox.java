@@ -23,8 +23,8 @@ import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 import com.phonepe.sentinelai.core.utils.ToolUtils;
 
-import io.appform.sai.Printer;
 import io.appform.sai.files.FileIO;
+import io.appform.sai.term.Printer;
 import io.appform.sai.tools.ToolIO.LineEditOperation;
 
 import java.nio.charset.StandardCharsets;

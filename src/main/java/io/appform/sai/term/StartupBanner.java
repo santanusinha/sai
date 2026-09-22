@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.appform.sai;
+package io.appform.sai.term;
 
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
+
+import io.appform.sai.SaiAgent;
 
 import java.util.ArrayList;
 import java.util.List;

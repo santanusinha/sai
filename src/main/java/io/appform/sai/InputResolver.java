@@ -17,6 +17,8 @@ package io.appform.sai;
 
 import com.google.common.base.Strings;
 
+import io.appform.sai.term.Printer;
+
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.UserInterruptException;
 

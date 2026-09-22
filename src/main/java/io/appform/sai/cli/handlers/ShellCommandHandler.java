@@ -16,9 +16,9 @@
 package io.appform.sai.cli.handlers;
 
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.CliCommandHandler;
 import io.appform.sai.models.Severity;
+import io.appform.sai.term.Printer;
 import io.appform.sai.tools.BashCommandRunner;
 
 import java.time.Duration;

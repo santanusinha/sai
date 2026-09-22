@@ -15,9 +15,9 @@
  */
 package io.appform.sai.cli.handlers;
 
-import io.appform.sai.Printer;
 import io.appform.sai.cli.CliCommandHandler;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
+import io.appform.sai.term.Printer;
 
 import lombok.RequiredArgsConstructor;
 
