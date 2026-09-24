@@ -13,7 +13,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.10.0</junit.version>
         <lombok.version>1.18.42</lombok.version>
-        <sentinel-ai.version>1.2.0</sentinel-ai.version>
+        <sentinel-ai.version>1.2.1-SNAPSHOT</sentinel-ai.version>
         <picocli.version>4.7.7</picocli.version>
         <logback.version>1.4.14</logback.version>
         <signals.version>1.4</signals.version>
@@ -48,6 +48,20 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <name>Central Portal Snapshots</name>
+            <id>central-portal-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>

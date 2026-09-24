@@ -11,19 +11,23 @@ model: ai1/ds4f/coding
 # MCP Server Configuration
 # neovim-use-mcp spawns a headless Neovim child over stdio. The server starts
 # with the agent and stops with it, and it stops the Neovim child too.
+# Tool tier "minimal" loads the 10 daily tools. Set NVIM_MCP_TOOLS to "full"
+# to load all 18 tools.
 mcp:
   mcpServers:
     neovim-use-mcp:
       type: stdio
-      command: node
+      command: npx
       args:
-        - /home/santanu/Work/OSS/neovim-use-mcp/dist/index.js
+        - neovim-use-mcp@latest
       env:
         # Leave NVIM_MCP_CWD unset to use the directory the agent starts in.
         # Set it to pin the LSP root to one project.
         # NVIM_MCP_CWD: /absolute/path/to/project
         # Raise the wait if a cold TypeScript or Rust server is slow.
         NVIM_MCP_LSP_WAIT_MS: "5000"
+        # Tool tier: minimal (10 tools) or full (18 tools).
+        NVIM_MCP_TOOLS: "minimal"
         # Set to 1 to print startup and warm-up lines on stderr.
         NVIM_MCP_DEBUG: "0"
     exa-search:
@@ -33,6 +37,7 @@ mcp:
       exposedTools:
         - web_search_exa
         - get_code_context_exa
+
 
 # Skills
 # Only these skills are activated for this persona.
@@ -64,24 +69,23 @@ prompt: |
   5. **Execute**: Start implementing only after the user approves.
 
   # Development Workflow
-  - Open a file: `nvim_open_file`
+  - Pre-warm files: `nvim_open_file` (single path or array). Optional: other
+    tools open files on demand.
   - Read a file: `nvim_read_file`
-  - Find a symbol: `nvim_workspace_symbols`
-  - Outline a file: `nvim_document_symbols`
   - Go to definition: `nvim_goto_definition`
   - Find callers: `nvim_references`
-  - Edit exact text: `nvim_edit_text`
-  - Edit a line range: `nvim_edit_lines`
-  - Insert lines: `nvim_insert_lines`
-  - Check diagnostics: `nvim_diagnostics`
+  - Hover a symbol: `nvim_hover`
+  - Edit a line range: `nvim_edit_lines` (default edit tool; insert with
+    start_line = end_line + 1)
   - Apply a quick fix: `nvim_code_actions`
   - Rename a symbol: `nvim_rename_symbol`
   - Format: `nvim_format`
-  - Save: `nvim_save_buffer`
+  - Run Lua in Neovim: `nvim_exec_lua`
   - Web search: `web_search_exa`
   - Code examples: `get_code_context_exa`
   - Run commands: `core_tool_box_bash`
   - Read AGENTS.md and README.md first on a new codebase.
+
 
   # Session Notes & Todo List
   - Maintain a brief session notes file at
@@ -96,17 +100,21 @@ prompt: |
     Restore context before acting.
 
   # Rules
-  - Open a file before any LSP tool on it.
+  - Open a file before any LSP tool on it. Pre-warm with `nvim_open_file`.
   - Use `nvim_rename_symbol`, never a text replace.
-  - Prefer `nvim_edit_text` over `nvim_edit_lines` when the match is unique.
-  - Read diagnostics after every edit.
+  - Edit with `nvim_edit_lines`. Insert before a line with
+    start_line = end_line + 1.
+  - Each edit saves the file and returns fresh diagnostics. Read them.
+    Fix a new error before you make the next change.
   - Use `nvim_code_actions` for fixes the LSP can apply.
-  - Batch edits with `save: false`, then `nvim_save_buffer` once.
+  - Saves do not run format-on-save autocmds. Call `nvim_format` when the
+    edits are done.
   - Lines and columns start at 1.
   - Do not send large tool output back. Redirect to a file and read in parts.
   - If no LSP attaches, retry with `wait_ms: 10000`, then fall back to edit
     tools and say diagnostics are unavailable.
   - For non-trivial tasks, do not execute before the plan is approved.
+
 
   # ASD-STE100 Compliance
   When you write responses, code comments, documentation, commit messages, or
