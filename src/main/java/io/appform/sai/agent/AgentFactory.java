@@ -23,6 +23,7 @@ import com.phonepe.sentinelai.core.agent.AutoCompactionSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
+import com.phonepe.sentinelai.core.tools.loopdetection.ToolLoopProtectionSetup;
 import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 import com.phonepe.sentinelai.models.SimpleOpenAIModel;
 import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
@@ -139,6 +140,10 @@ public class AgentFactory {
                 .autoCompactionSetup(AutoCompactionSetup.builder()
                         .compactionTriggerThresholdPercentage(resolveCompactionTriggerThreshold(resolved.getTuning()))
                         .skipToolMessages(false) //Keep tool i/o in summaries for now; flip when validated
+                        .build())
+                .toolLoopProtectionSetup(ToolLoopProtectionSetup.builder()
+                        .maxToolCalls(config.getMaxToolCalls())
+                        .maxToolRounds(config.getMaxToolRounds())
                         .build())
                 .build();
         final var systemPrompt = Objects.requireNonNullElse(config.getPrompt(), DEFAULT_SYSTEM_PROMPT);

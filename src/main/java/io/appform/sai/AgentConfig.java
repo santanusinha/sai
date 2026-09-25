@@ -41,6 +41,9 @@ import lombok.extern.jackson.Jacksonized;
 @Jacksonized
 public class AgentConfig {
 
+    /** Value that disables a tool call budget cap. */
+    public static final int UNLIMITED = 0;
+
     public static final ModelSettings DEFAULT_MODEL_SETTINGS = ModelSettings.builder()
             .temperature(0.1f)
             .build();
@@ -98,5 +101,18 @@ public class AgentConfig {
      */
     @Nullable
     List<String> tools;
+
+    /**
+     * Maximum number of tool calls in one agent run. A value {@code <= 0} means unlimited.
+     */
+    @Default
+    int maxToolCalls = UNLIMITED;
+
+    /**
+     * Maximum number of model rounds with tool calls in one agent run. A value {@code <= 0}
+     * means unlimited. The default is unlimited.
+     */
+    @Default //To keep context usage and consoe output sane
+    int maxToolRounds = UNLIMITED;
 
 }
