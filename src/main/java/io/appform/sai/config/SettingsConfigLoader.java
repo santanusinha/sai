@@ -31,10 +31,13 @@ import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Loads {@code settings.yaml} from the configuration directory with {@code ${ENV}} and
+ * Loads {@code settings.yaml} from the configuration directory with
+ * {@code ${ENV}} and
  * {@code ${VAR:-default}} interpolation.
  *
- * <p>If the file does not exist, an empty {@link SettingsConfig} is returned — this preserves
+ * <p>
+ * If the file does not exist, an empty {@link SettingsConfig} is returned —
+ * this preserves
  * backward compatibility with env-var-only setups.
  */
 @Slf4j
@@ -42,12 +45,14 @@ import lombok.extern.slf4j.Slf4j;
 public final class SettingsConfigLoader {
 
     private static final String SETTINGS_FILE_NAME = "settings.yaml";
+    private static final String SETTINGS_V2_FILE_NAME = "settings-v2.yaml";
 
     /**
      * Loads the settings configuration from the given path.
      *
      * @param settingsPath the path to the settings file
-     * @return the loaded {@link SettingsConfig}, or an empty config if the file is absent
+     * @return the loaded {@link SettingsConfig}, or an empty config if the file is
+     *         absent
      */
     public static SettingsConfig load(Path settingsPath) {
         if (!Files.exists(settingsPath)) {
@@ -69,17 +74,29 @@ public final class SettingsConfigLoader {
     }
 
     /**
-     * Loads the settings configuration from {@code {configDir}/settings.yaml}.
+     * Loads the settings configuration from {@code {configDir}/settings.yaml}. When
+     * {@code SAI_V2} is set to a truthy value, {@code {configDir}/settings-v2.yaml}
+     * is
+     * loaded instead, falling back to {@code settings.yaml} when absent.
      *
      * @param configDir the configuration directory (e.g. {@code ~/.config/sai})
-     * @return the loaded {@link SettingsConfig}, or an empty config if the file is absent
+     * @return the loaded {@link SettingsConfig}, or an empty config if the file is
+     *         absent
      */
     public static SettingsConfig load(String configDir) {
+        if (isV2()) {
+            final var v2Path = Paths.get(configDir, SETTINGS_V2_FILE_NAME);
+            if (Files.exists(v2Path)) {
+                return load(v2Path);
+            }
+            log.debug("Settings file {} not found; falling back to {}", v2Path, SETTINGS_FILE_NAME);
+        }
         return load(Paths.get(configDir, SETTINGS_FILE_NAME));
     }
 
     /**
-     * Substitutes environment variables in the content, supporting both {@code ${VAR}} and
+     * Substitutes environment variables in the content, supporting both
+     * {@code ${VAR}} and
      * {@code ${VAR:-default}} syntax (matching shell/bash convention).
      *
      * @param content the raw content with potential {@code ${...}} placeholders
@@ -90,5 +107,10 @@ public final class SettingsConfigLoader {
         substitutor.setEnableSubstitutionInVariables(false);
         substitutor.setPreserveEscapes(true);
         return substitutor.replace(content);
+    }
+
+    private static boolean isV2() {
+        final var flag = System.getenv("SAI_V2");
+        return flag != null && !flag.isBlank() && !"false".equalsIgnoreCase(flag) && !"0".equals(flag);
     }
 }

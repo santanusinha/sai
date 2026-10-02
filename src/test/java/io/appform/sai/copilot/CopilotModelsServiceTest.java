@@ -17,6 +17,7 @@ package io.appform.sai.copilot;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.List;
 
 import okhttp3.Call;
 import okhttp3.MediaType;
@@ -120,12 +122,37 @@ class CopilotModelsServiceTest {
     }
 
     @Test
+    void copilotModelDeserializesSupportedEndpoints() throws Exception {
+        final var json = """
+                {
+                  "id": "gpt-5",
+                  "supported_endpoints": ["/chat/completions", "/responses"]
+                }
+                """;
+
+        final var model = MAPPER.readValue(json, CopilotModel.class);
+
+        assertEquals(List.of("/chat/completions", "/responses"), model.getSupportedEndpoints());
+    }
+
+    @Test
     void copilotModelIgnoresUnknownFields() throws Exception {
         final var json = """
                 {"id": "x", "unknown_field": "ignored"}
                 """;
         final var model = MAPPER.readValue(json, CopilotModel.class);
         assertEquals("x", model.getId());
+    }
+
+    @Test
+    void copilotModelWithoutSupportedEndpointsIsNull() throws Exception {
+        final var json = """
+                {"id": "gpt-4o"}
+                """;
+
+        final var model = MAPPER.readValue(json, CopilotModel.class);
+
+        assertNull(model.getSupportedEndpoints());
     }
 
     // -------------------------------------------------------------------------

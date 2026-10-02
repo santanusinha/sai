@@ -67,16 +67,16 @@ class ConfigurableProviderFactoryTest {
                                           .apiVersion("2024-10-21")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("azure", mapper, httpClient, config);
-        final var services = factory.get("my-deployment");
+        final var factory = new ConfigurableProviderFactory("azure", httpClient, config);
+        final var services = factory.model("my-deployment", "my-deployment");
         assertNotNull(services);
     }
 
     @Test
     void getAzureWithoutConfigAndWithoutEnvThrows() {
         final var config = SettingsConfig.builder().build();
-        final var factory = new ConfigurableProviderFactory("azure", mapper, httpClient, config);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("gpt-4o"));
+        final var factory = new ConfigurableProviderFactory("azure", httpClient, config);
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("gpt-4o", "gpt-4o"));
         assertTrue(ex.getMessage().contains("AZURE_ENDPOINT"));
     }
 
@@ -89,8 +89,8 @@ class ConfigurableProviderFactoryTest {
                                           .apiKey("sk-key")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, config);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("gpt-4o"));
+        final var factory = new ConfigurableProviderFactory("openai", httpClient, config);
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("gpt-4o", "gpt-4o"));
         assertTrue(ex.getMessage().contains("no 'type' field"));
     }
 
@@ -104,8 +104,8 @@ class ConfigurableProviderFactoryTest {
                                           .apiKey("key")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("myprov", mapper, httpClient, config);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("model-x"));
+        final var factory = new ConfigurableProviderFactory("myprov", httpClient, config);
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("model-x", "model-x"));
         assertTrue(ex.getMessage().contains("Unsupported provider type"));
     }
 
@@ -119,18 +119,17 @@ class ConfigurableProviderFactoryTest {
                                           .apiKey("or-key")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("openrouter", mapper, httpClient, config);
-        final var services = factory.get("anthropic/claude-3.5-sonnet");
+        final var factory = new ConfigurableProviderFactory("openrouter", httpClient, config);
+        final var services = factory.model("anthropic/claude-3.5-sonnet", "anthropic/claude-3.5-sonnet");
         assertNotNull(services);
     }
 
     @Test
     void getNullConfigUsesEnvVarFallback() {
         final var factory = new ConfigurableProviderFactory("unknown-prov",
-                                                            mapper,
                                                             httpClient,
                                                             null);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("model"));
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("model", "model"));
         assertTrue(ex.getMessage().contains("Unsupported provider"));
     }
 
@@ -144,8 +143,8 @@ class ConfigurableProviderFactoryTest {
                                           .apiKey("sk-test-key")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, config);
-        final var services = factory.get("gpt-4o");
+        final var factory = new ConfigurableProviderFactory("openai", httpClient, config);
+        final var services = factory.model("gpt-4o", "gpt-4o");
         assertNotNull(services);
     }
 
@@ -160,8 +159,8 @@ class ConfigurableProviderFactoryTest {
                                           .extraHeaders(Map.of("Helicone-Auth", "Bearer sk-helicone"))
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, config);
-        final var services = factory.get("gpt-4o");
+        final var factory = new ConfigurableProviderFactory("openai", httpClient, config);
+        final var services = factory.model("gpt-4o", "gpt-4o");
         assertNotNull(services);
     }
 
@@ -177,8 +176,8 @@ class ConfigurableProviderFactoryTest {
                                           .projectId("proj-456")
                                           .build()))
                 .build();
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, config);
-        final var services = factory.get("gpt-4o");
+        final var factory = new ConfigurableProviderFactory("openai", httpClient, config);
+        final var services = factory.model("gpt-4o", "gpt-4o");
         assertNotNull(services);
     }
 
@@ -187,14 +186,14 @@ class ConfigurableProviderFactoryTest {
         // Use a custom provider name that has no built-in env-var fallback, so the test
         // always throws regardless of whether OPENAI_API_KEY happens to be set in the env.
         final var config = SettingsConfig.builder().build();
-        final var factory = new ConfigurableProviderFactory("my-openai-test", mapper, httpClient, config);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("gpt-4o"));
+        final var factory = new ConfigurableProviderFactory("my-openai-test", httpClient, config);
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("gpt-4o", "gpt-4o"));
         assertTrue(ex.getMessage().contains("Unsupported provider"));
     }
 
     @Test
     void getProviderNameAccessibleViaGetter() {
-        final var factory = new ConfigurableProviderFactory("openai", mapper, httpClient, null);
+        final var factory = new ConfigurableProviderFactory("openai", httpClient, null);
         assertEquals("openai", factory.getProvider());
     }
 
@@ -202,10 +201,9 @@ class ConfigurableProviderFactoryTest {
     void getUnknownProviderWithoutConfigThrows() {
         final var config = SettingsConfig.builder().build();
         final var factory = new ConfigurableProviderFactory("unknown-provider",
-                                                            mapper,
                                                             httpClient,
                                                             config);
-        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.get("model-x"));
+        final var ex = assertThrows(IllegalArgumentException.class, () -> factory.model("model-x", "model-x"));
         assertTrue(ex.getMessage().contains("Unsupported provider"));
         assertTrue(ex.getMessage().contains("settings.yaml"));
     }

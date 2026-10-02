@@ -174,14 +174,18 @@ public class CopilotCommand implements Callable<Integer> {
                 return 0;
             }
 
-            System.out.printf("%-45s %-20s %-12s %s%n", "Model ID", "Vendor", "Type", "Name");
-            System.out.println("-".repeat(100));
+            System.out.printf("%-45s %-16s %-8s %-45s %s%n", "Model ID", "Vendor", "Type", "Endpoints", "Name");
+            System.out.println("-".repeat(125));
             for (final var model : models) {
                 final var type = model.getCapabilities() != null ? model.getCapabilities().getType() : "";
-                System.out.printf("%-45s %-20s %-12s %s%n",
+                final var endpoints = model.getSupportedEndpoints() == null
+                        ? ""
+                        : String.join(" ", model.getSupportedEndpoints());
+                System.out.printf("%-45s %-16s %-8s %-45s %s%n",
                                   model.getId(),
                                   model.getVendor() != null ? model.getVendor() : "",
                                   type != null ? type : "",
+                                  endpoints,
                                   model.getName() != null ? model.getName() : "");
             }
             System.out.println();

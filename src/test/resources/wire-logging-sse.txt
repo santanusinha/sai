@@ -1,0 +1,8 @@
+{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}
+
+{"id":"chatcmpl-2","object":"chat.completion.chunk","created":1,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+{"id":"chatcmpl-3","object":"chat.completion.chunk","created":1,"model":"test-model","usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4},"choices":[]}
+
+[DONE]
+

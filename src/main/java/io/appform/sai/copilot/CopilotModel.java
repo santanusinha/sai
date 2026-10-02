@@ -18,6 +18,8 @@ package io.appform.sai.copilot;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
+
 import lombok.Data;
 
 /**
@@ -94,4 +96,11 @@ public class CopilotModel {
 
     @JsonProperty("capabilities")
     private Capabilities capabilities;
+
+    /**
+     * API surfaces this model serves, for example {@code /chat/completions}, {@code /responses}
+     * or {@code /v1/messages}; may be null when the endpoint does not report them.
+     */
+    @JsonProperty("supported_endpoints")
+    private List<String> supportedEndpoints;
 }

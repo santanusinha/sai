@@ -17,7 +17,7 @@ package io.appform.sai;
 
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.OutputGenerationMode;
-import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
+import com.phonepe.sentinelai.models.ModelOptions;
 import com.phonepe.sentinelai.toolbox.mcp.config.MCPConfiguration;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders;
 
@@ -64,7 +64,7 @@ public class AgentConfig {
     ModelSettings modelSettings = DEFAULT_MODEL_SETTINGS;
 
     @Default
-    SimpleOpenAIModelOptions modelOptions = SimpleOpenAIModelOptions.DEFAULT;
+    ModelOptions modelOptions = ModelOptions.DEFAULT;
 
     /**
      * Unified tuning section — preferred over {@code modelSettings} / {@code modelOptions}.

@@ -18,10 +18,14 @@ package io.appform.sai;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.phonepe.sentinelai.models.openai.ChatCompletionsProtocol;
+import com.phonepe.sentinelai.models.openai.ResponsesProtocol;
+import com.phonepe.sentinelai.models.wire.WireProtocol;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -181,6 +185,45 @@ class CopilotDirectProviderTest {
     // -------------------------------------------------------------------------
 
     @Test
+    void protocolForChatCompletionsNameReturnsChatCompletions() {
+        assertEquals(CopilotDirectProvider.protocolFor("chat_completions"),
+                     CopilotDirectProvider.protocolFor("chat_completions"));
+        assertEquals(ChatCompletionsProtocol.class,
+                     CopilotDirectProvider.protocolFor("chat_completions").getClass());
+    }
+
+    // -------------------------------------------------------------------------
+    // protocolFor — protocol name resolution
+    // -------------------------------------------------------------------------
+
+    @Test
+    void protocolForIsCaseInsensitive() {
+        assertEquals(ResponsesProtocol.class,
+                     CopilotDirectProvider.protocolFor("RESPONSES").getClass());
+        assertEquals(ChatCompletionsProtocol.class,
+                     CopilotDirectProvider.protocolFor("Chat_Completions").getClass());
+    }
+
+    @Test
+    void protocolForNullReturnsChatCompletions() {
+        assertEquals(ChatCompletionsProtocol.class,
+                     CopilotDirectProvider.protocolFor(null).getClass());
+    }
+
+    @Test
+    void protocolForResponsesReturnsResponsesProtocol() {
+        assertEquals(ResponsesProtocol.class,
+                     CopilotDirectProvider.protocolFor("responses").getClass());
+    }
+
+    @Test
+    void protocolForUnknownNameFailsFast() {
+        final var ex = assertThrows(IllegalArgumentException.class,
+                                    () -> CopilotDirectProvider.protocolFor("anthropic_messages"));
+        assertTrue(ex.getMessage().contains("Unknown protocol"));
+    }
+
+    @Test
     void resolveCachedTokenPathReturnsDefaultUnderHomeDir() {
         final var resolved = CopilotDirectProvider.resolveCachedTokenPath();
         final var home = System.getProperty("user.home",
@@ -200,5 +243,12 @@ class CopilotDirectProviderTest {
                    "Default path should end with known suffix, got: " + resolved);
         assertTrue(resolved.startsWith(home),
                    "Default path should start with home dir, got: " + resolved);
+    }
+
+    @Test
+    void sharedProtocolInstancesAreReused() {
+        final WireProtocol first = CopilotDirectProvider.protocolFor("responses");
+        final WireProtocol second = CopilotDirectProvider.protocolFor("responses");
+        assertSame(first, second, "Stateless protocol instances should be shared");
     }
 }

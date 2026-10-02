@@ -18,24 +18,29 @@ package io.appform.sai;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.net.MediaType;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
-
-import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
-import io.github.sashirestela.cleverclient.retry.RetryConfig;
-import io.github.sashirestela.openai.SimpleOpenAI;
-import io.github.sashirestela.openai.service.ChatCompletionServices;
+import com.phonepe.sentinelai.core.model.Model;
+import com.phonepe.sentinelai.models.ConfiguredModel;
+import com.phonepe.sentinelai.models.openai.ChatCompletionsProtocol;
+import com.phonepe.sentinelai.models.openai.ResponsesProtocol;
+import com.phonepe.sentinelai.models.provider.Provider;
+import com.phonepe.sentinelai.models.wire.WireLoggingMode;
+import com.phonepe.sentinelai.models.wire.WireProtocol;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.annotation.Nullable;
 
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -43,7 +48,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * A {@link ChatCompletionServiceFactory} that talks directly to the GitHub Copilot API without
+ * A {@link ModelFactory} that talks directly to the GitHub Copilot API without
  * requiring an external proxy server such as {@code copilot-api}.
  *
  * <p>On construction it:
@@ -61,26 +66,46 @@ import okhttp3.Response;
  * <li>Schedules automatic token refresh 60 s before the reported expiry.</li>
  * </ol>
  *
- * <p>Every call to {@link #get(String)} returns a {@link SimpleOpenAI} instance whose
- * underlying {@link OkHttpClient} is equipped with two interceptors:
- * <ul>
- * <li>A URL-rewrite interceptor that strips the {@code /v1} prefix added by the SimpleOpenAI
- * library — the Copilot chat endpoint is {@code /chat/completions}, not
- * {@code /v1/chat/completions}.</li>
- * <li>A header interceptor that injects all Copilot-required request headers (editor version,
- * plugin version, integration id, etc.) and replaces the {@code Authorization} header with
- * the current Copilot bearer token. On a {@code 401} or {@code 404} response the token is
- * refreshed inline and the request is retried once.</li>
- * </ul>
+ * <p>Every call to {@link #model(String, String)} returns a {@link ConfiguredModel} whose
+ * underlying {@link OkHttpClient} carries a header interceptor that injects all
+ * Copilot-required request headers (editor version, plugin version, integration id, etc.)
+ * and replaces the {@code Authorization} header with the current Copilot bearer token. On a
+ * {@code 401} or {@code 404} response the token is refreshed inline and the request is
+ * retried once. The Copilot API has no {@code /v1} prefix, so the provider declares
+ * {@link Provider#NO_ENDPOINT_PREFIX} and no URL rewriting is needed.
+ * </p>
  *
  * <p>Call {@link #close()} when the provider is no longer needed to release the background
  * refresh thread.
  */
 @Slf4j
-public class CopilotDirectProvider implements ChatCompletionServiceFactory, AutoCloseable {
+public class CopilotDirectProvider implements ModelFactory, AutoCloseable {
 
     static final String GITHUB_API_BASE_URL = "https://api.github.com";
     static final String COPILOT_API_BASE_URL = "https://api.githubcopilot.com";
+
+    /** Shared stateless protocol instances; the Copilot endpoint serves both. */
+    private static final WireProtocol CHAT_COMPLETIONS = new ChatCompletionsProtocol();
+    private static final WireProtocol RESPONSES = new ResponsesProtocol();
+
+    /**
+     * Resolves the configured protocol name to a wire protocol.
+     *
+     * @param protocol configured protocol name; null or blank means chat completions
+     * @return the wire protocol for the name
+     * @throws IllegalArgumentException when the name is unknown
+     */
+    public static WireProtocol protocolFor(@Nullable final String protocol) {
+        if (Strings.isNullOrEmpty(protocol) || "chat_completions".equalsIgnoreCase(protocol)) {
+            return CHAT_COMPLETIONS;
+        }
+        if ("responses".equalsIgnoreCase(protocol)) {
+            return RESPONSES;
+        }
+        throw new IllegalArgumentException(
+                                           "Unknown protocol '" + protocol
+                                                   + "'. Use 'chat_completions' or 'responses'.");
+    }
 
     private static final String COPILOT_VERSION = "0.26.7";
     private static final String EDITOR_PLUGIN_VERSION = "copilot-chat/" + COPILOT_VERSION;
@@ -96,7 +121,6 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
 
     private final ObjectMapper mapper;
     private final OkHttpClient baseHttpClient;
-    private final RetryConfig retryConfig;
     private final String githubToken;
     private final AtomicReference<String> copilotToken = new AtomicReference<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -110,16 +134,25 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
      *
      * @param mapper         Jackson mapper shared with the rest of the application
      * @param baseHttpClient the application-wide HTTP client (timeouts already configured)
-     * @param retryConfig    retry settings for the chat-completion client
+     * @throws IOException           if the GitHub token file cannot be read
+     * @throws IllegalStateException if the GitHub token file is empty or token exchange fails
+     */
+    public CopilotDirectProvider(OkHttpClient baseHttpClient) throws IOException {
+        this(new ObjectMapper(), baseHttpClient);
+    }
+
+    /**
+     * Creates and initialises a {@code CopilotDirectProvider}.
+     *
+     * @param mapper         Jackson mapper shared with the rest of the application
+     * @param baseHttpClient the application-wide HTTP client (timeouts already configured)
      * @throws IOException           if the GitHub token file cannot be read
      * @throws IllegalStateException if the GitHub token file is empty or token exchange fails
      */
     public CopilotDirectProvider(ObjectMapper mapper,
-                                 OkHttpClient baseHttpClient,
-                                 RetryConfig retryConfig) throws IOException {
+                                 OkHttpClient baseHttpClient) throws IOException {
         this.mapper = mapper;
         this.baseHttpClient = baseHttpClient;
-        this.retryConfig = retryConfig;
         this.githubToken = readGithubToken();
 
         final var cachePath = Path.of(resolveCachedTokenPath());
@@ -138,18 +171,22 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
     }
 
     @Override
-    public ChatCompletionServices get(String modelName) {
+    public Model model(String modelName, String apiModelId) {
+        return model(modelName, apiModelId, null, null);
+    }
+
+    @Override
+    public Model model(String modelName, String apiModelId, String protocolOverride) {
+        return model(modelName, apiModelId, protocolOverride, null);
+    }
+
+    @Override
+    public Model model(String modelName, String apiModelId, String protocolOverride, WireLoggingMode wireLogging) {
+        // The Copilot token rotates, so auth is applied by the client interceptors
+        // below (Auth = null on the provider). The interceptors refresh the token
+        // on 401/404 with one retry. The Copilot API has no /v1 prefix, so the
+        // provider declares NO_ENDPOINT_PREFIX.
         final var interceptedClient = baseHttpClient.newBuilder()
-                .addInterceptor(chain -> {
-                    // SimpleOpenAI uses @Resource("/v1/chat/completions") but the Copilot
-                    // API endpoint has no /v1 prefix — rewrite the path before sending.
-                    final var original = chain.request();
-                    final var originalUrl = original.url();
-                    final var rewrittenUrl = originalUrl.newBuilder()
-                            .encodedPath(originalUrl.encodedPath().replaceFirst("^/v1", ""))
-                            .build();
-                    return chain.proceed(original.newBuilder().url(rewrittenUrl).build());
-                })
                 .addInterceptor(chain -> {
                     final var original = chain.request();
                     final var response = chain.proceed(buildCopilotRequest(original));
@@ -164,12 +201,18 @@ public class CopilotDirectProvider implements ChatCompletionServiceFactory, Auto
                 })
                 .build();
 
-        return SimpleOpenAI.builder()
-                .baseUrl(COPILOT_API_BASE_URL)
-                .apiKey("dummy") // replaced by interceptor
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(interceptedClient))
-                .retryConfig(retryConfig)
+        return ConfiguredModel.builder()
+                .modelName(modelName)
+                .modelId(apiModelId)
+                .provider(Provider.builder()
+                        .baseUrl(COPILOT_API_BASE_URL)
+                        .protocol(CHAT_COMPLETIONS)
+                        .supportedProtocols(List.of(CHAT_COMPLETIONS, RESPONSES))
+                        .endpointPrefix(Provider.NO_ENDPOINT_PREFIX)
+                        .build())
+                .protocol(protocolFor(protocolOverride))
+                .httpClient(interceptedClient)
+                .wireLogging(wireLogging)
                 .build();
     }
 

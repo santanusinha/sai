@@ -3,11 +3,12 @@
 #
 # Usage:
 #   bash sai-installer [--base-dir <path>] [--force] install         # install SAI (--force reinstalls if already present)
-#   bash sai-installer [--base-dir <path>] upgrade                  # upgrade to latest commit
-#   bash sai-installer [--base-dir <path>] reinstall                # remove and re-install SAI (keeps config)
-#   bash sai-installer [--base-dir <path>] uninstall                # remove SAI
+#   bash sai-installer [--base-dir <path>] upgrade                    # upgrade to latest commit
+#   bash sai-installer [--base-dir <path>] upgrade-v2                 # upgrade the v2 jar (sentinel-ai branch)
+#   bash sai-installer [--base-dir <path>] reinstall                  # remove and re-install SAI (keeps config)
+#   bash sai-installer [--base-dir <path>] uninstall                  # remove SAI
 #   bash sai-installer skill-install <source>                       # install a skill
-#   bash sai-installer skill-remove  <name>                         # remove a skill
+#   bash sai-installer skill-remove  <name>                       # remove a skill
 #   bash sai-installer persona-install <source>                     # install a persona
 #   bash sai-installer persona-remove  <name>                       # remove a persona
 #
@@ -40,8 +41,10 @@ usage() {
     echo "Usage: sai-installer [--base-dir <path>] [--force] <subcommand> [args]" >&2
     echo "" >&2
     echo "Subcommands:" >&2
+    echo "Subcommands:" >&2
     echo "  install                    Install SAI" >&2
     echo "  upgrade                    Upgrade SAI to the latest commit" >&2
+    echo "  upgrade-v2                 Upgrade the v2 jar (sentinel-ai branch)" >&2
     echo "  reinstall                  Remove and re-install SAI (preserves config)" >&2
     echo "  uninstall                  Remove SAI" >&2
     echo "  skill-install <source>     Install a skill from a local path, GitHub, or URL" >&2
@@ -83,7 +86,7 @@ while [[ $# -gt 0 ]]; do
             FORCE=1
             shift
             ;;
-        install|upgrade|reinstall|uninstall|skill-install|skill-remove|persona-install|persona-remove)
+        install|upgrade|upgrade-v2|reinstall|uninstall|skill-install|skill-remove|persona-install|persona-remove)
             [[ -n "${MODE}" ]] && { echo "Error: multiple subcommands given: '${MODE}' and '${1}'" >&2; exit 1; }
             MODE="${1}"
             shift
@@ -101,8 +104,8 @@ done
 [[ -z "${MODE}" ]] && usage
 
 # ─── path constants (all rooted under BASE_HOME) ──────────────────────────────
-REPO_URL="https://github.com/santanusinha/sai.git"
-INSTALL_DIR="${BASE_HOME}/.local/share/sai"
+JAR_PATH="${INSTALL_DIR}/sai.jar"
+JAR2_PATH="${INSTALL_DIR}/sai-v2.jar"
 REPO_DIR="${INSTALL_DIR}/repo"
 JAR_PATH="${INSTALL_DIR}/sai.jar"
 COMMIT_STAMP="${INSTALL_DIR}/.last_commit"
@@ -307,13 +310,22 @@ ensure_maven() {
 build_jar() {
     info "Building SAI from source..."
     local commit
-    commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
-    log_event "build_started" "commit" "${commit}"
     (cd "${REPO_DIR}" && mvn -Dspotless.skip=true clean package -q)
     cp "${REPO_DIR}/target/${BUILT_JAR_NAME}" "${JAR_PATH}"
     git -C "${REPO_DIR}" rev-parse HEAD > "${COMMIT_STAMP}"
     log_event "build_complete" "commit" "${commit}" "jar" "${JAR_PATH}"
     success "Build complete → ${JAR_PATH}"
+}
+
+build_jar_v2() {
+    info "Building SAI v2 from source..."
+    local commit
+    commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
+    log_event "build_v2_started" "commit" "${commit}"
+    (cd "${REPO_DIR}" && mvn -Dspotless.skip=true clean package -q)
+    cp "${REPO_DIR}/target/${BUILT_JAR_NAME}" "${JAR2_PATH}"
+    log_event "build_v2_complete" "commit" "${commit}" "jar" "${JAR2_PATH}"
+    success "Build complete → ${JAR2_PATH}"
 }
 
 write_wrapper() {
@@ -330,13 +342,19 @@ if [[ -f "\${SAI_ENV}" ]]; then
     source "\${SAI_ENV}"
     set +a
 fi
-exec java -jar "${JAR_PATH}" "\$@"
+SAI_JAR="${JAR_PATH}"
+if [[ "\${1:-}" == "-v2" ]]; then
+    SAI_JAR="${JAR2_PATH}"
+    export SAI_V2=1
+    shift
+fi
+exec java -jar "\${SAI_JAR}" "\$@"
 EOF
-    chmod +x "${WRAPPER}"
-    log_event "wrapper_written" "path" "${WRAPPER}"
-    success "Launcher written → ${WRAPPER}"
 }
 
+install_self() {
+    # BASH_SOURCE is unbound when the script is piped through bash (e.g. curl | bash).
+    # When piped, BASH_SOURCE[0] is empty, so we cannot copy ourselves from disk.
 install_self() {
     # BASH_SOURCE is unbound when the script is piped through bash (e.g. curl | bash).
     # When piped, BASH_SOURCE[0] is empty, so we cannot copy ourselves from disk.
@@ -521,8 +539,36 @@ do_upgrade() {
         success "Already up to date (${local_commit:0:7})."
         exit 0
     fi
+do_upgrade_v2() {
+    if [[ ! -d "${REPO_DIR}" ]]; then
+        warn "No existing installation found. Run a full install first."
+        exit 1
+    fi
 
-    info "New commits available: ${local_commit:0:7} → ${remote_commit:0:7}"
+    info "Checking for v2 updates (base: ${BASE_HOME})..."
+    detect_os
+
+    local local_commit remote_commit
+    local_commit=$(git -C "${REPO_DIR}" rev-parse HEAD)
+    remote_commit=$(git -C "${REPO_DIR}" rev-parse origin/sentinel-ai)
+
+    info "Building v2 jar from sentinel-ai branch (${local_commit:0:7} → ${remote_commit:0:7})..."
+    log_event "upgrade_v2_started" "from_commit" "${local_commit}" "to_commit" "${remote_commit}"
+
+    ensure_java
+    ensure_maven
+
+    git -C "${REPO_DIR}" fetch origin -q
+    git -C "${REPO_DIR}" checkout sentinel-ai -q
+    git -C "${REPO_DIR}" pull -q
+    build_jar_v2
+    write_wrapper
+
+    log_event "upgrade_v2_complete" "from_commit" "${local_commit}" "to_commit" "${remote_commit}"
+    success "SAI v2 jar upgraded to ${remote_commit:0:7}. Run with: sai -v2"
+}
+
+do_reinstall() {
     log_event "upgrade_started" "from_commit" "${local_commit}" "to_commit" "${remote_commit}"
     git -C "${REPO_DIR}" log --oneline "${local_commit}..${remote_commit}"
     echo
@@ -883,6 +929,7 @@ do_skill_install() {
         [[ -n "${subpath}" ]] && skill_dir="${tmp_dir}/repo/${subpath}"
         install_skill_dir "${skill_dir}"
         return
+    fi
     fi
 
     # ── GitHub shorthand: owner/repo[/sub/path] ───────────────────────────────

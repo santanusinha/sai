@@ -15,20 +15,23 @@
  */
 package io.appform.sai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
+import com.phonepe.sentinelai.core.model.Model;
 import com.phonepe.sentinelai.core.utils.EnvLoader;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
+import com.phonepe.sentinelai.models.ConfiguredModel;
+import com.phonepe.sentinelai.models.openai.ChatCompletionsProtocol;
+import com.phonepe.sentinelai.models.provider.ExtraHeadersRequestTransformer;
+import com.phonepe.sentinelai.models.provider.HeaderAuth;
+import com.phonepe.sentinelai.models.provider.Provider;
+import com.phonepe.sentinelai.models.provider.RequestTransformer;
+import com.phonepe.sentinelai.models.wire.WireLoggingMode;
 
 import io.appform.sai.config.ProviderEntry;
 import io.appform.sai.config.SettingsConfig;
-import io.github.sashirestela.cleverclient.client.OkHttpClientAdapter;
-import io.github.sashirestela.cleverclient.retry.RetryConfig;
-import io.github.sashirestela.openai.SimpleOpenAI;
-import io.github.sashirestela.openai.SimpleOpenAIAzure;
-import io.github.sashirestela.openai.service.ChatCompletionServices;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import lombok.Getter;
@@ -37,11 +40,13 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 
 @Slf4j
-public class ConfigurableProviderFactory implements ChatCompletionServiceFactory {
+public class ConfigurableProviderFactory implements ModelFactory {
 
-    private static final RetryConfig RETRY_CONFIG = RetryConfig.builder()
-            .maxAttempts(1) // disabling implicit retries by default for tests
-            .build();
+    private static final Map<String, String> COPILOT_PROXY_HEADERS = Map.of(
+                                                                            "Accept",
+                                                                            "application/vnd.github+json",
+                                                                            "X-GitHub-Api-Version",
+                                                                            "2022-11-28");
 
     @UtilityClass
     public static class Providers {
@@ -53,9 +58,9 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
 
     @Getter
     private final String provider;
-    private final ObjectMapper mapper;
     private final OkHttpClient okHttpClient;
     private final SettingsConfig settingsConfig;
+    private final List<RequestTransformer> extraRequestTransformers;
 
     private CopilotDirectProvider copilotDirectProvider = null;
 
@@ -63,93 +68,117 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
      * Constructs a factory with a loaded {@link SettingsConfig} for config-driven providers.
      *
      * @param provider       the provider name (e.g. "openai", "azure", "copilot")
-     * @param mapper         the shared Jackson {@link ObjectMapper}
      * @param okHttpClient   the shared {@link OkHttpClient}
      * @param settingsConfig the loaded settings.yaml configuration (may be empty for env-var fallback)
      */
     public ConfigurableProviderFactory(String provider,
-                                       ObjectMapper mapper,
                                        OkHttpClient okHttpClient,
                                        SettingsConfig settingsConfig) {
+        this(provider, okHttpClient, settingsConfig, List.of());
+    }
+
+    /**
+     * Constructs a factory that attaches extra model-level request transformers to every
+     * model it builds. The agent layer uses this for jolt transforms, session affinity
+     * and extra headers.
+     *
+     * @param provider                 the provider name (e.g. "openai", "azure", "copilot")
+     * @param okHttpClient             the shared {@link OkHttpClient}
+     * @param settingsConfig           the loaded settings.yaml configuration (may be empty for env-var fallback)
+     * @param extraRequestTransformers model-level request transformers applied to every built model
+     */
+    public ConfigurableProviderFactory(String provider,
+                                       OkHttpClient okHttpClient,
+                                       SettingsConfig settingsConfig,
+                                       List<RequestTransformer> extraRequestTransformers) {
         this.provider = provider;
-        this.mapper = mapper;
         this.okHttpClient = okHttpClient;
         this.settingsConfig = settingsConfig != null ? settingsConfig : SettingsConfig.builder().build();
+        this.extraRequestTransformers = List.copyOf(extraRequestTransformers);
     }
 
     @Override
-    public ChatCompletionServices get(String modelName) {
+    public Model model(String modelName, String apiModelId) {
+        return model(modelName, apiModelId, null, null);
+    }
+
+    @Override
+    public Model model(String modelName, String apiModelId, String protocolOverride) {
+        return model(modelName, apiModelId, protocolOverride, null);
+    }
+
+    @Override
+    public Model model(String modelName, String apiModelId, String protocolOverride, WireLoggingMode wireLogging) {
         // Check settings.yaml first. If a config entry exists, build from it. If not,
         // fall back to env-var behavior for backward compatibility.
         final var providerEntry = settingsConfig.getProvider(provider).orElse(null);
         if (providerEntry != null) {
-            return buildFromConfig(providerEntry, modelName);
+            return buildFromConfig(providerEntry, modelName, apiModelId, protocolOverride, wireLogging);
         }
         // No config entry — fall back to env-var behavior for known built-in provider types.
         return switch (provider) {
-            case Providers.COPILOT -> copilotDirectModel(modelName);
-            case Providers.AZURE -> azureModel(modelName);
-            case Providers.OPENAI -> openAIModel(modelName);
-            case Providers.COPILOT_PROXY -> copilotProxyModel(modelName);
+            case Providers.COPILOT -> copilotDirectModel(modelName, apiModelId, protocolOverride, wireLogging);
+            case Providers.AZURE, Providers.OPENAI, Providers.COPILOT_PROXY -> buildEnvVarModel(apiModelId,
+                                                                                                wireLogging);
             default -> throw new IllegalArgumentException("Unsupported provider: " + provider
                     + ". Add it to settings.yaml or use a built-in provider (openai, azure, copilot, copilot-proxy).");
         };
     }
 
-    /**
-     * Applies extra headers to every request made through the client.
-     *
-     * @param client       the base OkHttpClient
-     * @param extraHeaders map of header name to value, or null
-     * @return the client with headers injected, or the original client if no headers
-     */
-    private OkHttpClient applyExtraHeaders(OkHttpClient client, Map<String, String> extraHeaders) {
-        if (extraHeaders == null || extraHeaders.isEmpty()) {
-            return client;
-        }
-        return client.newBuilder()
-                .addInterceptor(chain -> {
-                    var requestBuilder = chain.request().newBuilder();
-                    extraHeaders.forEach((key, value) -> {
-                        requestBuilder.addHeader(key, value);
-                        log.debug("Adding extra header: {}", key);
-                    });
-                    return chain.proceed(requestBuilder.build());
-                })
-                .build();
+    private Model azureModel(String modelName, String apiModelId) {
+        return azureModel(modelName, apiModelId, null);
     }
 
-    private ChatCompletionServices azureModel(String modelName) {
-        log.debug("Creating Azure ChatCompletionServices for model: {}", modelName);
+    /**
+     * Builds Azure {@link Model} from resolved connection values.
+     *
+     * <p>Azure serves the plain OpenAI chat-completions path with an
+     * {@code api-version} query parameter that a request transformer appends.
+     *
+     * @param endpoint    the Azure endpoint / base URL
+     * @param apiKey      the Azure API key
+     * @param apiVersion  the Azure API version
+     * @param apiModelId  the model id sent on the wire
+     * @param wireLogging the wire payload logging mode, or null for the default
+     * @return the built model
+     */
+    private Model azureModel(String endpoint,
+                             String apiKey,
+                             String apiVersion,
+                             String apiModelId,
+                             WireLoggingMode wireLogging) {
+        final var transformers = new ArrayList<RequestTransformer>(extraRequestTransformers);
+        transformers.add(new ApiVersionRequestTransformer(apiVersion));
+        return baseModel(apiModelId,
+                         Provider.builder()
+                                 .baseUrl(endpoint)
+                                 .protocol(new ChatCompletionsProtocol())
+                                 .endpointPrefix("/openai/deployments/" + apiModelId)
+                                 .auth(HeaderAuth.bearer(apiKey))
+                                 .build(),
+                         transformers,
+                         wireLogging);
+    }
+
+    private Model azureModel(String modelName, String apiModelId, WireLoggingMode wireLogging) {
+        log.debug("Creating Azure model for model: {}", modelName);
         final var endpoint = readEnv("AZURE_ENDPOINT",
                                      "AZURE_ENDPOINT environment variable must be set");
         final var apiKey = readEnv("AZURE_API_KEY",
                                    "AZURE_API_KEY environment variable must be set");
         final var apiVersion = EnvLoader.readEnv("AZURE_API_VERSION", "2024-10-21");
-        return azureModel(endpoint, apiKey, apiVersion);
+        return azureModel(endpoint, apiKey, apiVersion, apiModelId, wireLogging);
     }
 
-    /**
-     * Builds Azure {@link ChatCompletionServices} from resolved connection values.
-     *
-     * @param endpoint   the Azure endpoint / base URL
-     * @param apiKey     the Azure API key
-     * @param apiVersion the Azure API version
-     * @return the built {@link ChatCompletionServices}
-     */
-    private ChatCompletionServices azureModel(String endpoint, String apiKey, String apiVersion) {
-        return SimpleOpenAIAzure.builder()
-                .baseUrl(endpoint)
-                .apiKey(apiKey)
-                .apiVersion(apiVersion)
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
-                .retryConfig(RETRY_CONFIG)
-                .build();
+    private Model azureModelFromConfig(ProviderEntry entry, String modelName, String apiModelId) {
+        return azureModelFromConfig(entry, modelName, apiModelId, null);
     }
 
-    private ChatCompletionServices azureModelFromConfig(ProviderEntry entry, String modelName) {
-        log.debug("Creating Azure ChatCompletionServices from config for provider: {}, model: {}", provider, modelName);
+    private Model azureModelFromConfig(ProviderEntry entry,
+                                       String modelName,
+                                       String apiModelId,
+                                       WireLoggingMode wireLogging) {
+        log.debug("Creating Azure model from config for provider: {}, model: {}", provider, modelName);
         final var endpoint = resolveValue(entry.getEndpoint(),
                                           "AZURE_ENDPOINT",
                                           "Azure endpoint must be set in settings.yaml or AZURE_ENDPOINT env var");
@@ -157,18 +186,60 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                                         "AZURE_API_KEY",
                                         "Azure API key must be set in settings.yaml or AZURE_API_KEY env var");
         final var apiVersion = resolveValueWithDefault(entry.getApiVersion(), "AZURE_API_VERSION", "2024-10-21");
-        return azureModel(endpoint, apiKey, apiVersion);
+        return azureModel(endpoint, apiKey, apiVersion, apiModelId, wireLogging);
+    }
+
+    private Model baseModel(String apiModelId, Provider provider, List<RequestTransformer> transformers) {
+        return baseModel(apiModelId, provider, transformers, null);
+    }
+
+    private Model baseModel(String apiModelId,
+                            Provider provider,
+                            List<RequestTransformer> transformers,
+                            WireLoggingMode wireLogging) {
+        return ConfiguredModel.builder()
+                .modelName(apiModelId)
+                .modelId(apiModelId)
+                .provider(provider)
+                .httpClient(okHttpClient)
+                .requestTransformers(transformers)
+                .wireLogging(wireLogging)
+                .build();
     }
 
     /**
-     * Builds {@link ChatCompletionServices} from a {@link ProviderEntry} in settings.yaml.
+     * Builds the env-var-backed model for providers that ignore protocol overrides, with
+     * a wire logging mode.
      *
-     * @param entry     the provider configuration entry
-     * @param modelName the model name
-     * @return the built {@link ChatCompletionServices}
+     * @param apiModelId  the model id sent on the wire
+     * @param wireLogging the wire payload logging mode, or null for the default
+     * @return the built model
+     */
+    private Model buildEnvVarModel(String apiModelId, WireLoggingMode wireLogging) {
+        return switch (provider) {
+            case Providers.AZURE -> azureModel(apiModelId, apiModelId, wireLogging);
+            case Providers.OPENAI -> openAIModel(apiModelId, wireLogging);
+            case Providers.COPILOT_PROXY -> copilotProxyModel(apiModelId, wireLogging);
+            default -> throw new IllegalArgumentException("Unsupported provider: " + provider);
+        };
+    }
+
+    /**
+     * Builds a {@link Model} from a {@link ProviderEntry} in settings.yaml.
+     *
+     * @param entry            the provider configuration entry
+     * @param modelName        the model name
+     * @param apiModelId       the model id sent on the wire
+     * @param protocolOverride wire protocol name, or null for the provider default
+     * @param wireLogging      the wire payload logging mode, or null for the default
+     * @return the built model
      * @throws IllegalArgumentException if the provider type is unsupported
      */
-    private ChatCompletionServices buildFromConfig(ProviderEntry entry, String modelName) {
+    private Model buildFromConfig(ProviderEntry entry,
+                                  String modelName,
+                                  String apiModelId,
+                                  String protocolOverride,
+                                  WireLoggingMode wireLogging) {
         var type = entry.getType() == null && Providers.COPILOT.equals(provider)
                 ? Providers.COPILOT
                 : entry.getType();
@@ -176,50 +247,111 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
             throw new IllegalArgumentException("Provider '" + provider + "' in settings.yaml has no 'type' field. "
                     + "Set type to 'openai' or 'azure'.");
         }
-        log.info("Building ChatCompletionServices for provider '{}' (type: '{}') from settings.yaml for model: {}",
+        log.info("Building model for provider '{}' (type: '{}') from settings.yaml for model: {}",
                  provider,
                  type,
                  modelName);
         return switch (type.toLowerCase()) {
-            case Providers.COPILOT -> copilotDirectModel(modelName);
-            case Providers.OPENAI -> openAIModelFromConfig(entry, modelName);
-            case Providers.AZURE -> azureModelFromConfig(entry, modelName);
+            case Providers.COPILOT -> copilotDirectModel(modelName, apiModelId, protocolOverride, wireLogging);
+            case Providers.OPENAI -> openAIModelFromConfig(entry, modelName, apiModelId, wireLogging);
+            case Providers.AZURE -> azureModelFromConfig(entry, modelName, apiModelId, wireLogging);
             default -> throw new IllegalArgumentException(
                                                           "Unsupported provider type '" + type + "' for provider '"
                                                                   + provider + "'. Use 'openai' or 'azure'.");
         };
     }
 
-
-    private ChatCompletionServices copilotDirectModel(String modelName) {
-        log.debug("Creating Copilot Direct ChatCompletionServices for model: {}", modelName);
+    private Model copilotDirectModel(String modelName,
+                                     String apiModelId,
+                                     String protocolOverride,
+                                     WireLoggingMode wireLogging) {
+        log.debug("Creating Copilot Direct model for model: {}", modelName);
         if (copilotDirectProvider == null) {
             try {
-                copilotDirectProvider = new CopilotDirectProvider(mapper, okHttpClient, RETRY_CONFIG);
+                copilotDirectProvider = new CopilotDirectProvider(okHttpClient);
             }
             catch (java.io.IOException e) {
                 throw new IllegalStateException("Failed to initialise Copilot direct provider", e);
             }
         }
-        return copilotDirectProvider.get(modelName);
+        return copilotDirectProvider.model(modelName, apiModelId, protocolOverride, wireLogging);
     }
 
-    private ChatCompletionServices copilotProxyModel(String modelName) {
-        log.debug("Creating Copilot Proxy ChatCompletionServices for model: {}", modelName);
+    private Model copilotProxyModel(String apiModelId) {
+        return copilotProxyModel(apiModelId, null);
+    }
+
+    /**
+     * Builds the env-var-backed Copilot proxy model with a wire logging mode.
+     *
+     * @param apiModelId  the model id sent on the wire
+     * @param wireLogging the wire payload logging mode, or null for the default
+     * @return the built model
+     */
+    private Model copilotProxyModel(String apiModelId, WireLoggingMode wireLogging) {
+        log.debug("Creating Copilot Proxy model for model: {}", apiModelId);
         final var endpoint = EnvLoader.readEnv("COPILOT_PROXY_ENDPOINT", "http://localhost:4141");
-        return GithubCopilot.builder()
-                .objectMapper(mapper)
-                .clientAdapter(new OkHttpClientAdapter(okHttpClient))
-                .baseUrl(endpoint)
-                .retryConfig(RETRY_CONFIG)
-                .build();
+        return baseModel(apiModelId,
+                         Provider.builder()
+                                 .baseUrl(endpoint)
+                                 .protocol(new ChatCompletionsProtocol())
+                                 .auth(HeaderAuth.of(COPILOT_PROXY_HEADERS))
+                                 .build(),
+                         extraRequestTransformers,
+                         wireLogging);
     }
 
-    private ChatCompletionServices openAIModel(String modelName) {
-        log.debug("Creating OpenAI ChatCompletionServices for model: {}", modelName);
+    private Model openAIModel(String apiModelId) {
+        return openAIModel(apiModelId, null);
+    }
+
+    /**
+     * Builds OpenAI-compatible {@link Model} from resolved connection values.
+     *
+     * <p>Organization, project and extra headers are attached through an
+     * {@link ExtraHeadersRequestTransformer}.
+     *
+     * @param endpoint       the API base URL
+     * @param apiKey         the API key
+     * @param organizationId the OpenAI organization ID (may be null)
+     * @param projectId      the OpenAI project ID (may be null)
+     * @param extraHeaders   extra headers to inject into every request (may be null or empty)
+     * @param apiModelId     the model id sent on the wire
+     * @param wireLogging    the wire payload logging mode, or null for the default
+     * @return the built model
+     */
+    private Model openAIModel(String endpoint,
+                              String apiKey,
+                              String organizationId,
+                              String projectId,
+                              Map<String, String> extraHeaders,
+                              String apiModelId,
+                              WireLoggingMode wireLogging) {
+        final var headers = new LinkedHashMap<String, String>();
+        if (!Strings.isNullOrEmpty(organizationId)) {
+            headers.put("OpenAI-Organization", organizationId);
+        }
+        if (!Strings.isNullOrEmpty(projectId)) {
+            headers.put("OpenAI-Project", projectId);
+        }
+        if (extraHeaders != null) {
+            headers.putAll(extraHeaders);
+        }
+        return baseModel(apiModelId,
+                         Provider.builder()
+                                 .baseUrl(endpoint)
+                                 .protocol(new ChatCompletionsProtocol())
+                                 .auth(HeaderAuth.bearer(apiKey))
+                                 .build(),
+                         withHeaderTransformer(headers),
+                         wireLogging);
+    }
+
+    private Model openAIModel(String apiModelId, WireLoggingMode wireLogging) {
+        log.debug("Creating OpenAI model for model: {}", apiModelId);
         final var apiKey = readEnv("OPENAI_API_KEY",
                                    "OPENAI_API_KEY environment variable must be set");
-        final var endpoint = EnvLoader.readEnv("OPENAI_ENDPOINT", "https://api.openai.com/v1");
+        final var endpoint = EnvLoader.readEnv("OPENAI_ENDPOINT", "https://api.openai.com");
         final var organizationId = EnvLoader.readEnv("OPENAI_ORGANIZATION", null);
         final var projectId = EnvLoader.readEnv("OPENAI_PROJECT_ID", null);
         final var extraHeaders = EnvLoader.readEnv("OPENAI_EXTRA_HEADERS", null);
@@ -228,38 +360,20 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
                            apiKey,
                            organizationId,
                            projectId,
-                           parseExtraHeaders(extraHeaders));
+                           parseExtraHeaders(extraHeaders),
+                           apiModelId,
+                           wireLogging);
     }
 
-    /**
-     * Builds OpenAI-compatible {@link ChatCompletionServices} from resolved connection values.
-     *
-     * @param endpoint       the API base URL
-     * @param apiKey         the API key
-     * @param organizationId the OpenAI organization ID (may be null)
-     * @param projectId      the OpenAI project ID (may be null)
-     * @param extraHeaders   extra headers to inject into every request (may be null or empty)
-     * @return the built {@link ChatCompletionServices}
-     */
-    private ChatCompletionServices openAIModel(String endpoint,
-                                               String apiKey,
-                                               String organizationId,
-                                               String projectId,
-                                               Map<String, String> extraHeaders) {
-        var httpClient = applyExtraHeaders(okHttpClient, extraHeaders);
-        return SimpleOpenAI.builder()
-                .baseUrl(endpoint)
-                .apiKey(apiKey)
-                .objectMapper(mapper)
-                .organizationId(organizationId)
-                .projectId(projectId)
-                .clientAdapter(new OkHttpClientAdapter(httpClient))
-                .retryConfig(RETRY_CONFIG)
-                .build();
+    private Model openAIModelFromConfig(ProviderEntry entry, String modelName, String apiModelId) {
+        return openAIModelFromConfig(entry, modelName, apiModelId, null);
     }
 
-    private ChatCompletionServices openAIModelFromConfig(ProviderEntry entry, String modelName) {
-        log.debug("Creating OpenAI-compatible ChatCompletionServices from config for provider: {}, model: {}",
+    private Model openAIModelFromConfig(ProviderEntry entry,
+                                        String modelName,
+                                        String apiModelId,
+                                        WireLoggingMode wireLogging) {
+        log.debug("Creating OpenAI-compatible model from config for provider: {}, model: {}",
                   provider,
                   modelName);
         final var endpoint = resolveValue(entry.getEndpoint(),
@@ -271,7 +385,13 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         final var organizationId = resolveValueOrNull(entry.getOrganizationId(), "OPENAI_ORGANIZATION");
         final var projectId = resolveValueOrNull(entry.getProjectId(), "OPENAI_PROJECT_ID");
         log.debug("Using OpenAI endpoint: {} for provider: {}", endpoint, provider);
-        return openAIModel(endpoint, apiKey, organizationId, projectId, entry.getExtraHeaders());
+        return openAIModel(endpoint,
+                           apiKey,
+                           organizationId,
+                           projectId,
+                           entry.getExtraHeaders(),
+                           apiModelId,
+                           wireLogging);
     }
 
     /**
@@ -293,7 +413,6 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         }
         return headers;
     }
-
 
     private String readEnv(String key, String errorMessage) {
         return EnvLoader.readEnv(key)
@@ -347,4 +466,13 @@ public class ConfigurableProviderFactory implements ChatCompletionServiceFactory
         return EnvLoader.readEnv(envVar, defaultValue);
     }
 
+    private List<RequestTransformer> withHeaderTransformer(Map<String, String> headers) {
+        final var transformers = new ArrayList<RequestTransformer>(extraRequestTransformers);
+        if (!headers.isEmpty()) {
+            transformers.add(ExtraHeadersRequestTransformer.builder()
+                    .headers(headers)
+                    .build());
+        }
+        return transformers;
+    }
 }

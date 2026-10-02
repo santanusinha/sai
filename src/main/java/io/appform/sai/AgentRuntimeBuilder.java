@@ -19,7 +19,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
 
 import io.appform.sai.config.AgentConfigLoader;
 import io.appform.sai.config.ModelEntry;
@@ -216,7 +215,7 @@ public final class AgentRuntimeBuilder {
 
     /**
      * Resolves the model pointer into a provider name, model name, mode, HTTP client,
-     * and completion-service factory.
+     * and model factory.
      *
      * @param modelPointer   model string in {@code provider/model[/mode]} form
      * @param mapper         the JSON mapper
@@ -251,7 +250,6 @@ public final class AgentRuntimeBuilder {
                                         mode,
                                         okHttpClient,
                                         new ConfigurableProviderFactory(provider,
-                                                                        mapper,
                                                                         okHttpClient,
                                                                         settingsConfig));
     }
@@ -286,7 +284,7 @@ public final class AgentRuntimeBuilder {
             String modelName,
             String mode,
             OkHttpClient httpClient,
-            ChatCompletionServiceFactory factory
+            ModelFactory factory
     ) {
     }
 }

@@ -21,12 +21,18 @@ import com.phonepe.sentinelai.core.agent.AgentExtension;
 import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.agent.AutoCompactionSetup;
 import com.phonepe.sentinelai.core.events.EventBus;
+import com.phonepe.sentinelai.core.model.Model;
 import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.tools.loopdetection.ToolLoopProtectionSetup;
-import com.phonepe.sentinelai.models.ChatCompletionServiceFactory;
-import com.phonepe.sentinelai.models.SimpleOpenAIModel;
-import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
+import com.phonepe.sentinelai.models.ConfiguredModel;
+import com.phonepe.sentinelai.models.ModelOptions;
+import com.phonepe.sentinelai.models.provider.ExtraHeadersRequestTransformer;
+import com.phonepe.sentinelai.models.provider.JoltRequestTransformer;
+import com.phonepe.sentinelai.models.provider.JoltTransform;
+import com.phonepe.sentinelai.models.provider.RequestTransformer;
+import com.phonepe.sentinelai.models.provider.SessionIdInjectionTransformer;
+import com.phonepe.sentinelai.models.wire.WireLoggingMode;
 import com.phonepe.sentinelai.toolbox.mcp.ComposingMCPToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.HttpToolBox;
 import com.phonepe.sentinelai.toolbox.remotehttp.templating.HttpToolReaders.ConfiguredHttpTool;
@@ -35,6 +41,7 @@ import com.phonepe.sentinelai.toolbox.remotehttp.templating.TemplatizedHttpTool;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.ConfigurableProviderFactory;
+import io.appform.sai.ModelFactory;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.Settings;
 import io.appform.sai.config.ModelTuning;
@@ -43,9 +50,8 @@ import io.appform.sai.config.SessionAffinityConfig;
 import io.appform.sai.config.SettingsConfig;
 import io.appform.sai.config.SettingsResolver;
 import io.appform.sai.transform.MdcSessionInterceptor;
-import io.appform.sai.transform.RequestTransformInterceptor;
-import io.appform.sai.transform.SessionAffinityInterceptor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -78,7 +84,7 @@ public class AgentFactory {
     private final Settings settings;
     private final List<AgentExtension<String, String, SaiAgent>> sessionExtensions;
     private final ExecutorService executorService;
-    private final ChatCompletionServiceFactory modelProviderFactory;
+    private final ModelFactory modelProviderFactory;
     private final ObjectMapper mapper;
     private final EventBus eventBus;
     private final OkHttpClient httpClient;
@@ -116,9 +122,10 @@ public class AgentFactory {
                 .withParallelToolCalls(false); //To keep context usage and console output sane
         final var modelOptions = Objects.requireNonNullElse(resolved.getModelOptions(),
                                                             Objects.requireNonNullElse(config.getModelOptions(),
-                                                                                       SimpleOpenAIModelOptions.DEFAULT));
+                                                                                       ModelOptions.DEFAULT));
 
         final var effectiveProviderFactory = resolveProviderFactory(config, resolved.getTuning());
+        final var protocolOverride = resolveProtocolOverride(resolved.getTuning());
 
         // If the ModelEntry defines an effectiveModelId (e.g. "moonshotai/kimi-k3" for an
         // OpenRouter model keyed as "kimi-k3"), use it as the API model ID; otherwise fall back
@@ -133,10 +140,11 @@ public class AgentFactory {
                 .eventBus(eventBus)
                 .modelSettings(modelSettings)
                 .outputGenerationMode(config.getOutputGenerationMode())
-                .model(new SimpleOpenAIModel<>(apiModelId,
-                                               effectiveProviderFactory,
-                                               mapper,
-                                               modelOptions))
+                .model(buildModel(apiModelId,
+                                  effectiveProviderFactory,
+                                  modelOptions,
+                                  protocolOverride,
+                                  settings.isDebug() ? WireLoggingMode.FRAMES : null))
                 .autoCompactionSetup(AutoCompactionSetup.builder()
                         .compactionTriggerThresholdPercentage(resolveCompactionTriggerThreshold(resolved.getTuning()))
                         .skipToolMessages(false) //Keep tool i/o in summaries for now; flip when validated
@@ -159,6 +167,47 @@ public class AgentFactory {
         return saiAgent;
     }
 
+    /**
+     * Builds the agent's model from the provider factory and model options.
+     *
+     * <p>When the resolved tuning carries request transforms, session affinity or extra
+     * headers, the provider factory applies them as model-level request transformers.
+     * The resolved protocol override from the tuning is passed through so the provider
+     * can apply it when it builds the model.
+     *
+     * @param apiModelId       the model id to send on the wire
+     * @param providerFactory  the provider factory for this agent
+     * @param modelOptions     the resolved model options
+     * @param protocolOverride the protocol override name from the tuning (may be null)
+     * @param wireLogging      the wire payload logging mode from debug mode, or null for the default
+     * @return the built model
+     */
+    private Model buildModel(String apiModelId,
+                             ModelFactory providerFactory,
+                             ModelOptions modelOptions,
+                             @Nullable String protocolOverride,
+                             @Nullable WireLoggingMode wireLogging) {
+        final var model = (ConfiguredModel) providerFactory.model(apiModelId,
+                                                                  apiModelId,
+                                                                  protocolOverride,
+                                                                  wireLogging);
+        if (model.getModelOptions() == modelOptions) {
+            return model;
+        }
+        return ConfiguredModel.builder()
+                .modelName(model.getModelName())
+                .modelId(model.getModelId())
+                .provider(model.getProvider())
+                .protocol(model.getProtocol())
+                .httpClient(model.getHttpClient())
+                .modelOptions(modelOptions)
+                .tokenCounter(model.getTokenCounter())
+                .requestTransformers(model.getRequestTransformers())
+                .requestRetryPolicy(model.getRequestRetryPolicy())
+                .wireLogging(wireLogging)
+                .build();
+    }
+
     private TemplatizedHttpTool createTool(ConfiguredHttpTool tool) {
         return new TemplatizedHttpTool(tool.metadata(),
                                        tool.definition(),
@@ -173,6 +222,32 @@ public class AgentFactory {
                         .encodingType(EncodingType.O200K_BASE)
                         .build())
                 .build();
+    }
+
+    /**
+     * Resolves the extra headers for a provider from settings.yaml.
+     *
+     * @param provider the provider name
+     * @return the extra headers, or an empty map when none are configured
+     */
+    private Map<String, String> extraHeaders(String provider) {
+        return settingsConfig.getProvider(provider)
+                .map(ProviderEntry::getExtraHeaders)
+                .map(headers -> headers == null ? Map.<String, String>of() : headers)
+                .orElseGet(() -> Map.of());
+    }
+
+    /**
+     * Converts the tuning's request transforms to {@link JoltTransform} instances.
+     *
+     * @param tuning the resolved tuning (may be null)
+     * @return the jolt transforms, or an empty list when none are configured
+     */
+    private List<JoltTransform> joltTransforms(@Nullable ModelTuning tuning) {
+        if (tuning == null || tuning.getRequestTransforms() == null) {
+            return List.of();
+        }
+        return tuning.getRequestTransforms();
     }
 
     private void registerHttpTools(SaiAgent saiAgent, AgentConfig config) {
@@ -217,55 +292,81 @@ public class AgentFactory {
     }
 
     /**
-     * Resolves the {@link ChatCompletionServiceFactory} to use for this agent.
+     * Resolves the wire protocol override name from the tuning.
      *
-     * <p>If the agent config contains {@code requestTransforms}, a
-     * {@link RequestTransformInterceptor} is added, and a fresh
-     * {@link ConfigurableProviderFactory} is created.
+     * @param tuning the resolved tuning (may be null)
+     * @return the protocol name, or null when the provider default applies
      */
-    private ChatCompletionServiceFactory resolveProviderFactory(AgentConfig config,
-                                                                ModelTuning tuning) {
+    @Nullable
+    private String resolveProtocolOverride(@Nullable ModelTuning tuning) {
+        if (tuning == null || tuning.getProtocol() == null || tuning.getProtocol().isBlank()) {
+            return null;
+        }
+        log.info("Protocol override from tuning: {}", tuning.getProtocol());
+        return tuning.getProtocol();
+    }
+
+    /**
+     * Resolves the {@link ModelFactory} to use for this agent.
+     *
+     * <p>When the agent needs request transforms, session affinity or extra headers, they are
+     * applied as model-level request transformers on the built {@link ConfiguredModel}. A
+     * fresh {@link ConfigurableProviderFactory} is created so the base factory stays reusable.
+     */
+    private ModelFactory resolveProviderFactory(AgentConfig config, ModelTuning tuning) {
         if (!(modelProviderFactory instanceof ConfigurableProviderFactory factory)) {
             log.warn("modelProviderFactory is not a ConfigurableProviderFactory; "
                     + "request transforms and session affinity may not be applied");
             return modelProviderFactory;
         }
-        final var requestTransforms = tuning == null ? null : tuning.getRequestTransforms();
-        final var hasRequestTransforms = requestTransforms != null && !requestTransforms.isEmpty();
+        final var joltTransforms = joltTransforms(tuning);
         final var sessionAffinity = sessionAffinityConfig(factory.getProvider());
-
-        if (!hasRequestTransforms && !sessionAffinity.enabled()) {
+        final var extraHeaders = extraHeaders(factory.getProvider());
+        if (joltTransforms.isEmpty() && !sessionAffinity.enabled() && extraHeaders.isEmpty()) {
             return modelProviderFactory;
         }
-
-        var clientBuilder = httpClient.newBuilder();
         // Stamp the session id onto OkHttp threads first so that all
         // interceptor log lines route to the per-session log file.
-        clientBuilder = clientBuilder.addInterceptor(new MdcSessionInterceptor(settings.getSessionId()));
-        if (hasRequestTransforms) {
+        final var mdcClient = httpClient.newBuilder()
+                .addInterceptor(new MdcSessionInterceptor(settings.getSessionId()))
+                .build();
+        final var requestTransformers = new ArrayList<RequestTransformer>();
+        if (!joltTransforms.isEmpty()) {
             log.info("Applying {} request transform(s) for agent {}",
-                     requestTransforms.size(),
+                     joltTransforms.size(),
                      config.getAgentId());
-            clientBuilder = clientBuilder
-                    .addInterceptor(new RequestTransformInterceptor(mapper, requestTransforms));
+            requestTransformers.add(JoltRequestTransformer.ofTransforms(joltTransforms));
         }
         if (sessionAffinity.enabled()) {
             log.info("Enabling session affinity for provider {} (header: {}, bodyField: {})",
                      factory.getProvider(),
                      sessionAffinity.getHeader(),
                      sessionAffinity.getBodyField());
-            clientBuilder = clientBuilder
-                    .addInterceptor(new SessionAffinityInterceptor(mapper,
-                                                                   sessionAffinity,
-                                                                   settings.getSessionId()));
+            requestTransformers.add(SessionIdInjectionTransformer.builder()
+                    .header(sessionAffinity.getHeader())
+                    .bodyPath(sessionAffinity.getBodyField() == null
+                            ? null
+                            : "/" + sessionAffinity.getBodyField())
+                    .build());
         }
-
+        if (!extraHeaders.isEmpty()) {
+            requestTransformers.add(ExtraHeadersRequestTransformer.builder()
+                    .headers(extraHeaders)
+                    .build());
+        }
         return new ConfigurableProviderFactory(factory.getProvider(),
-                                               mapper,
-                                               clientBuilder.build(),
-                                               settingsConfig);
+                                               mdcClient,
+                                               settingsConfig,
+                                               requestTransformers);
     }
 
+    /**
+     * Resolves the {@link ModelFactory} to use for this agent.
+     *
+     * <p>If the agent config contains {@code requestTransforms}, a
+     * {@link RequestTransformInterceptor} is added, and a fresh
+     * {@link ConfigurableProviderFactory} is created.
+     */
     /**
      * Resolves the opt-in session cache affinity config for a provider.
      *

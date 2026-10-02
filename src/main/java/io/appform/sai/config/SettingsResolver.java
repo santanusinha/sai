@@ -16,7 +16,7 @@
 package io.appform.sai.config;
 
 import com.phonepe.sentinelai.core.model.ModelSettings;
-import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
+import com.phonepe.sentinelai.models.ModelOptions;
 
 import java.util.Map;
 import java.util.Objects;
@@ -50,7 +50,7 @@ public class SettingsResolver {
 
     /**
      * Resolved settings result containing the effective {@link ModelSettings} and
-     * {@link SimpleOpenAIModelOptions}.
+     * {@link ModelOptions}.
      */
     @Value
     @Builder
@@ -59,7 +59,7 @@ public class SettingsResolver {
         ModelSettings modelSettings;
 
         @Nullable
-        SimpleOpenAIModelOptions modelOptions;
+        ModelOptions modelOptions;
 
         @Nullable
         ModelTuning tuning;

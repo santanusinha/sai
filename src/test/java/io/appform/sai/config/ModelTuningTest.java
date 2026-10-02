@@ -186,6 +186,31 @@ class ModelTuningTest {
     }
 
     @Test
+    void protocolIsNullByDefault() {
+        assertNull(ModelTuning.builder().build().getProtocol());
+    }
+
+    @Test
+    void protocolMergeKeepsLhsWhenRhsNull() {
+        final var lhs = ModelTuning.builder()
+                .protocol("responses")
+                .build();
+        final var rhs = ModelTuning.builder().build();
+        assertEquals("responses", ModelTuning.merge(lhs, rhs).getProtocol());
+    }
+
+    @Test
+    void protocolMergeRhsWins() {
+        final var lhs = ModelTuning.builder()
+                .protocol("chat_completions")
+                .build();
+        final var rhs = ModelTuning.builder()
+                .protocol("responses")
+                .build();
+        assertEquals("responses", ModelTuning.merge(lhs, rhs).getProtocol());
+    }
+
+    @Test
     void toModelAttributesReturnsNonNullWhenContextWindowSizeSet() {
         final var tuning = ModelTuning.builder()
                 .contextWindowSize(128_000)
@@ -214,13 +239,17 @@ class ModelTuningTest {
     @Test
     void toModelOptionsReturnsNonNullWhenToolChoiceSet() {
         final var tuning = ModelTuning.builder()
-                .toolChoice(com.phonepe.sentinelai.models.SimpleOpenAIModelOptions.ToolChoice.AUTO)
+                .toolChoice(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO)
                 .build();
         final var options = tuning.toModelOptions();
         assertNotNull(options);
-        assertEquals(com.phonepe.sentinelai.models.SimpleOpenAIModelOptions.ToolChoice.AUTO,
+        assertEquals(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO,
                      options.getToolChoice());
     }
+
+    // -------------------------------------------------------------------------
+    // protocol field
+    // -------------------------------------------------------------------------
 
     @Test
     void toModelOptionsReturnsNullWhenToolChoiceNull() {

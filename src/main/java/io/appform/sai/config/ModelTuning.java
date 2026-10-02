@@ -22,9 +22,8 @@ import com.phonepe.sentinelai.core.model.ModelAttributes;
 import com.phonepe.sentinelai.core.model.ModelSettings;
 import com.phonepe.sentinelai.core.model.OutputGenerationMode;
 import com.phonepe.sentinelai.core.model.Reasoning;
-import com.phonepe.sentinelai.models.SimpleOpenAIModelOptions;
-
-import io.appform.sai.transform.RequestTransform;
+import com.phonepe.sentinelai.models.ModelOptions;
+import com.phonepe.sentinelai.models.provider.JoltTransform;
 
 import java.time.Duration;
 import java.util.List;
@@ -41,17 +40,17 @@ import lombok.extern.jackson.Jacksonized;
  * persona files ({@code tuning} section).
  *
  * <p>Carries all model-tuning fields — those from {@link ModelSettings}, the nested
- * {@link ModelAttributes}, and {@link SimpleOpenAIModelOptions} — in a single flat structure
+ * {@link ModelAttributes}, and {@link ModelOptions} — in a single flat structure
  * suitable for YAML/JSON configuration.
  *
  * <p>Provides:
  * <ul>
  * <li>{@link #merge(ModelTuning, ModelTuning)} — chains the framework merge methods
  * ({@code ModelSettings.merge}, {@code ModelAttributes.merge},
- * {@code SimpleOpenAIModelOptions.merge}). <strong>rhs wins if non-null</strong>.</li>
+ * {@code ModelOptions.merge}). <strong>rhs wins if non-null</strong>.</li>
  * <li>{@link #toModelSettings()} — converts to {@link ModelSettings}.</li>
  * <li>{@link #toModelAttributes()} — converts to {@link ModelAttributes}.</li>
- * <li>{@link #toModelOptions()} — converts to {@link SimpleOpenAIModelOptions}.</li>
+ * <li>{@link #toModelOptions()} — converts to {@link ModelOptions}.</li>
  * </ul>
  */
 @Value
@@ -92,6 +91,16 @@ public class ModelTuning {
     @Nullable
     Boolean disableTools;
 
+    // ── Protocol selection ───────────────────────────────────────────────
+
+    /**
+     * Wire protocol used for this model: {@code chat_completions} or {@code responses}.
+     * Null uses the provider default (chat completions). Applied only when the provider
+     * supports the requested protocol; unsupported values fail fast at model build.
+     */
+    @Nullable
+    String protocol;
+
     // ── ModelAttributes fields ────────────────────────────────────────────
 
     @Nullable
@@ -100,11 +109,11 @@ public class ModelTuning {
     @Nullable
     Integer contextWindowSize;
 
-    // ── SimpleOpenAIModelOptions fields ───────────────────────────────────
+    // ── ModelOptions fields ────────────────────────────────────────────────────────────────────────
 
     @Nullable
     @JsonProperty("toolChoice")
-    SimpleOpenAIModelOptions.ToolChoice toolChoice;
+    ModelOptions.ToolChoice toolChoice;
 
     // ── Compaction settings ───────────────────────────────────────────────
 
@@ -130,7 +139,7 @@ public class ModelTuning {
     Map<String, String> extraArgs;
 
     @Nullable
-    List<RequestTransform> requestTransforms;
+    List<JoltTransform> requestTransforms;
 
     /**
      * Merges two {@link ModelTuning} instances, chaining the framework merge methods.
@@ -154,7 +163,6 @@ public class ModelTuning {
 
         final var mergedSettings = ModelSettings.merge(lhs.toModelSettings(), rhs.toModelSettings());
         final var mergedToolChoice = rhs.getToolChoice() != null ? rhs.getToolChoice() : lhs.getToolChoice();
-
         return ModelTuning.builder()
                 .maxTokens(mergedSettings.getMaxTokens())
                 .temperature(mergedSettings.getTemperature())
@@ -171,6 +179,7 @@ public class ModelTuning {
                         ? rhs.getContextWindowSize()
                         : lhs.getContextWindowSize())
                 .toolChoice(mergedToolChoice)
+                .protocol(rhs.getProtocol() != null ? rhs.getProtocol() : lhs.getProtocol())
                 .compactionOutputGenerationMode(rhs.getCompactionOutputGenerationMode() != null
                         ? rhs.getCompactionOutputGenerationMode()
                         : lhs.getCompactionOutputGenerationMode())
@@ -194,14 +203,15 @@ public class ModelTuning {
                 && temperature == null
                 && topP == null
                 && timeout == null
-                && seed == null
-                && presencePenalty == null
-                && frequencyPenalty == null
-                && logitBias == null
-                && reasoning == null
                 && disableTools == null
+                && protocol == null
                 && encodingType == null
                 && contextWindowSize == null
+                && toolChoice == null
+                && reasoning == null
+                && disableTools == null
+                && protocol == null
+                && encodingType == null
                 && toolChoice == null
                 && compactionOutputGenerationMode == null
                 && compactionTriggerThresholdPercentage == null
@@ -231,18 +241,18 @@ public class ModelTuning {
     }
 
     /**
-     * Converts this tuning to a {@link SimpleOpenAIModelOptions} instance.
+     * Converts this tuning to a {@link ModelOptions} instance.
      *
-     * @return a {@link SimpleOpenAIModelOptions} with the tool choice, or
+     * @return a {@link ModelOptions} with the tool choice, or
      *         {@code null} if toolChoice is null so that callers can fall back
      *         to legacy {@code modelOptions} or framework defaults
      */
     @Nullable
-    public SimpleOpenAIModelOptions toModelOptions() {
+    public ModelOptions toModelOptions() {
         if (toolChoice == null) {
             return null;
         }
-        return new SimpleOpenAIModelOptions(toolChoice, null);
+        return ModelOptions.builder().toolChoice(toolChoice).build();
     }
 
     /**
