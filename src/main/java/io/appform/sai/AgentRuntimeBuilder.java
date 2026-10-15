@@ -261,12 +261,17 @@ public final class AgentRuntimeBuilder {
      * <p>Some providers (for example OpenCode Go) ask clients to identify with
      * their own user agent instead of a generic HTTP-library name.
      *
+     * <p>TODO Make the read and call timeouts configurable per provider.
+     * Long-running servers (for example the local {@code ai1} vLLM deployment)
+     * need more than the default. Tracked for a follow-up change after this
+     * branch merges to master.
+     *
      * @return a configured {@code OkHttpClient}
      */
     private static OkHttpClient buildOkHttpClient() {
         return new OkHttpClient.Builder()
-                .readTimeout(Duration.ofSeconds(300))
-                .callTimeout(Duration.ofSeconds(300))
+                .readTimeout(Duration.ofSeconds(900))
+                .callTimeout(Duration.ofSeconds(900))
                 .connectTimeout(Duration.ofSeconds(10))
                 .addInterceptor(chain -> chain.proceed(
                                                        chain.request().newBuilder()
