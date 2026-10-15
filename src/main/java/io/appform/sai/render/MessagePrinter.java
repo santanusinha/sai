@@ -30,6 +30,7 @@ import com.phonepe.sentinelai.core.agentmessages.AgentRequest;
 import com.phonepe.sentinelai.core.agentmessages.AgentRequestVisitor;
 import com.phonepe.sentinelai.core.agentmessages.AgentResponse;
 import com.phonepe.sentinelai.core.agentmessages.AgentResponseVisitor;
+import com.phonepe.sentinelai.core.agentmessages.ReasoningContent;
 import com.phonepe.sentinelai.core.agentmessages.requests.SystemPrompt;
 import com.phonepe.sentinelai.core.agentmessages.requests.ToolCallResponse;
 import com.phonepe.sentinelai.core.agentmessages.requests.UserPrompt;
@@ -221,17 +222,24 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             public List<Update> visit(StructuredOutput structuredOutput) {
                 return handleResponse(structuredOutput.getContent(),
                                       structuredOutput.getStats(),
-                                      structuredOutput.getElapsedTimeMs());
+                                      structuredOutput.getElapsedTimeMs(),
+                                      structuredOutput.getReasoning());
             }
 
             @Override
             public List<Update> visit(Text text) {
-                return handleResponse(text.getContent(), text.getStats(), text.getElapsedTimeMs());
+                return handleResponse(text.getContent(),
+                                      text.getStats(),
+                                      text.getElapsedTimeMs(),
+                                      text.getReasoning());
             }
 
             @Override
             public List<Update> visit(ToolCall toolCall) {
                 final var messages = new ArrayList<Update>();
+                if (historical) {
+                    addReasoningMessages(messages, toolCall.getReasoning());
+                }
                 try {
                     switch (toolCall.getToolName()) {
                         case KnownToolNames.PRINT_TOOL -> {
@@ -277,7 +285,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @SneakyThrows
             private List<Update> handleResponse(String content,
                                                 ModelUsageStats stats,
-                                                long elapsedTimeMs) {
+                                                long elapsedTimeMs,
+                                                ReasoningContent reasoning) {
                 final var messages = new ArrayList<Update>();
                 if (historical) {
                     String output;
@@ -292,6 +301,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         output = content;
                     }
                     messages.add(Printer.assistantMessage(MarkdownRenderer.toAnsi(output)).withImportant(true));
+                    addReasoningMessages(messages, reasoning);
                     var infoMessage = Printer.Colours.WHITE + "%s %s."
                             .formatted(Severity.SUCCESS.getEmoji(),
                                        ErrorType.SUCCESS.getMessage());
@@ -303,6 +313,21 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                             + Utils.tokenSummary(stats)));
                 }
                 return messages;
+            }
+
+            /**
+             * Appends the reasoning of a historical assistant turn as dimmed markdown so a
+             * restored session shows the reasoning the model produced, matching how the
+             * live stream renders it. Skipped when no normalized reasoning text exists.
+             */
+            private void addReasoningMessages(List<Update> messages, ReasoningContent reasoning) {
+                if (reasoning == null || Strings.isNullOrEmpty(reasoning.getContent())) {
+                    return;
+                }
+                messages.add(Printer.empty());
+                messages.add(Printer.raw(Colours.GRAY + "🧠 Reasoning" + Colours.RESET));
+                messages.add(Printer.raw(Colours.GRAY
+                        + MarkdownRenderer.toAnsi(reasoning.getContent()) + Colours.RESET));
             }
 
         });
