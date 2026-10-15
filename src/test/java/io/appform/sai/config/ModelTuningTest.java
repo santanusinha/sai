@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.knuddels.jtokkit.api.EncodingType;
 import com.phonepe.sentinelai.core.model.Reasoning;
+import com.phonepe.sentinelai.models.ModelOptions;
 
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,14 @@ class ModelTuningTest {
     void isEmptyReturnsFalseWhenExtraArgsHasEntries() {
         final var tuning = ModelTuning.builder()
                 .extraArgs(Map.of("key", "value"))
+                .build();
+        assertTrue(!tuning.isEmpty());
+    }
+
+    @Test
+    void isEmptyReturnsFalseWhenOnlyReasoningReplaySet() {
+        final var tuning = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
                 .build();
         assertTrue(!tuning.isEmpty());
     }
@@ -79,6 +88,18 @@ class ModelTuningTest {
         assertEquals(0.9f, result.getTemperature());
         assertEquals(2048, result.getMaxTokens());
         assertEquals(42, result.getSeed());
+    }
+
+    @Test
+    void mergeKeepsLhsReasoningReplayWhenRhsNull() {
+        final var lhs = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
+                .build();
+        final var rhs = ModelTuning.builder()
+                .temperature(0.5f)
+                .build();
+        assertEquals(ModelOptions.ReasoningReplay.ON,
+                     ModelTuning.merge(lhs, rhs).getReasoningReplay());
     }
 
     @Test
@@ -124,6 +145,18 @@ class ModelTuningTest {
                 .build();
         final var result = ModelTuning.merge(lhs, rhs);
         assertEquals(Reasoning.HIGH, result.getReasoning());
+    }
+
+    @Test
+    void mergePreservesReasoningReplayFromRhs() {
+        final var lhs = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.OFF)
+                .build();
+        final var rhs = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
+                .build();
+        assertEquals(ModelOptions.ReasoningReplay.ON,
+                     ModelTuning.merge(lhs, rhs).getReasoningReplay());
     }
 
     @Test
@@ -211,6 +244,11 @@ class ModelTuningTest {
     }
 
     @Test
+    void reasoningReplayIsNullByDefault() {
+        assertNull(ModelTuning.builder().build().getReasoningReplay());
+    }
+
+    @Test
     void toModelAttributesReturnsNonNullWhenContextWindowSizeSet() {
         final var tuning = ModelTuning.builder()
                 .contextWindowSize(128_000)
@@ -237,6 +275,28 @@ class ModelTuningTest {
     }
 
     @Test
+    void toModelOptionsCarriesBothToolChoiceAndReasoningReplay() {
+        final var tuning = ModelTuning.builder()
+                .toolChoice(ModelOptions.ToolChoice.AUTO)
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
+                .build();
+        final var options = tuning.toModelOptions();
+        assertNotNull(options);
+        assertEquals(ModelOptions.ToolChoice.AUTO, options.getToolChoice());
+        assertEquals(ModelOptions.ReasoningReplay.ON, options.getReasoningReplay());
+    }
+
+    @Test
+    void toModelOptionsReturnsNonNullWhenOnlyReasoningReplaySet() {
+        final var tuning = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
+                .build();
+        final var options = tuning.toModelOptions();
+        assertNotNull(options);
+        assertEquals(ModelOptions.ReasoningReplay.ON, options.getReasoningReplay());
+    }
+
+    @Test
     void toModelOptionsReturnsNonNullWhenToolChoiceSet() {
         final var tuning = ModelTuning.builder()
                 .toolChoice(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO)
@@ -246,6 +306,12 @@ class ModelTuningTest {
         assertEquals(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO,
                      options.getToolChoice());
     }
+
+    @Test
+    void toModelOptionsReturnsNullWhenNeitherToolChoiceNorReasoningReplaySet() {
+        assertNull(ModelTuning.builder().build().toModelOptions());
+    }
+
 
     // -------------------------------------------------------------------------
     // protocol field

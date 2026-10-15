@@ -115,6 +115,14 @@ public class ModelTuning {
     @JsonProperty("toolChoice")
     ModelOptions.ToolChoice toolChoice;
 
+    /**
+     * Reasoning replay policy: capture reasoning on model responses and send it back to the
+     * provider on subsequent requests. Intended for providers that require reasoning pass-back
+     * (OpenAI Responses stateless mode, xAI Grok); leave null/OFF otherwise.
+     */
+    @Nullable
+    ModelOptions.ReasoningReplay reasoningReplay;
+
     // ── Compaction settings ───────────────────────────────────────────────
 
     /**
@@ -179,6 +187,9 @@ public class ModelTuning {
                         ? rhs.getContextWindowSize()
                         : lhs.getContextWindowSize())
                 .toolChoice(mergedToolChoice)
+                .reasoningReplay(rhs.getReasoningReplay() != null
+                        ? rhs.getReasoningReplay()
+                        : lhs.getReasoningReplay())
                 .protocol(rhs.getProtocol() != null ? rhs.getProtocol() : lhs.getProtocol())
                 .compactionOutputGenerationMode(rhs.getCompactionOutputGenerationMode() != null
                         ? rhs.getCompactionOutputGenerationMode()
@@ -208,6 +219,7 @@ public class ModelTuning {
                 && encodingType == null
                 && contextWindowSize == null
                 && toolChoice == null
+                && reasoningReplay == null
                 && reasoning == null
                 && disableTools == null
                 && protocol == null
@@ -249,10 +261,17 @@ public class ModelTuning {
      */
     @Nullable
     public ModelOptions toModelOptions() {
-        if (toolChoice == null) {
+        if (toolChoice == null && reasoningReplay == null) {
             return null;
         }
-        return ModelOptions.builder().toolChoice(toolChoice).build();
+        final var builder = ModelOptions.builder();
+        if (toolChoice != null) {
+            builder.toolChoice(toolChoice);
+        }
+        if (reasoningReplay != null) {
+            builder.reasoningReplay(reasoningReplay);
+        }
+        return builder.build();
     }
 
     /**

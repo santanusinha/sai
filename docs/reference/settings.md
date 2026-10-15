@@ -226,6 +226,7 @@ The `tuning` block is shared between `settings.yaml` and persona files. All fiel
 | `encodingType` | String | Tokenizer encoding: `CL100K_BASE`, `O200K_BASE`, etc. |
 | `contextWindowSize` | Integer | Context window size in tokens |
 | `toolChoice` | String | Tool choice: `AUTO` or `REQUIRED` |
+| `reasoningReplay` | String | Reasoning replay: `ON` or `OFF` (default `OFF`). When `ON`, reasoning returned with model responses is captured and sent back to the provider on subsequent requests so reasoning models keep chain-of-thought continuity across tool calls and turns. Enable only for providers that require reasoning pass-back (OpenAI Responses stateless mode, xAI Grok); for providers that do not need it (e.g. DeepSeek) replay only adds input tokens. |
 | `compactionOutputGenerationMode` | String | Auto-compaction output mode: `TOOL_BASED` (default) or `STRUCTURED_OUTPUT` |
 | `extraArgs` | Map\<String, String\> | Free-form passthrough arguments |
 
