@@ -67,34 +67,15 @@ class BufferedOutputPrinter {
     /** Accumulated content for the current CODE or TABLE block. */
     private String blockBuffer = "";
     private Mode currentMode = Mode.NORMAL;
+    /**
+     * Sentence segmentation for the NORMAL-mode residual. Replaces the previous
+     * hand-rolled boundary scan: SRX rules (segment.srx) know about
+     * abbreviations, decimals, URLs and list markers.
+     */
+    private final SrxSentenceSplitter splitter = new SrxSentenceSplitter();
 
     BufferedOutputPrinter(Printer printer) {
         this.printer = printer;
-    }
-
-    /**
-     * Return {@code true} when the {@code '.'} at {@code dotIndex} is the
-     * terminator of an ordered-list marker rather than a sentence end, i.e.
-     * the whole preceding content of {@code buffer} (ignoring leading
-     * whitespace used for indentation/nesting) consists only of digits, like
-     * {@code "1."}, {@code "42."}, or {@code "   3."}. In those cases the dot
-     * belongs to the list bullet and must not trigger a sentence flush.
-     */
-    private static boolean isOrderedListMarker(String buffer, int dotIndex) {
-        int start = 0;
-        while (start < dotIndex && Character.isWhitespace(buffer.charAt(start))) {
-            start++;
-        }
-        // Must have at least one digit and nothing but digits before the dot.
-        if (start == dotIndex) {
-            return false;
-        }
-        for (int i = start; i < dotIndex; i++) {
-            if (!Character.isDigit(buffer.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     public void accept(final String content) {
@@ -158,13 +139,6 @@ class BufferedOutputPrinter {
             }
         }
 
-        // Handle the residual (last element after split).
-        // The residual is always stored in buffer, regardless of the current mode.
-        // This ensures that buffer+content at the top of the next accept() call
-        // always reconstructs the full partial line before detectMode() sees it.
-        // (Storing block-mode residuals in blockBuffer would cause the continuation
-        // fragment to be processed as a standalone new line, breaking multi-token
-        // table rows that lack a leading '|' in mid-chunk fragments.)
         buffer = lines[lines.length - 1];
 
         // In NORMAL mode, flush any sentence-complete prefix from the residual
@@ -224,44 +198,23 @@ class BufferedOutputPrinter {
 
     /**
      * In NORMAL mode the residual {@code buffer} may already contain one or
-     * more complete sentences (i.e. text ending with {@code .}, {@code !}, or
-     * {@code ?} followed by a space or the end of the buffer). Flush those
-     * complete sentences immediately so the user sees output as each sentence
-     * arrives rather than waiting for the entire line's newline.
-     *
-     * <p>The remainder (any text after the last sentence boundary) is kept in
-     * {@code buffer} for reassembly with the next chunk.
+     * more complete sentences. Ask the {@link SrxSentenceSplitter} which
+     * prefix is safe to emit (every sentence whose boundary lies at least
+     * {@link SrxSentenceSplitter#MARGIN} characters before the end of the
+     * buffer) and print it. The remainder stays in {@code buffer} because
+     * more text may still extend a boundary inside the margin (e.g.
+     * {@code "Dr."} followed by {@code " Smith"} on the next chunk).
      */
     private void flushSentencesFromBuffer() {
         if (buffer.isEmpty()) {
             return;
         }
-        // Find the rightmost sentence boundary: [.!?] followed by a space, or
-        // [.!?] at the very end of the buffer (stream may end mid-sentence).
-        int flushUpTo = -1;
-        for (int i = 0; i < buffer.length(); i++) {
-            final char c = buffer.charAt(i);
-            if (c == '.' || c == '!' || c == '?') {
-                // Accept boundary if followed by a space or at end of buffer.
-                if (i + 1 == buffer.length() || buffer.charAt(i + 1) == ' ') {
-                    // A '.' that merely terminates an ordered-list marker
-                    // (e.g. "1." or "  2."), where everything before it is
-                    // digits only, is a list bullet — not a sentence end.
-                    // Splitting here would flush the marker away from its
-                    // list item, so leave it in the buffer.
-                    if (c == '.' && isOrderedListMarker(buffer, i)) {
-                        continue;
-                    }
-                    flushUpTo = i + 1; // exclusive: include the punctuation
-                }
-            }
-        }
-        if (flushUpTo <= 0) {
+        final var ready = splitter.emittablePrefix(buffer, SrxSentenceSplitter.MARGIN);
+        if (ready.isEmpty()) {
             return;
         }
-        final String toFlush = buffer.substring(0, flushUpTo);
-        buffer = buffer.substring(flushUpTo);
-        printLine(toFlush);
+        buffer = buffer.substring(ready.length());
+        printLine(ready);
     }
 
     private void printBlock(String markdown) {

@@ -72,6 +72,19 @@ class BufferedOutputPrinterTest {
     private BufferedOutputPrinter bop;
 
     @Test
+    void abbreviationDrDoesNotBreakSentence() {
+        // SRX rules know "Dr." is an abbreviation, so "Dr. Smith" is one
+        // sentence and only the following boundary flushes.
+        feed("Dr. Smith went home.");
+        assertEquals(0, printCount(), "abbreviation sentence stays held by margin");
+        feed(" He slept very well. ");
+        feed("x".repeat(85));
+        final var parts = renderedParts();
+        assertEquals(1, parts.size(), "no false break after the abbreviation");
+        assertTrue(parts.get(0).contains("Dr. Smith went home."));
+    }
+
+    @Test
     void blankLineBetweenContentIsPreserved() {
         // A blank separator line in the LLM stream must be passed through as an
         // empty print call so that JLine's printAbove("") renders a visible
@@ -88,6 +101,10 @@ class BufferedOutputPrinterTest {
         assertTrue(parts.get(2).contains("line two"), "third part");
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     @Test
     void carryOverIsNotDuplicatedOnContinuation() {
         feed("buf");
@@ -97,10 +114,6 @@ class BufferedOutputPrinterTest {
         assertTrue(parts.get(0).contains("buffer"), "first part should be 'buffer'");
         assertTrue(parts.get(1).contains("line2"), "second part should be 'line2'");
     }
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
 
     @Test
     void codeBlockChunkedAtFenceBoundary() {
@@ -134,15 +147,15 @@ class BufferedOutputPrinterTest {
                     "no double-newline should appear before the closing fence");
     }
 
+    // -------------------------------------------------------------------------
+    // Mode detection unit tests
+    // -------------------------------------------------------------------------
+
     @Test
     void codeBlockIsBufferedAndFlushedAsOneUnit() {
         feed("```java\nint x = 1;\n```\n");
         assertEquals(1, printCount(), "entire code block should be one print call");
     }
-
-    // -------------------------------------------------------------------------
-    // Mode detection unit tests
-    // -------------------------------------------------------------------------
 
     @Test
     void codeBlockLanguageTagIsRendered() {
@@ -170,9 +183,25 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
+    void decimalEgAndNoDoNotBreakSentences() {
+        // Decimals ("3.5"), "e.g." and "No." must not act as boundaries.
+        feed("It costs 3.5 dollars, e.g. at No. 5 Main Street.");
+        assertEquals(0, printCount(), "no false boundary inside the held text");
+        feed(" Then he paid. ");
+        feed("x".repeat(85));
+        final var out = renderedOutput();
+        assertFalse(out.contains("3\n"), "decimal dot must not break the sentence");
+        assertTrue(out.contains("Then he paid."), "the real boundary should flush");
+    }
+
+    @Test
     void detectModeReturnsCodeForTildeFence() {
         assertEquals(BufferedOutputPrinter.Mode.CODE, bop.detectMode("~~~"));
     }
+
+    // -------------------------------------------------------------------------
+    // NORMAL mode — basic line handling
+    // -------------------------------------------------------------------------
 
     @Test
     void detectModeReturnsCodeForTripleBacktick() {
@@ -183,10 +212,6 @@ class BufferedOutputPrinterTest {
     void detectModeReturnsNormalForPlainLine() {
         assertEquals(BufferedOutputPrinter.Mode.NORMAL, bop.detectMode("Hello world"));
     }
-
-    // -------------------------------------------------------------------------
-    // NORMAL mode — basic line handling
-    // -------------------------------------------------------------------------
 
     @Test
     void detectModeReturnsTableForPipeDelimitedLine() {
@@ -204,11 +229,30 @@ class BufferedOutputPrinterTest {
         assertEquals(BufferedOutputPrinter.Mode.TABLE, bop.detectMode("| A | B |  "));
     }
 
+    // -------------------------------------------------------------------------
+    // CODE block rendering
+    // -------------------------------------------------------------------------
+
     @Test
     void emptyChunkIsIgnored() {
         bop.accept(null);
         bop.accept("");
         assertEquals(0, printCount(), "empty/null chunks should produce no output");
+    }
+
+    @Test
+    void heldBackGptSentenceIsEmittedWholeAfterMarginClears() {
+        // "GPT 3." at the end of the held text must not be split from its
+        // continuation: the SRX rules treat the digit-dot as a non-boundary
+        // until more text proves it final.
+        feed("The model is GP");
+        feed("T 3.");
+        assertEquals(0, printCount(), "the partial 'GPT 3.' must stay held");
+        feed(" It works. ");
+        feed("x".repeat(85));
+        final var out = renderedOutput();
+        assertTrue(out.contains("GPT 3."), "the held sentence must be flushed whole");
+        assertFalse(out.contains("GP\n"), "the sentence must not be split mid-token");
     }
 
     @Test
@@ -218,10 +262,6 @@ class BufferedOutputPrinterTest {
                      printCount(),
                      "an indented '2.' marker must not be flushed as a sentence");
     }
-
-    // -------------------------------------------------------------------------
-    // CODE block rendering
-    // -------------------------------------------------------------------------
 
     @Test
     void markDoneFlushesResidualNormalLine() {
@@ -296,6 +336,10 @@ class BufferedOutputPrinterTest {
                    "plain line text should be preserved");
     }
 
+    // -------------------------------------------------------------------------
+    // TABLE block rendering
+    // -------------------------------------------------------------------------
+
     @Test
     void normalLineAfterCodeBlockIsPrintedSeparately() {
         feed("```\ncode\n```\nafter code\n");
@@ -325,10 +369,6 @@ class BufferedOutputPrinterTest {
                         "printLine output must not contain double-newline: [" + update.getData() + "]");
         }
     }
-
-    // -------------------------------------------------------------------------
-    // TABLE block rendering
-    // -------------------------------------------------------------------------
 
     @Test
     void normalLinesArePrintedImmediatelyOneByOne() {
@@ -360,19 +400,29 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
-    void realSentenceBoundaryStillFlushesImmediately() {
-        // Guard: ordinary prose that ends in a period followed by a space must
-        // still flush eagerly (the list-marker guard must not suppress it).
+    void realSentenceBoundaryFlushesAfterMarginClears() {
+        // The SRX splitter holds back the last MARGIN characters, so a short
+        // sentence does not flush yet…
         feed("This is a sentence. ");
-        assertEquals(1, printCount(), "a normal sentence should flush on its boundary");
+        assertEquals(0,
+                     printCount(),
+                     "a sentence inside the hold-back margin must not flush yet");
+        // …but once enough text follows, the boundary is more than MARGIN
+        // characters before the end and the sentence flushes.
+        feed("x".repeat(85));
+        assertEquals(1,
+                     printCount(),
+                     "a sentence more than MARGIN chars before the end should flush");
         assertTrue(renderedOutput().contains("This is a sentence."));
     }
 
     @Test
-    void sentenceAfterOrderedListMarkerStillFlushes() {
-        // The marker dot is skipped, but a genuine sentence end later in the
-        // same buffer must still flush (up to and including that period).
+    void sentenceAfterOrderedListMarkerFlushesAfterMarginClears() {
+        // SRX keeps the "1." marker with its item; the sentence flushes only
+        // once its boundary clears the hold-back margin.
         feed("1. First item. ");
+        assertEquals(0, printCount(), "inside the margin: nothing flushes yet");
+        feed("x".repeat(85));
         assertEquals(1,
                      printCount(),
                      "the real sentence boundary after the list item should flush");
@@ -456,6 +506,13 @@ class BufferedOutputPrinterTest {
         assertEquals(1, printCount(), "markDone should flush the table as one unit");
     }
 
+    @Test
+    void tableBlockIsFlushedWhenNonTableLineArrives() {
+        feed("| A | B |\n| - | - |\n| 1 | 2 |\nsome text after\n");
+        // table (1) + "some text after" (1) = 2
+        assertEquals(2, printCount());
+    }
+
     // -------------------------------------------------------------------------
     // Mixed / streaming scenarios
     // -------------------------------------------------------------------------
@@ -464,14 +521,6 @@ class BufferedOutputPrinterTest {
     // Issue fixes: trailing newline, blank-line skip, consecutive code blocks,
     // table after heading
     // -------------------------------------------------------------------------
-
-    @Test
-    void tableBlockIsFlushedWhenNonTableLineArrives() {
-        feed("| A | B |\n| - | - |\n| 1 | 2 |\nsome text after\n");
-        // table (1) + "some text after" (1) = 2
-        assertEquals(2, printCount());
-    }
-
 
     @Test
     void tableChunkedMidRowCarriesOverCorrectly() {
@@ -486,6 +535,7 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("Col B"), "reconstructed header cell");
         assertTrue(out.contains("v1") && out.contains("v2"), "body cells");
     }
+
 
     @Test
     void tableFollowedByCodeBlockFlushesTableFirst() {
@@ -625,6 +675,17 @@ class BufferedOutputPrinterTest {
         assertTrue(parts.get(0).contains("fn1()"), "first block must contain fn1()");
         assertEquals("", parts.get(1), "middle part must be the blank separator line");
         assertTrue(parts.get(2).contains("fn2()"), "second block must contain fn2()");
+    }
+
+    @Test
+    void urlInHeldTextDoesNotBreakSentence() {
+        // A URL in the middle of the stream must not split the sentence.
+        feed("See https://example.com/docs for details. ");
+        assertEquals(0, printCount());
+        feed("x".repeat(85));
+        final var out = renderedOutput();
+        assertFalse(out.contains("example\n"), "URL dots must not break the sentence");
+        assertTrue(out.contains("https://example.com/docs"), "the URL must survive intact");
     }
 
     private void feed(String text) {
