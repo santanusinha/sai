@@ -27,7 +27,7 @@ import java.util.Objects;
 
 import net.loomchild.segment.srx.SrxDocument;
 import net.loomchild.segment.srx.SrxTextIterator;
-import net.loomchild.segment.srx.io.SrxAnyParser;
+import net.loomchild.segment.srx.io.Srx2StaxParser;
 
 /**
  * Sentence segmentation for streamed text, based on the SRX {@code segment}
@@ -79,13 +79,22 @@ final class SrxSentenceSplitter {
         return local;
     }
 
+    /**
+     * Parse the bundled SRX rules with the StAX parser. Do not use
+     * {@code SrxAnyParser} or {@code Srx2Parser}: those use JAXB, and the JAXB
+     * runtime (jaxb-impl) needs its {@code Multi-Release: true} manifest entry
+     * to reach the Java 9+ copy of {@code Injector}. The shade plugin drops
+     * that entry, so JAXB fails at run time in the fat jar with
+     * {@code NoSuchMethodException: sun.misc.Unsafe.defineClass}. The StAX
+     * parser uses only the JDK StAX API and produces the same rules.
+     */
     private static SrxDocument parseDocument() {
         try (Reader reader = new InputStreamReader(
                                                    Objects.requireNonNull(SrxSentenceSplitter.class.getResourceAsStream(
                                                                                                                         SRX_RESOURCE),
                                                                           "Missing bundled resource " + SRX_RESOURCE),
                                                    StandardCharsets.UTF_8)) {
-            return new SrxAnyParser().parse(reader);
+            return new Srx2StaxParser().parse(reader);
         }
         catch (IOException e) {
             throw new UncheckedIOException("Failed to read " + SRX_RESOURCE, e);
