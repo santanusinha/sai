@@ -18,18 +18,25 @@ package io.appform.sai.repl;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.StreamConsumer;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 class AgentStreamConsumer implements StreamConsumer {
     // So we don't cock up the internal buffers if both
     // reasoning and content are being streamed at the same time
     private final BufferedOutputPrinter reasoningPrinter;
     private final BufferedOutputPrinter outputPrinter;
 
+    /** Becomes true when the first reasoning chunk of the turn arrives. */
+    private boolean reasoningStarted;
+
     @Override
     public void consumeReasoningAndContent(String reasoningData, String content) {
         if (!Strings.isNullOrEmpty(reasoningData)) {
+            if (!reasoningStarted) {
+                reasoningStarted = true;
+                reasoningPrinter.printReasoningStartedMarker();
+            }
             reasoningPrinter.accept(reasoningData);
         }
         if (!Strings.isNullOrEmpty(content)) {
@@ -38,7 +45,11 @@ class AgentStreamConsumer implements StreamConsumer {
     }
 
     public void markDone() {
-        reasoningPrinter.markDone();
+        if (reasoningStarted) {
+            reasoningPrinter.markDone();
+            reasoningPrinter.printReasoningCompletedMarker();
+            reasoningStarted = false;
+        }
         outputPrinter.markDone();
     }
 }

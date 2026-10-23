@@ -33,8 +33,9 @@ import java.util.Objects;
 
 /**
  * Unit tests for reasoning rendering in {@link MessagePrinter} on session restore
- * (historical mode). The upstream framework now persists reasoning content on
- * agent responses; the printer must render it dimmed, after the content message.
+ * (historical mode). The printer renders saved reasoning the same way the live
+ * stream does: a thinking marker, markdown-rendered reasoning lines, and a
+ * thinking completed marker.
  */
 class MessagePrinterReasoningTest {
 
@@ -79,7 +80,7 @@ class MessagePrinterReasoningTest {
                 .map(Printer.Update::getData)
                 .filter(Objects::nonNull)
                 .reduce("", (a, b) -> a + "\n" + b);
-
+        assertFalse(joined.contains("Thinking"), "blank reasoning renders no thinking markers");
         assertFalse(joined.contains("Reasoning"), "blank reasoning renders nothing");
     }
 
@@ -104,11 +105,16 @@ class MessagePrinterReasoningTest {
 
         assertTrue(joined.contains("The answer is 42."), "content is rendered");
         assertTrue(joined.contains("I need to compute the answer."), "reasoning is rendered");
-        assertTrue(joined.contains("Reasoning"), "reasoning header is rendered");
+        assertTrue(joined.contains("Thinking"), "thinking marker is rendered");
+        assertTrue(joined.contains("Thinking completed"), "thinking completed marker is rendered");
 
         final var contentIndex = joined.indexOf("The answer is 42.");
         final var reasoningIndex = joined.indexOf("I need to compute the answer.");
         assertTrue(contentIndex < reasoningIndex, "reasoning comes after the content");
+        final var markerIndex = joined.indexOf("Thinking");
+        final var completedIndex = joined.indexOf("Thinking completed");
+        assertTrue(markerIndex < reasoningIndex, "thinking marker comes before the reasoning");
+        assertTrue(reasoningIndex < completedIndex, "thinking completed marker comes after the reasoning");
     }
 
     @Test

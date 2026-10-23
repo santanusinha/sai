@@ -17,6 +17,7 @@ package io.appform.sai.repl;
 
 
 import io.appform.sai.render.MarkdownRenderer;
+import io.appform.sai.render.Utils;
 import io.appform.sai.term.Printer;
 
 import java.util.regex.Pattern;
@@ -166,10 +167,6 @@ class BufferedOutputPrinter {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
     /**
      * Flush any buffered content that has not yet been printed. Should be
      * called exactly once after the LLM stream is exhausted.
@@ -184,7 +181,6 @@ class BufferedOutputPrinter {
             buffer = "";
         }
     }
-
 
     /**
      * Classify {@code line} into the appropriate {@link Mode}.
@@ -211,6 +207,29 @@ class BufferedOutputPrinter {
         }
         // Any other line: stay CODE if already in a code block, otherwise NORMAL.
         return currentMode == Mode.CODE ? Mode.CODE : Mode.NORMAL;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Print the reasoning-completed marker once the reasoning of the turn is
+     * fully delivered. The live stream prints this when the turn completes, and
+     * the history replay prints it after rendering the saved reasoning.
+     */
+    void printReasoningCompletedMarker() {
+        printer.print(Printer.raw(Utils.reasoningCompletedMarker()).withImportant(true));
+    }
+
+
+    /**
+     * Print the reasoning-started marker so the user knows the model is thinking.
+     * The live stream prints this before the first reasoning chunk arrives, and
+     * the history replay prints it before rendering the saved reasoning.
+     */
+    void printReasoningStartedMarker() {
+        printer.print(Printer.raw(Utils.reasoningStartedMarker()).withImportant(true));
     }
 
     /**

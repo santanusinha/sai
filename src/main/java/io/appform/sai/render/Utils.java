@@ -39,6 +39,22 @@ public class Utils {
         return toSeconds(stopwatch.elapsed(TimeUnit.MILLISECONDS));
     }
 
+    /**
+     * Marker line that is shown after the reasoning of a turn is complete. Used
+     * by both the live stream and the history replay.
+     */
+    public static String reasoningCompletedMarker() {
+        return C + "\uD83E\uDDE0" + G + " Thinking completed." + R;
+    }
+
+    /**
+     * Marker line that is shown before reasoning is streamed so the user knows
+     * the model is thinking. Used by both the live stream and the history replay.
+     */
+    public static String reasoningStartedMarker() {
+        return C + "\uD83E\uDDE0" + G + " Thinking\u2026" + R;
+    }
+
     public static float toSeconds(long millis) {
         return millis / 1000.0f;
     }

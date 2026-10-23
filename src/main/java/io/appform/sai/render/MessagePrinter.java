@@ -316,18 +316,24 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             }
 
             /**
-             * Appends the reasoning of a historical assistant turn as dimmed markdown so a
-             * restored session shows the reasoning the model produced, matching how the
-             * live stream renders it. Skipped when no normalized reasoning text exists.
+             * Appends the reasoning of a historical assistant turn the same way the live
+             * stream renders it: the thinking marker, the reasoning text rendered
+             * through the markdown renderer, then the thinking completed marker.
+             * Skipped when no normalized reasoning text exists.
              */
             private void addReasoningMessages(List<Update> messages, ReasoningContent reasoning) {
                 if (reasoning == null || Strings.isNullOrEmpty(reasoning.getContent())) {
                     return;
                 }
                 messages.add(Printer.empty());
-                messages.add(Printer.raw(Colours.GRAY + "🧠 Reasoning" + Colours.RESET));
-                messages.add(Printer.raw(Colours.GRAY
-                        + MarkdownRenderer.toAnsi(reasoning.getContent()) + Colours.RESET));
+                messages.add(Printer.raw(Utils.reasoningStartedMarker()).withImportant(true));
+                for (final var line : reasoning.getContent().split("\\R")) {
+                    final var rendered = MarkdownRenderer.toAnsi(line);
+                    if (rendered != null && !rendered.isBlank()) {
+                        messages.add(Printer.assistantMessage(rendered).withImportant(true).withRaw(true));
+                    }
+                }
+                messages.add(Printer.raw(Utils.reasoningCompletedMarker()).withImportant(true));
             }
 
         });
@@ -480,7 +486,6 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             if (!Strings.isNullOrEmpty(content)) {
                 messages.add(Printer.raw(Printer.Colours.GRAY + truncatePreview(content, 8, 5, 3)
                         + Printer.Colours.RESET));
-                messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
                 messages.add(Printer.systemMessage("Read %d characters...".formatted(content.length())));
             }
         }
