@@ -277,6 +277,14 @@ public class ReplRunner {
                     continue;
                 }
                 final var parsedInput = MediaParser.parse(userInput);
+                if (parsedInput.hasErrors()) {
+                    parsedInput.getErrors()
+                            .forEach(error -> printer.print(Printer.systemMessage(error)
+                                    .withSeverity(Severity.ERROR)
+                                    .withImportant(true)));
+                    userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
+                    continue;
+                }
                 final var resolvedInput = InputResolver.resolveInput(parsedInput.getTextPrompt());
                 final var inputCommand = new InputCommand("run-" + UUID.randomUUID().toString(),
                                                           resolvedInput,

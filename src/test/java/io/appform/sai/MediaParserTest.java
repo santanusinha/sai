@@ -127,10 +127,12 @@ class MediaParserTest {
     }
 
     @Test
-    void parseNonExistentFileKeepsTokenInText() {
+    void parseNonExistentFileReportsError() {
         final var input = "Check this @image:/nonexistent/path/file.png";
         final var result = MediaParser.parse(input);
-        assertTrue(result.getTextPrompt().contains("@image:/nonexistent/path/file.png"));
+        assertTrue(result.hasErrors());
+        assertEquals(1, result.getErrors().size());
+        assertTrue(result.getErrors().get(0).contains("/nonexistent/path/file.png"));
         assertTrue(result.getMedia().isEmpty());
     }
 
