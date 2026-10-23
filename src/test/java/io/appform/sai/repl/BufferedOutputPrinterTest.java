@@ -182,6 +182,10 @@ class BufferedOutputPrinterTest {
         assertTrue(renderedOutput().contains("plain code"));
     }
 
+    // -------------------------------------------------------------------------
+    // Mode detection unit tests
+    // -------------------------------------------------------------------------
+
     @Test
     void decimalEgAndNoDoNotBreakSentences() {
         // Decimals ("3.5"), "e.g." and "No." must not act as boundaries.
@@ -264,6 +268,14 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
+    void inlineCodeContainingDotIsNotSplit() {
+        for (final var c : "Use `a.b` now\n".toCharArray()) {
+            feed(String.valueOf(c));
+        }
+        assertEquals(List.of("Use `a.b` now"), renderedParts());
+    }
+
+    @Test
     void markDoneFlushesResidualNormalLine() {
         feed("no newline at end");
         assertEquals(0, printCount());
@@ -281,6 +293,10 @@ class BufferedOutputPrinterTest {
         assertEquals(1, printCount());
         assertTrue(renderedOutput().contains("code without closing fence"));
     }
+
+    // -------------------------------------------------------------------------
+    // CODE block rendering
+    // -------------------------------------------------------------------------
 
     @Test
     void markDoneIsIdempotentWhenBufferIsEmpty() {
@@ -377,6 +393,27 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
+    void numberedListItemStaysOnOneLineWhenStreamedCharByChar() {
+        final var text = "1. First do this. Then that.\n2. Second item.\n";
+        for (final var c : text.toCharArray()) {
+            feed(String.valueOf(c));
+        }
+        final var parts = renderedParts();
+        assertEquals(2, parts.size());
+        assertEquals("1. First do this. Then that.", parts.get(0));
+        assertEquals("2. Second item.", parts.get(1));
+    }
+
+    @Test
+    void numberedListItemWithSentencesStaysOnOneLine() {
+        feed("1. First do this. Then that.\n2. Second item.\n");
+        final var parts = renderedParts();
+        assertEquals(2, parts.size(), "each list item must be one print call");
+        assertEquals("1. First do this. Then that.", parts.get(0));
+        assertEquals("2. Second item.", parts.get(1));
+    }
+
+    @Test
     void orderedListMarkerDotIsNotTreatedAsSentenceBoundary() {
         // Streaming "1. First item" without a trailing newline must NOT flush
         // the "1." bullet marker on its own — doing so would separate the
@@ -417,19 +454,13 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
-    void sentenceAfterOrderedListMarkerFlushesAfterMarginClears() {
-        // SRX keeps the "1." marker with its item; the sentence flushes only
-        // once its boundary clears the hold-back margin.
+    void sentenceInsideListItemIsHeldUntilNewline() {
         feed("1. First item. ");
-        assertEquals(0, printCount(), "inside the margin: nothing flushes yet");
-        feed("x".repeat(85));
-        assertEquals(1,
-                     printCount(),
-                     "the real sentence boundary after the list item should flush");
+        assertEquals(0, printCount(), "a list item must not be split at a sentence boundary");
+        feed("More text.\n");
         final var parts = renderedParts();
-        assertTrue(parts.get(0).contains("1."),
-                   "flushed text must keep the list marker with its item: " + parts.get(0));
-        assertTrue(parts.get(0).contains("First item"), "item text should be present");
+        assertEquals(1, parts.size());
+        assertEquals("1. First item. More text.", parts.get(0));
     }
 
     @BeforeEach
