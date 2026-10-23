@@ -25,6 +25,7 @@ import com.phonepe.sentinelai.session.QueryDirection;
 
 import io.appform.sai.AgentConfig;
 import io.appform.sai.AgentRuntimeBuilder;
+import io.appform.sai.CancellableExecutorService;
 import io.appform.sai.InputResolver;
 import io.appform.sai.MediaParser;
 import io.appform.sai.SaiAgent;
@@ -67,6 +68,7 @@ public class ReplRunner {
     private final ObjectMapper mapper;
     private final EventBus eventBus;
     private final ExecutorService executorService;
+    private final CancellableExecutorService agentExecutor;
     private final FileSystemSessionStore sessionStore;
     private final AgentSessionExtension<String, String, SaiAgent> sessionExtension;
     private final AgentSkillsExtension<String, String, SaiAgent> agentSkillsExtension;
@@ -89,6 +91,7 @@ public class ReplRunner {
         this.mapper = runtime.mapper();
         this.eventBus = runtime.eventBus();
         this.executorService = runtime.executorService();
+        this.agentExecutor = runtime.agentExecutor();
         this.sessionStore = runtime.sessionStore();
         this.sessionExtension = runtime.sessionExtension();
         this.agentSkillsExtension = runtime.agentSkillsExtension();
@@ -110,6 +113,7 @@ public class ReplRunner {
      * @param mapper               shared JSON mapper
      * @param eventBus             event bus the agent publishes to
      * @param executorService      shared executor (agent runs, printer queue, event bus)
+     * @param agentExecutor        executor that runs the agent work and can abort all of it on Ctrl-C
      * @param sessionStore         session store for history replay
      * @param sessionExtension     session extension registered on the agent
      * @param agentSkillsExtension skills extension registered on the agent
@@ -127,6 +131,7 @@ public class ReplRunner {
             ObjectMapper mapper,
             EventBus eventBus,
             ExecutorService executorService,
+            CancellableExecutorService agentExecutor,
             FileSystemSessionStore sessionStore,
             AgentSessionExtension<String, String, SaiAgent> sessionExtension,
             AgentSkillsExtension<String, String, SaiAgent> agentSkillsExtension,
@@ -180,7 +185,11 @@ public class ReplRunner {
                                           slashContext.getCurrentModel().get());
             });
 
-            final var commandProcessor = AgentRuntimeBuilder.buildCommandProcessor(agentRef.get(), settings, printer);
+            final var commandProcessor = AgentRuntimeBuilder.buildCommandProcessor(agentRef.get(),
+                                                                                   settings,
+                                                                                   printer,
+                                                                                   agentExecutor,
+                                                                                   modelDetails.httpClient());
             final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
             try {
                 printWelcomeAndBanner(printer, agent);

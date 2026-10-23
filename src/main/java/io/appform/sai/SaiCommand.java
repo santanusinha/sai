@@ -150,6 +150,7 @@ public class SaiCommand implements Callable<Integer> {
 
         final var mapper = JsonUtils.createMapper();
         final var executorService = new MdcPropagatingExecutorService(Executors.newCachedThreadPool());
+        final var agentExecutor = new CancellableExecutorService(executorService);
         final var eventBus = new EventBus(executorService);
 
         final var pipedInput = InputResolver.readPipedInput(input, headless);
@@ -207,7 +208,8 @@ public class SaiCommand implements Callable<Integer> {
                 : model;
         final var modelDetails = AgentRuntimeBuilder.resolveModelFactory(modelPointer,
                                                                          mapper,
-                                                                         settingsConfig);
+                                                                         settingsConfig,
+                                                                         agentExecutor::isCancelled);
         log.info("Settings path: {}, data path: {}, persona: {}, model: {}, mode: {}",
                  settings.getConfigDir(),
                  settings.getDataDir(),
@@ -246,7 +248,7 @@ public class SaiCommand implements Callable<Integer> {
                                                                                        skill);
         final var agentFactory = new AgentFactory(settings,
                                                   List.of(sessionExtension, agentSkillsExtension),
-                                                  executorService,
+                                                  agentExecutor,
                                                   modelDetails.factory(),
                                                   mapper,
                                                   eventBus,
@@ -258,6 +260,7 @@ public class SaiCommand implements Callable<Integer> {
                                                   mapper,
                                                   eventBus,
                                                   executorService,
+                                                  agentExecutor,
                                                   sessionStore,
                                                   sessionExtension,
                                                   agentSkillsExtension,

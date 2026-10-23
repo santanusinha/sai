@@ -35,6 +35,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -111,11 +112,15 @@ public final class AgentRuntimeBuilder {
      */
     public static CommandProcessor buildCommandProcessor(final SaiAgent agent,
                                                          final Settings settings,
-                                                         final Printer printer) {
+                                                         final Printer printer,
+                                                         final CancellableExecutorService agentExecutor,
+                                                         final OkHttpClient httpClient) {
         return CommandProcessor.builder()
                 .sessionId(settings.getSessionId())
                 .agent(agent)
                 .printer(printer)
+                .agentExecutor(agentExecutor)
+                .httpClient(httpClient)
                 .build();
     }
 
@@ -220,11 +225,13 @@ public final class AgentRuntimeBuilder {
      * @param modelPointer   model string in {@code provider/model[/mode]} form
      * @param mapper         the JSON mapper
      * @param settingsConfig loaded settings config
+     * @param cancelled      returns {@code true} while the current run is cancelled; new HTTP requests then fail
      * @return the resolved model details
      */
     public static ResolvedModelDetails resolveModelFactory(final String modelPointer,
                                                            final ObjectMapper mapper,
-                                                           final SettingsConfig settingsConfig) {
+                                                           final SettingsConfig settingsConfig,
+                                                           final BooleanSupplier cancelled) {
         final var parts = modelPointer.split("/", 3);
         Preconditions.checkArgument(parts.length >= 2,
                                     "Model name must be in the format 'provider/model[/mode]'. Provided: "
@@ -244,7 +251,7 @@ public final class AgentRuntimeBuilder {
         }
         log.debug("Loaded settings config: {}", settingsConfig);
         log.info("Using model provider: {}, model name: {}, mode: {}", provider, modelName, mode);
-        final var okHttpClient = buildOkHttpClient();
+        final var okHttpClient = buildOkHttpClient(cancelled);
         return new ResolvedModelDetails(provider,
                                         modelName,
                                         mode,
@@ -268,11 +275,12 @@ public final class AgentRuntimeBuilder {
      *
      * @return a configured {@code OkHttpClient}
      */
-    private static OkHttpClient buildOkHttpClient() {
+    private static OkHttpClient buildOkHttpClient(final BooleanSupplier cancelled) {
         return new OkHttpClient.Builder()
                 .readTimeout(Duration.ofSeconds(900))
                 .callTimeout(Duration.ofSeconds(900))
                 .connectTimeout(Duration.ofSeconds(10))
+                .addInterceptor(new CancellationInterceptor(cancelled))
                 .addInterceptor(chain -> chain.proceed(
                                                        chain.request().newBuilder()
                                                                .header("User-Agent", USER_AGENT)

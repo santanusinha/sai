@@ -21,16 +21,14 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Duration;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
 import lombok.AllArgsConstructor;
 import lombok.Value;
@@ -50,6 +48,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutput> {
 
+    private static final long READER_GRACE_SECONDS = 2;
+
     private static final ExecutorService DAEMON_EXECUTOR = Executors.newCachedThreadPool(r -> {
         final var t = new Thread(r);
         t.setDaemon(true);
@@ -68,8 +68,19 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
     private final Duration timeout;
     private final UnaryOperator<String> lineConsumer;
 
+    private static void killTree(final Process process) {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
+    }
+
     private static BufferedReader reader(final InputStream stream) {
         return new BufferedReader(new InputStreamReader(stream));
+    }
+
+    private static String snapshot(final List<String> collected) {
+        synchronized (collected) {
+            return String.join(System.lineSeparator(), collected);
+        }
     }
 
     @Override
@@ -83,43 +94,55 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
                         "/bin/bash", "-c", command
                 };
         var statusCode = -1;
-        var readerTask = new AtomicReference<Future<Optional<String>>>();
-        var taskLatch = new CountDownLatch(1);
+        final var collected = new ArrayList<String>();
+        final var taskLatch = new CountDownLatch(1);
+        Process process = null;
         try {
-            final var process = new ProcessBuilder(processbuilderArgs)
+            process = new ProcessBuilder(processbuilderArgs)
                     .redirectErrorStream(true)
                     .start();
+            final var started = process;
+            // Nobody writes to the command: close stdin so programs that read it see EOF, not a hang.
+            process.getOutputStream().close();
 
             // Collect stdout on a daemon thread so the main thread can use waitFor(timeout),
-            // which is interruptible — unlike InputStream.read().
-            readerTask.set(DAEMON_EXECUTOR.submit(() -> {
-                try (final var stdoutStream = reader(process.getInputStream())) {
-                    return Optional.ofNullable(streamToString(stdoutStream));
+            // which is interruptible — unlike InputStream.read(). Lines are stored as they arrive so
+            // partial output survives a timeout or a background child that keeps the pipe open.
+            DAEMON_EXECUTOR.submit(() -> {
+                try (final var stdoutStream = reader(started.getInputStream())) {
+                    stdoutStream.lines().forEach(line -> {
+                        final var consumed = lineConsumer.apply(line);
+                        synchronized (collected) {
+                            collected.add(consumed);
+                        }
+                    });
                 }
                 catch (Exception e) {
-                    final var rootCause = AgentUtils.rootCause(e);
-                    log.error("Error reading stdout: {}", rootCause.getMessage());
-                    return Optional.<String>empty();
+                    log.error("Error reading stdout: {}", AgentUtils.rootCause(e).getMessage());
                 }
                 finally {
                     taskLatch.countDown();
                 }
-            }));
+            });
 
-            final var task = readerTask.get();
             final boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
             if (!finished) {
-                process.destroyForcibly();
-                // destroyForcibly closes the write-end of the pipe; the reader sees EOF quickly.
-                if (null != task && !task.isDone()) {
-                    task.cancel(true);
-                    taskLatch.await();
-                }
-                return new CommandOutput(-1, "", "Execution timed out after " + timeout.toSeconds() + " seconds");
+                // Kill the whole tree: a surviving child keeps the pipe open and the reader blocked.
+                killTree(process);
+                taskLatch.await(READER_GRACE_SECONDS, TimeUnit.SECONDS);
+                return new CommandOutput(-1,
+                                         snapshot(collected),
+                                         "Execution timed out after " + timeout.toSeconds() + " seconds");
             }
 
-            final var stdout = task.get(5, TimeUnit.SECONDS).orElse("");
+            // The shell has exited. A background child that inherited the pipe may keep it open, so
+            // wait only briefly and return what was received instead of failing.
+            final var drained = taskLatch.await(READER_GRACE_SECONDS, TimeUnit.SECONDS);
+            if (!drained) {
+                log.warn("Output stream still open after command exit (background process?): {}", command);
+            }
+            final var stdout = snapshot(collected);
             statusCode = process.exitValue();
             if (statusCode == 0) {
                 return new CommandOutput(statusCode, stdout, "");
@@ -127,11 +150,10 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
             return new CommandOutput(statusCode, "", stdout);
         }
         catch (InterruptedException e) {
-            final var task = readerTask.get();
-            if (null != task && !task.isDone()) {
-                task.cancel(true);
+            if (null != process) {
+                killTree(process);
                 try {
-                    taskLatch.await();
+                    taskLatch.await(READER_GRACE_SECONDS, TimeUnit.SECONDS);
                 }
                 catch (InterruptedException interrupted) {
                     e.addSuppressed(interrupted);
@@ -144,13 +166,7 @@ public class BashCommandRunner implements Callable<BashCommandRunner.CommandOutp
             final var rootCause = AgentUtils.rootCause(e);
             return new CommandOutput(statusCode,
                                      "",
-                                     "Error executing command: " + rootCause.getMessage());
+                                     "Error executing command: " + rootCause);
         }
-    }
-
-    private String streamToString(final BufferedReader reader) {
-        return reader.lines()
-                .map(lineConsumer)
-                .collect(Collectors.joining(System.lineSeparator()));
     }
 }

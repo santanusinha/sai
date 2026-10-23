@@ -24,6 +24,7 @@ import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
 import com.phonepe.sentinelai.core.errors.ErrorType;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
+import io.appform.sai.CancellableExecutorService;
 import io.appform.sai.SaiAgent;
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
@@ -31,16 +32,19 @@ import io.appform.sai.render.Utils;
 import io.appform.sai.term.Printer;
 import io.appform.sai.term.Printer.Update;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
 
 /**
  * Runs one user input against the agent on the calling thread and tracks the
@@ -57,7 +61,10 @@ public class CommandProcessor implements AutoCloseable {
 
     private final AtomicReference<SaiAgent> agent;
     private final Printer printer;
+    private final CancellableExecutorService agentExecutor;
+    private final OkHttpClient httpClient;
 
+    private final AtomicBoolean cancelled = new AtomicBoolean();
     private final AtomicReference<Future<?>> runningTask = new AtomicReference<>();
     private final String user = Optional.ofNullable(System.getProperty("user.name"))
             .orElseGet(() -> System.getenv().getOrDefault("USER", "User"));
@@ -66,8 +73,12 @@ public class CommandProcessor implements AutoCloseable {
     public CommandProcessor(
                             @NonNull final String sessionId,
                             @NonNull final SaiAgent agent,
-                            @NonNull final Printer printer) {
+                            @NonNull final Printer printer,
+                            final CancellableExecutorService agentExecutor,
+                            final OkHttpClient httpClient) {
         this.sessionId = sessionId;
+        this.agentExecutor = agentExecutor;
+        this.httpClient = httpClient;
         this.agent = new AtomicReference<>(agent);
         this.printer = printer;
     }
@@ -90,6 +101,16 @@ public class CommandProcessor implements AutoCloseable {
             return false;
         }
         log.info("Cancelling running task");
+        cancelled.set(true);
+        // Order matters. First close the gate and interrupt every worker thread, so retries are rejected.
+        // Then abort in-flight HTTP calls, because a socket read does not react to an interrupt.
+        // Last, complete the caller's future so that handleInput stops waiting.
+        if (agentExecutor != null) {
+            agentExecutor.cancelAll();
+        }
+        if (httpClient != null) {
+            httpClient.dispatcher().cancelAll();
+        }
         try {
             task.cancel(true);
         }
@@ -118,6 +139,10 @@ public class CommandProcessor implements AutoCloseable {
         final var elapsedTimeCounter = Stopwatch.createStarted();
         var errorMessage = "";
         var errorActor = Actor.ASSISTANT;
+        cancelled.set(false);
+        if (agentExecutor != null) {
+            agentExecutor.beginRun();
+        }
         final var streamHandler = new AgentStreamConsumer(new BufferedOutputPrinter(printer), //Reasoning stream
                                                           new BufferedOutputPrinter(printer));//Content stream
         try {
@@ -141,6 +166,9 @@ public class CommandProcessor implements AutoCloseable {
             // between submission and get() still finds something to cancel.
             runningTask.set(responseF);
             final var response = responseF.get();
+            if (cancelled.get()) {
+                throw new CancellationException("Cancelled by user");
+            }
             streamHandler.markDone();
             final var error = response.getError();
             if (error.getErrorType().equals(ErrorType.SUCCESS)) {
@@ -162,6 +190,11 @@ public class CommandProcessor implements AutoCloseable {
                         .getErrorType(), error.getMessage());
             }
         }
+        catch (CancellationException e) {
+            errorMessage = "Agent execution cancelled by user";
+            log.info(errorMessage);
+            errorActor = Actor.SYSTEM;
+        }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             errorMessage = "Agent execution interrupted by user";
@@ -176,6 +209,7 @@ public class CommandProcessor implements AutoCloseable {
         finally {
             // Always flush streamed residuals so a cancelled run does not
             // swallow the text that already arrived.
+            awaitWorkersStopped();
             streamHandler.markDone();
             runningTask.set(null);
         }
@@ -205,6 +239,20 @@ public class CommandProcessor implements AutoCloseable {
      */
     public void setAgent(@NonNull final SaiAgent agent) {
         this.agent.set(agent);
+    }
+
+    private void awaitWorkersStopped() {
+        if (agentExecutor == null || !cancelled.get()) {
+            return;
+        }
+        try {
+            if (!agentExecutor.awaitIdle(Duration.ofSeconds(5))) {
+                log.warn("Agent work did not stop within 5 seconds of cancel");
+            }
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
 }
