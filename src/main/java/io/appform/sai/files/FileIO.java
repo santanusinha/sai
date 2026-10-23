@@ -69,8 +69,11 @@ public class FileIO {
         if (!Strings.isNullOrEmpty(currentContent.error)) {
             return error(currentContent.error);
         }
-        if (!currentContent.checksum.equals(expectedChecksum)) {
-            log.error("Checksum mismatch for file {}.", filePath);
+        if (!checksumMatches(currentContent.checksum, expectedChecksum)) {
+            log.error("Checksum mismatch for file {}. Expected: [{}], actual: [{}].",
+                      filePath,
+                      expectedChecksum,
+                      currentContent.checksum);
             return error("Checksum mismatch. Re-read the file and try again with the latest checksum.");
         }
         final var content = currentContent.getContent();
@@ -153,9 +156,12 @@ public class FileIO {
                 // we return that error instead of proceeding with edits.
                 return ToolIO.WriteResponse.builder().error(currentContent.error).build();
             }
-            if (!currentContent.checksum.equals(expectedChecksum)) {
+            if (!checksumMatches(currentContent.checksum, expectedChecksum)) {
                 final var errorMessage = "Checksum mismatch. Re-read the file and try again with the latest checksum.";
-                log.error("Checksum mismatch for file {}.", filePath);
+                log.error("Checksum mismatch for file {}. Expected: [{}], actual: [{}].",
+                          filePath,
+                          expectedChecksum,
+                          currentContent.checksum);
                 return ToolIO.WriteResponse.builder()
                         .error(errorMessage)
                         .build();
@@ -209,6 +215,10 @@ public class FileIO {
             lines.addAll(startLine - 1, replacementLines);
         }
         return lines;
+    }
+
+    private static boolean checksumMatches(final String actual, final String expected) {
+        return actual != null && expected != null && actual.trim().equalsIgnoreCase(expected.trim());
     }
 
     private static List<String> editLines(String content, List<ToolIO.FileEditOperation> edits) {
