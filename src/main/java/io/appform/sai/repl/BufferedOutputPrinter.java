@@ -19,6 +19,8 @@ package io.appform.sai.repl;
 import io.appform.sai.render.MarkdownRenderer;
 import io.appform.sai.term.Printer;
 
+import java.util.regex.Pattern;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -52,6 +54,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class BufferedOutputPrinter {
 
+    private static final Pattern LIST_ITEM_PATTERN = Pattern.compile("^\\s*(?:\\d+[.)]|[-*+])(?:\\s|$)");
+
     enum Mode {
         /** Print each complete line immediately. */
         NORMAL,
@@ -70,6 +74,19 @@ class BufferedOutputPrinter {
 
     BufferedOutputPrinter(Printer printer) {
         this.printer = printer;
+    }
+
+    private static boolean hasOpenInlineCode(String line) {
+        return line.chars().filter(c -> c == '`').count() % 2 != 0;
+    }
+
+    /**
+     * Return {@code true} when {@code line} starts a list item, such as {@code "1. text"}, {@code "- text"},
+     * {@code "* text"} or {@code "+ text"}. Splitting such a line at a sentence boundary breaks the list item
+     * into separate output lines.
+     */
+    private static boolean isListItemLine(String line) {
+        return LIST_ITEM_PATTERN.matcher(line).find();
     }
 
     /**
@@ -233,7 +250,7 @@ class BufferedOutputPrinter {
      * {@code buffer} for reassembly with the next chunk.
      */
     private void flushSentencesFromBuffer() {
-        if (buffer.isEmpty()) {
+        if (buffer.isEmpty() || isListItemLine(buffer) || hasOpenInlineCode(buffer)) {
             return;
         }
         // Find the rightmost sentence boundary: [.!?] followed by a space, or
@@ -286,9 +303,15 @@ class BufferedOutputPrinter {
         if (rendered == null) {
             return;
         }
-        final var stripped = rendered.endsWith("\n")
-                ? rendered.substring(0, rendered.length() - 1)
-                : rendered;
+        var stripped = rendered;
+        if (!line.isBlank()) {
+            while (stripped.endsWith("\n")) {
+                stripped = stripped.substring(0, stripped.length() - 1);
+            }
+        }
+        else if (stripped.endsWith("\n")) {
+            stripped = stripped.substring(0, stripped.length() - 1);
+        }
         printer.print(Printer.assistantMessage(stripped)
                 .withImportant(true)
                 .withRaw(true));
