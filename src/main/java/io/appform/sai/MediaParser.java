@@ -58,6 +58,11 @@ public class MediaParser {
     public static class ParsedInput {
         String textPrompt;
         List<MediaInput> media;
+        List<String> errors;
+
+        public boolean hasErrors() {
+            return !errors.isEmpty();
+        }
     }
 
     /**
@@ -69,10 +74,11 @@ public class MediaParser {
      */
     public static ParsedInput parse(String input) {
         if (Strings.isNullOrEmpty(input)) {
-            return new ParsedInput(input, List.of());
+            return new ParsedInput(input, List.of(), List.of());
         }
 
         final var media = new ArrayList<MediaInput>();
+        final var errors = new ArrayList<String>();
         final var matcher = MEDIA_TOKEN.matcher(input);
         final var cleaned = new StringBuilder();
         int lastEnd = 0;
@@ -97,7 +103,7 @@ public class MediaParser {
                           type,
                           path,
                           e.getMessage());
-                // Keep the original token in the text so the user sees the error
+                errors.add("Cannot attach %s '%s': %s".formatted(type, path, e.getMessage()));
                 cleaned.append(matcher.group(0));
             }
 
@@ -105,7 +111,7 @@ public class MediaParser {
         }
         cleaned.append(input, lastEnd, input.length());
 
-        return new ParsedInput(cleaned.toString().trim(), List.copyOf(media));
+        return new ParsedInput(cleaned.toString().trim(), List.copyOf(media), List.copyOf(errors));
     }
 
     private static void checkFileSize(Path path) throws IOException {
