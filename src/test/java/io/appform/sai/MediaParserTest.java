@@ -65,6 +65,23 @@ class MediaParserTest {
     }
 
     @Test
+    void parseImageFileDetectsGifAndWebpMime() throws IOException {
+        final var gif = tempDir.resolve("pic.gif");
+        Files.write(gif, new byte[]{
+                1
+        });
+        final var gifMedia = MediaParser.parse("@image:" + gif).getMedia().get(0);
+        assertTrue(gifMedia.getContent().startsWith("data:image/gif;base64,"));
+
+        final var webp = tempDir.resolve("pic.webp");
+        Files.write(webp, new byte[]{
+                2
+        });
+        final var webpMedia = MediaParser.parse("@image:" + webp).getMedia().get(0);
+        assertTrue(webpMedia.getContent().startsWith("data:image/webp;base64,"));
+    }
+
+    @Test
     void parseImageFileReturnsMedia() throws IOException {
         final var imageFile = tempDir.resolve("test.png");
         Files.write(imageFile, new byte[]{
@@ -80,6 +97,20 @@ class MediaParserTest {
     }
 
     @Test
+    void parseImageFileUrlReturnsBase64Data() throws IOException {
+        final var imageFile = tempDir.resolve("local.png");
+        Files.write(imageFile, new byte[]{
+                5, 6, 7, 8
+        });
+        final var input = "What is this @image-url:" + imageFile.toUri();
+        final var result = MediaParser.parse(input);
+        assertEquals(1, result.getMedia().size());
+        final var media = result.getMedia().get(0);
+        assertEquals(MessageContentType.IMAGE_DATA, media.getContentType());
+        assertTrue(media.getContent().startsWith("data:image/png;base64,"));
+    }
+
+    @Test
     void parseImageUrlReturnsMedia() {
         final var input = "Describe this @image-url:https://example.com/image.png";
         final var result = MediaParser.parse(input);
@@ -88,6 +119,34 @@ class MediaParserTest {
         final var media = result.getMedia().get(0);
         assertEquals(MessageContentType.IMAGE_URL, media.getContentType());
         assertEquals("https://example.com/image.png", media.getContent());
+    }
+
+    @Test
+    void parseImageUrlWithLocalPathReturnsBase64Data() throws IOException {
+        final var imageFile = tempDir.resolve("bare.jpg");
+        Files.write(imageFile, new byte[]{
+                9, 9
+        });
+        final var input = "Look @image-url:" + imageFile.toAbsolutePath();
+        final var result = MediaParser.parse(input);
+        assertEquals(1, result.getMedia().size());
+        final var media = result.getMedia().get(0);
+        assertEquals(MessageContentType.IMAGE_DATA, media.getContentType());
+        assertTrue(media.getContent().startsWith("data:image/jpeg;base64,"));
+    }
+
+    @Test
+    void parseImageUrlWithPlainHttpUrlReturnsMedia() {
+        final var result = MediaParser.parse("Check @image-url:http://example.com/a.png");
+        assertEquals(1, result.getMedia().size());
+        assertEquals(MessageContentType.IMAGE_URL, result.getMedia().get(0).getContentType());
+    }
+
+    @Test
+    void parseImageUrlWithUnsupportedValueReportsError() {
+        final var result = MediaParser.parse("Check @image-url:not-a-url-or-file.png");
+        assertTrue(result.hasErrors());
+        assertTrue(result.getMedia().isEmpty());
     }
 
     @Test

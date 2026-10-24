@@ -21,6 +21,7 @@ import com.phonepe.sentinelai.core.agentmessages.MediaTypes.AudioFormat;
 import com.phonepe.sentinelai.core.agentmessages.MediaTypes.ImageDetail;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -38,7 +39,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Supported syntax (space-delimited tokens in the input):
  * <ul>
  * <li>{@code @image:./path/to/image.png} — image file, base64-encoded</li>
- * <li>{@code @image-url:https://example.com/image.png} — image URL</li>
+ * <li>{@code @image-url:https://example.com/image.png} — public HTTPS image URL;
+ * a {@code file:} URI or an existing local path is read and sent as base64 data</li>
  * <li>{@code @audio:./path/to/audio.wav} — audio file, base64-encoded</li>
  * </ul>
  *
@@ -91,7 +93,7 @@ public class MediaParser {
             try {
                 final var mediaInput = switch (type) {
                     case "image" -> readImageFile(path);
-                    case "image-url" -> MediaInput.imageUrl(path, ImageDetail.AUTO);
+                    case "image-url" -> resolveImageUrl(path);
                     case "audio" -> readAudioFile(path);
                     default -> throw new IllegalArgumentException("Unsupported media type: " + type);
                 };
@@ -153,10 +155,31 @@ public class MediaParser {
         final var bytes = Files.readAllBytes(path);
         final var base64 = Base64.getEncoder().encodeToString(bytes);
         // UserPrompt.imageData requires the content to be a full data URL of the
-        // form data:image/{png|jpeg|jpg};base64,&lt;content&gt;. Only png and jpeg are
-        // accepted by the model APIs.
+        // form data:image/{mime};base64,&lt;content&gt;. Only png, jpeg, gif and
+        // webp are accepted by the model APIs.
         final var lower = filePath.toLowerCase();
-        final var mime = lower.endsWith(".png") ? "png" : "jpeg";
+        final var mime = lower.endsWith(".png")
+                ? "png"
+                : lower.endsWith(".gif")
+                        ? "gif"
+                : lower.endsWith(".webp") ? "webp"
+                : "jpeg";
         return MediaInput.imageContent("data:image/%s;base64,%s".formatted(mime, base64), ImageDetail.AUTO);
+    }
+
+    private static MediaInput resolveImageUrl(String value) throws IOException {
+        if (value.startsWith("file:")) {
+            return readImageFile(Path.of(URI.create(value)).toString());
+        }
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+            return MediaInput.imageUrl(value, ImageDetail.AUTO);
+        }
+        // A bare token that points at an existing local file is treated as a
+        // local image; anything else would be rejected by the model API.
+        if (Files.exists(Path.of(value))) {
+            return readImageFile(value);
+        }
+        throw new IOException("Model APIs accept public HTTPS URLs or data URLs only. "
+                + "Use @image:" + value + " to attach a local image file.");
     }
 }
