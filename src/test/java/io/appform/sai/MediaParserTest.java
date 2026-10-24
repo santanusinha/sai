@@ -15,8 +15,11 @@
  */
 package io.appform.sai;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.phonepe.sentinelai.core.agentmessages.MediaTypes.AudioFormat;
@@ -28,11 +31,65 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 
 class MediaParserTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void clipboardCommandIsNullWithoutDisplayServer() {
+        assertNull(MediaParser.clipboardCommand("", ""));
+    }
+
+    @Test
+    void clipboardCommandUsesWaylandPaste() {
+        assertArrayEquals(new String[]{
+                "wl-paste", "-t", "image/png"
+        },
+                          MediaParser.clipboardCommand("wayland-0", null));
+        // Wayland takes precedence when both variables are set.
+        assertArrayEquals(new String[]{
+                "wl-paste", "-t", "image/png"
+        },
+                          MediaParser.clipboardCommand("wayland-0", ":0"));
+    }
+
+    @Test
+    void clipboardCommandUsesXclipOnX11() {
+        assertArrayEquals(
+                          new String[]{
+                                  "xclip", "-selection", "clipboard", "-t", "image/png", "-o"
+                          },
+                          MediaParser.clipboardCommand(null, ":0"));
+    }
+
+    void detectImageMimeIdentifiesMagicBytes() {
+        final var png = new byte[]{
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x00
+        };
+        assertEquals("png", MediaParser.detectImageMime(png));
+
+        final var jpeg = new byte[]{
+                (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10
+        };
+        assertEquals("jpeg", MediaParser.detectImageMime(jpeg));
+
+        final var gif = new byte[]{
+                'G', 'I', 'F', '8', '9', 'a'
+        };
+        assertEquals("gif", MediaParser.detectImageMime(gif));
+
+        final var webp = new byte[]{
+                'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P', 'V', 'P', '8', ' '
+        };
+        assertEquals("webp", MediaParser.detectImageMime(webp));
+
+        assertEquals("png", MediaParser.detectImageMime(new byte[]{
+                0x00
+        }));
+    }
 
     @Test
     void parseAtFileWithoutPrefixIsNotMedia() {
@@ -207,5 +264,25 @@ class MediaParserTest {
         final var result = MediaParser.parse("Hello, how are you?");
         assertEquals("Hello, how are you?", result.getTextPrompt());
         assertTrue(result.getMedia().isEmpty());
+    }
+
+    @Test
+    void readImageFromProcessBuildsDataUrl() throws IOException {
+        final var media = MediaParser.readImageFromProcess(
+                                                           new String[]{
+                                                                   "printf", "%s", "dummy-clipboard-bytes"
+                                                           });
+        assertEquals(MessageContentType.IMAGE_DATA, media.getContentType());
+        assertTrue(media.getContent().startsWith("data:image/png;base64,"));
+        final var decoded = media.getContent().substring("data:image/png;base64,".length());
+        assertEquals("dummy-clipboard-bytes", new String(Base64.getDecoder().decode(decoded)));
+    }
+
+    @Test
+    void readImageFromProcessTimesOutOnHangingProcess() {
+        final var command = new String[]{
+                "sleep", "60"
+        };
+        assertThrows(IOException.class, () -> MediaParser.readImageFromProcess(command));
     }
 }

@@ -22,11 +22,16 @@ import com.phonepe.sentinelai.core.agentmessages.MediaTypes.ImageDetail;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 import lombok.Value;
@@ -39,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Supported syntax (space-delimited tokens in the input):
  * <ul>
  * <li>{@code @image:./path/to/image.png} — image file, base64-encoded</li>
+ * <li>{@code @image:clipboard} — image copied to the system clipboard (Wayland or X11)</li>
  * <li>{@code @image-url:https://example.com/image.png} — public HTTPS image URL;
  * a {@code file:} URI or an existing local path is read and sent as base64 data</li>
  * <li>{@code @audio:./path/to/audio.wav} — audio file, base64-encoded</li>
@@ -55,6 +61,8 @@ public class MediaParser {
                                                                "@(image|image-url|audio):([^\\s]+)");
 
     private static final int MAX_MEDIA_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+    private static final String CLIPBOARD_TOKEN = "clipboard";
 
     @Value
     public static class ParsedInput {
@@ -92,7 +100,9 @@ public class MediaParser {
 
             try {
                 final var mediaInput = switch (type) {
-                    case "image" -> readImageFile(path);
+                    case "image" -> CLIPBOARD_TOKEN.equals(path)
+                            ? readClipboardImage()
+                            : readImageFile(path);
                     case "image-url" -> resolveImageUrl(path);
                     case "audio" -> readAudioFile(path);
                     default -> throw new IllegalArgumentException("Unsupported media type: " + type);
@@ -114,6 +124,121 @@ public class MediaParser {
         cleaned.append(input, lastEnd, input.length());
 
         return new ParsedInput(cleaned.toString().trim(), List.copyOf(media), List.copyOf(errors));
+    }
+
+    static String[] clipboardCommand() {
+        return clipboardCommand(System.getenv("WAYLAND_DISPLAY"), System.getenv("DISPLAY"));
+    }
+
+    static String[] clipboardCommand(String waylandDisplay, String display) {
+        if (!isBlank(waylandDisplay)) {
+            return new String[]{
+                    "wl-paste", "-t", "image/png"
+            };
+        }
+        if (!isBlank(display)) {
+            return new String[]{
+                    "xclip", "-selection", "clipboard", "-t", "image/png", "-o"
+            };
+        }
+        return null;
+    }
+
+    static String detectImageMime(byte[] bytes) {
+        if (bytes.length >= 8
+                && (bytes[0] & 0xFF) == 0x89
+                && bytes[1] == 0x50
+                && bytes[2] == 0x4E
+                && bytes[3] == 0x47
+                && bytes[4] == 0x0D
+                && bytes[5] == 0x0A
+                && bytes[6] == 0x1A
+                && bytes[7] == 0x0A) {
+            return "png";
+        }
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF) {
+            return "jpeg";
+        }
+        if (bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F') {
+            return "gif";
+        }
+        if (bytes.length >= 12
+                && bytes[0] == 'R'
+                && bytes[1] == 'I'
+                && bytes[2] == 'F'
+                && bytes[3] == 'F'
+                && bytes[8] == 'W'
+                && bytes[9] == 'E'
+                && bytes[10] == 'B'
+                && bytes[11] == 'P') {
+            return "webp";
+        }
+        // The clipboard command requests image/png, so default to png.
+        return "png";
+    }
+
+    static MediaInput readImageFromProcess(String[] command) throws IOException {
+        final Process process;
+        try {
+            process = new ProcessBuilder(command).start();
+        }
+        catch (IOException e) {
+            throw new IOException("Failed to run '" + command[0] + "': " + e.getMessage());
+        }
+        // Consume the streams on helper threads. Reading them on the current
+        // thread before waitFor() blocks until the process exits, and reading
+        // them after waitFor() can deadlock when the pipe buffer fills up.
+        final var stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final var stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final boolean finished;
+        try {
+            finished = process.waitFor(10, TimeUnit.SECONDS);
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            abort(process, stdout, stderr);
+            throw new IOException("Interrupted while reading the clipboard.");
+        }
+        if (!finished) {
+            abort(process, stdout, stderr);
+            throw new IOException("'" + command[0] + "' did not finish in time.");
+        }
+        final byte[] bytes;
+        final String stderrText;
+        try {
+            bytes = stdout.get(2, TimeUnit.SECONDS);
+            stderrText = new String(stderr.get(2, TimeUnit.SECONDS), StandardCharsets.UTF_8).trim();
+        }
+        catch (ExecutionException | InterruptedException | TimeoutException e) {
+            abort(process, stdout, stderr);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IOException("Failed to read the output of '" + command[0] + "'.");
+        }
+        if (process.exitValue() != 0 || bytes.length == 0) {
+            throw new IOException("The clipboard does not contain an image. "
+                    + "Copy an image to the clipboard first."
+                    + (stderrText.isEmpty() ? "" : " (" + stderrText + ")"));
+        }
+        if (bytes.length > MAX_MEDIA_SIZE_BYTES) {
+            throw new IOException("Image size %d bytes exceeds the maximum limit of %d bytes."
+                    .formatted(bytes.length, MAX_MEDIA_SIZE_BYTES));
+        }
+        final var mime = detectImageMime(bytes);
+        final var base64 = Base64.getEncoder().encodeToString(bytes);
+        return MediaInput.imageContent("data:image/%s;base64,%s".formatted(mime, base64),
+                                       ImageDetail.AUTO);
+    }
+
+    private static void abort(Process process, CompletableFuture<byte[]>... reads) {
+        process.destroyForcibly();
+        for (var read : reads) {
+            read.cancel(true);
+        }
     }
 
     private static void checkFileSize(Path path) throws IOException {
@@ -140,6 +265,10 @@ public class MediaParser {
         return AudioFormat.WAV;
     }
 
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private static MediaInput readAudioFile(String filePath) throws IOException {
         final var path = Path.of(filePath).toAbsolutePath().normalize();
         checkFileSize(path);
@@ -147,6 +276,15 @@ public class MediaParser {
         final var base64 = Base64.getEncoder().encodeToString(bytes);
         final var audioFormat = detectAudioFormat(filePath);
         return MediaInput.audio(base64, audioFormat);
+    }
+
+    private static MediaInput readClipboardImage() throws IOException {
+        final var command = clipboardCommand();
+        if (command == null) {
+            throw new IOException("No graphical session found. "
+                    + "Copy an image to the clipboard inside a Wayland or X11 session first.");
+        }
+        return readImageFromProcess(command);
     }
 
     private static MediaInput readImageFile(String filePath) throws IOException {
@@ -167,7 +305,19 @@ public class MediaParser {
         return MediaInput.imageContent("data:image/%s;base64,%s".formatted(mime, base64), ImageDetail.AUTO);
     }
 
+    private static byte[] readStream(java.io.InputStream stream) {
+        try (stream) {
+            return stream.readAllBytes();
+        }
+        catch (IOException e) {
+            return new byte[0];
+        }
+    }
+
     private static MediaInput resolveImageUrl(String value) throws IOException {
+        if (CLIPBOARD_TOKEN.equals(value)) {
+            return readClipboardImage();
+        }
         if (value.startsWith("file:")) {
             return readImageFile(Path.of(URI.create(value)).toString());
         }
