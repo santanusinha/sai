@@ -152,6 +152,11 @@ public class MediaParser {
         checkFileSize(path);
         final var bytes = Files.readAllBytes(path);
         final var base64 = Base64.getEncoder().encodeToString(bytes);
-        return MediaInput.imageContent(base64, ImageDetail.AUTO);
+        // UserPrompt.imageData requires the content to be a full data URL of the
+        // form data:image/{png|jpeg|jpg};base64,&lt;content&gt;. Only png and jpeg are
+        // accepted by the model APIs.
+        final var lower = filePath.toLowerCase();
+        final var mime = lower.endsWith(".png") ? "png" : "jpeg";
+        return MediaInput.imageContent("data:image/%s;base64,%s".formatted(mime, base64), ImageDetail.AUTO);
     }
 }
