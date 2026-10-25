@@ -20,6 +20,7 @@ import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.tools.ToolIO;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,6 +46,16 @@ public class FileIO {
         String content;
         String checksum;
         String error;
+    }
+
+    /**
+     * Reads the content of a file.
+     *
+     * @param path the file to checksum
+     * @return the SHA-256 of the raw file bytes, matching what sha256sum computes
+     */
+    public static String checksumOf(Path path) throws IOException {
+        return calculateChecksum(Files.readAllBytes(path));
     }
 
     /**
@@ -116,9 +127,12 @@ public class FileIO {
                                       null,
                                       "File size exceeds the maximum limit of 1 MB. Use the bash tool to read and operate on large files.");
             }
-            final var content = Files.readString(path, StandardCharsets.UTF_8);
+            // Read the raw bytes first: the checksum is over them, and decoding via
+            // new String never fails on non-UTF-8 content, unlike Files.readString.
+            final var rawBytes = Files.readAllBytes(path);
+            final var checksum = calculateChecksum(rawBytes);
+            final var content = new String(rawBytes, StandardCharsets.UTF_8);
             final var lines = content.isEmpty() ? new String[0] : content.split(System.lineSeparator(), -1);
-            final var checksum = calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
             if (endLine == -1) {
                 log.debug("Reading whole file {} as endLine is -1", filePath);
                 if (addLineNumbers) {

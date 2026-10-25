@@ -70,6 +70,19 @@ class BashChecksumInteropTest {
 
     @Test
     @SneakyThrows
+    void checksumMatchesSha256sumOnBinaryFile() {
+        // The checksum is over raw file bytes, so it must equal sha256sum even for a
+        // file that is not valid UTF-8.
+        final var bytes = new byte[]{
+                0x00, 0x01, 0x02, (byte) 0xFF, (byte) 0xFE, (byte) 0xC3, 0x28
+        };
+        Files.write(testFile, bytes);
+
+        assertEquals(sha256sum(testFile), FileIO.readFile(testFile.toString(), 1, -1, false).getChecksum());
+    }
+
+    @Test
+    @SneakyThrows
     void editAcceptsChecksumComputedByBashAfterBashModification() {
         Files.writeString(testFile, "line1\nline2\nline3", StandardCharsets.UTF_8);
 
@@ -100,6 +113,25 @@ class BashChecksumInteropTest {
 
     @Test
     @SneakyThrows
+    void writeAcceptsBashChecksumOnBinaryFile() {
+        // A binary file changed by bash must accept a write carrying the sha256sum of the
+        // new raw bytes.
+        final var bytes = new byte[]{
+                0x00, 0x01, 0x02, (byte) 0xFF, (byte) 0xFE, (byte) 0xC3, 0x28
+        };
+        Files.write(testFile, bytes);
+
+        runBash("printf '\\x0a\\x0b\\xff' > " + testFile);
+        final var bashChecksum = sha256sum(testFile);
+
+        final var response = FileIO.write(testFile.toString(), "text content", bashChecksum);
+
+        assertNull(response.getError());
+        assertEquals("text content", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void writeAcceptsChecksumComputedByBashAfterBashModification() {
         Files.writeString(testFile, "original content", StandardCharsets.UTF_8);
 
@@ -110,6 +142,8 @@ class BashChecksumInteropTest {
 
         // A write with the pre-bash checksum is rejected.
         final var rejected = FileIO.write(testFile.toString(), "agent content", preBashChecksum);
+        assertNotNull(rejected.getError());
+        assertTrue(rejected.getError().contains("Checksum mismatch"), rejected.getError());
 
         // A write with the bash-computed checksum succeeds.
         final var response = FileIO.write(testFile.toString(), "agent content", bashChecksum);
