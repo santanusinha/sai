@@ -156,6 +156,24 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void editDetectsExternalModificationAfterRead() {
+        // The edit tool also computes the checksum from the file on disk at every call.
+        Files.writeString(testFile, "line1\nline2", StandardCharsets.UTF_8);
+        final var readResult = FileIO.readFile(testFile.toString(), 1, -1, false);
+
+        Files.writeString(testFile, "changed externally", StandardCharsets.UTF_8);
+
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(1).content("edited").build());
+        final var response = FileIO.editFile(testFile.toString(), edits, readResult.getChecksum());
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("Checksum mismatch"), response.getError());
+        assertEquals("changed externally", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void editEndLineMinusOneDeleteToEnd() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -413,6 +431,7 @@ class FileIOTest {
         }
     }
 
+
     @Test
     @SneakyThrows
     void safePathAllowsSubdirectoryUnderTmp() {
@@ -430,7 +449,6 @@ class FileIOTest {
             deleteRecursive(tmpSubDir);
         }
     }
-
 
     @BeforeEach
     void setUp() throws IOException {
@@ -451,6 +469,30 @@ class FileIOTest {
 
         final var response = FileIO.write(newFile.toString(), content, "");
         assertEquals(content.length(), response.getCharsWritten());
+    }
+
+    @Test
+    @SneakyThrows
+    void writeDetectsExternalModificationAfterRead() {
+        // The checksum is computed from the file on disk at every write call. A change
+        // made after the read, for example by the bash tool, must fail the write.
+        Files.writeString(testFile, "original content", StandardCharsets.UTF_8);
+        final var readResult = FileIO.readFile(testFile.toString(), 1, -1, false);
+
+        Files.writeString(testFile, "changed externally", StandardCharsets.UTF_8);
+
+        final var response = FileIO.write(testFile.toString(), "new content", readResult.getChecksum());
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("Checksum mismatch"), response.getError());
+        assertEquals("changed externally", Files.readString(testFile));
+
+        // A write with the checksum of a fresh read succeeds.
+        final var fresh = FileIO.readFile(testFile.toString(), 1, -1, false);
+        final var retried = FileIO.write(testFile.toString(), "new content", fresh.getChecksum());
+
+        assertNull(retried.getError());
+        assertEquals("new content", Files.readString(testFile));
     }
 
     @Test
