@@ -38,22 +38,49 @@ class MediaParserTest {
     @TempDir
     Path tempDir;
 
+
+    @SuppressWarnings("unchecked")
+    private static void setEnv(String key, String value) {
+        try {
+            final var field = System.getenv().getClass().getDeclaredField("m");
+            field.setAccessible(true);
+            final var env = (java.util.Map<String, String>) field.get(System.getenv());
+            env.put(key, value);
+        }
+        catch (Exception e) {
+            // Env mutation is best effort; skip the test body if it fails.
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Cannot modify process environment");
+        }
+    }
+
+    @Test
+    void clipboardCommandFailsWhenClipboardToolIsMissing() {
+        // An empty PATH makes every program look missing.
+        assertThrows(MediaParser.ClipboardUnavailableException.class,
+                     () -> MediaParser.clipboardCommand("wayland-0", null, ""));
+        assertThrows(MediaParser.ClipboardUnavailableException.class,
+                     () -> MediaParser.clipboardCommand(null, ":0", ""));
+        // No display server at all stays null.
+        assertNull(MediaParser.clipboardCommand(null, null, ""));
+    }
+
     @Test
     void clipboardCommandIsNullWithoutDisplayServer() {
-        assertNull(MediaParser.clipboardCommand("", ""));
+        assertNull(MediaParser.clipboardCommand("", "", System.getenv("PATH")));
     }
 
     @Test
     void clipboardCommandUsesWaylandPaste() {
+        final var path = System.getenv("PATH");
         assertArrayEquals(new String[]{
                 "wl-paste", "-t", "image/png"
         },
-                          MediaParser.clipboardCommand("wayland-0", null));
+                          MediaParser.clipboardCommand("wayland-0", null, path));
         // Wayland takes precedence when both variables are set.
         assertArrayEquals(new String[]{
                 "wl-paste", "-t", "image/png"
         },
-                          MediaParser.clipboardCommand("wayland-0", ":0"));
+                          MediaParser.clipboardCommand("wayland-0", ":0", path));
     }
 
     @Test
@@ -62,9 +89,10 @@ class MediaParserTest {
                           new String[]{
                                   "xclip", "-selection", "clipboard", "-t", "image/png", "-o"
                           },
-                          MediaParser.clipboardCommand(null, ":0"));
+                          MediaParser.clipboardCommand(null, ":0", System.getenv("PATH")));
     }
 
+    @Test
     void detectImageMimeIdentifiesMagicBytes() {
         final var png = new byte[]{
                 (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x00
@@ -112,6 +140,23 @@ class MediaParserTest {
         final var media = result.getMedia().get(0);
         assertEquals(MessageContentType.AUDIO, media.getContentType());
         assertEquals(AudioFormat.WAV, media.getAudioFormat());
+    }
+
+    @Test
+    void parseClipboardTokenReportsMissingToolAsParseError() {
+        final var path = System.getenv("PATH");
+        try {
+            setEnv("PATH", "");
+            final var result = MediaParser.parse("Check @image:clipboard");
+            assertTrue(result.hasErrors());
+            assertTrue(result.getMedia().isEmpty());
+            assertTrue(result.getErrors().get(0).contains("is not installed"));
+        }
+        finally {
+            if (path != null) {
+                setEnv("PATH", path);
+            }
+        }
     }
 
     @Test

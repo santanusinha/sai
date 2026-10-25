@@ -20,6 +20,7 @@ import com.phonepe.sentinelai.core.agent.MediaInput;
 import com.phonepe.sentinelai.core.agentmessages.MediaTypes.AudioFormat;
 import com.phonepe.sentinelai.core.agentmessages.MediaTypes.ImageDetail;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -75,6 +76,13 @@ public class MediaParser {
         }
     }
 
+    static class ClipboardUnavailableException extends RuntimeException {
+
+        ClipboardUnavailableException(String message) {
+            super(message);
+        }
+    }
+
     /**
      * Scans the input for media references, reads and encodes the referenced files,
      * and returns the cleaned text prompt with the media list.
@@ -127,19 +135,26 @@ public class MediaParser {
     }
 
     static String[] clipboardCommand() {
-        return clipboardCommand(System.getenv("WAYLAND_DISPLAY"), System.getenv("DISPLAY"));
+        return clipboardCommand(
+                                System.getenv("WAYLAND_DISPLAY"),
+                                System.getenv("DISPLAY"),
+                                System.getenv("PATH"));
     }
 
-    static String[] clipboardCommand(String waylandDisplay, String display) {
+    static String[] clipboardCommand(String waylandDisplay, String display, String path) {
         if (!isBlank(waylandDisplay)) {
-            return new String[]{
-                    "wl-paste", "-t", "image/png"
-            };
+            return isExecutable("wl-paste", path)
+                    ? new String[]{
+                            "wl-paste", "-t", "image/png"
+                    }
+                    : unavailable("wl-paste", "wl-clipboard");
         }
         if (!isBlank(display)) {
-            return new String[]{
-                    "xclip", "-selection", "clipboard", "-t", "image/png", "-o"
-            };
+            return isExecutable("xclip", path)
+                    ? new String[]{
+                            "xclip", "-selection", "clipboard", "-t", "image/png", "-o"
+                    }
+                    : unavailable("xclip", "xclip");
         }
         return null;
     }
@@ -269,6 +284,19 @@ public class MediaParser {
         return value == null || value.isBlank();
     }
 
+    private static boolean isExecutable(String program, String path) {
+        for (final var dir : (path == null ? "" : path).split(File.pathSeparator)) {
+            if (dir.isBlank()) {
+                continue;
+            }
+            final var candidate = new File(dir, program);
+            if (candidate.canExecute()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static MediaInput readAudioFile(String filePath) throws IOException {
         final var path = Path.of(filePath).toAbsolutePath().normalize();
         checkFileSize(path);
@@ -279,12 +307,24 @@ public class MediaParser {
     }
 
     private static MediaInput readClipboardImage() throws IOException {
-        final var command = clipboardCommand();
-        if (command == null) {
-            throw new IOException("No graphical session found. "
-                    + "Copy an image to the clipboard inside a Wayland or X11 session first.");
+        final String[] command;
+        try {
+            command = clipboardCommand();
         }
-        return readImageFromProcess(command);
+        catch (ClipboardUnavailableException e) {
+            throw new IOException(e.getMessage());
+        }
+        if (command == null) {
+            throw new ClipboardUnavailableException(
+                                                    "No graphical session found. "
+                                                            + "Copy an image to the clipboard inside a Wayland or X11 session first.");
+        }
+        try {
+            return readImageFromProcess(command);
+        }
+        catch (IOException e) {
+            throw new IOException(e.getMessage());
+        }
     }
 
     private static MediaInput readImageFile(String filePath) throws IOException {
@@ -292,9 +332,6 @@ public class MediaParser {
         checkFileSize(path);
         final var bytes = Files.readAllBytes(path);
         final var base64 = Base64.getEncoder().encodeToString(bytes);
-        // UserPrompt.imageData requires the content to be a full data URL of the
-        // form data:image/{mime};base64,&lt;content&gt;. Only png, jpeg, gif and
-        // webp are accepted by the model APIs.
         final var lower = filePath.toLowerCase();
         final var mime = lower.endsWith(".png")
                 ? "png"
@@ -331,5 +368,11 @@ public class MediaParser {
         }
         throw new IOException("Model APIs accept public HTTPS URLs or data URLs only. "
                 + "Use @image:" + value + " to attach a local image file.");
+    }
+
+    private static String[] unavailable(String program, String packageName) {
+        throw new ClipboardUnavailableException(
+                                                program + " is not installed. Install " + packageName
+                                                        + " to use @image:clipboard.");
     }
 }
