@@ -173,7 +173,7 @@ public class SaiCommand implements Callable<Integer> {
         final var sessionDataPath = Paths.get(settings.getDataDir(), "sessions");
         Files.createDirectories(sessionDataPath);
 
-        Files.createDirectories(Paths.get("/tmp", "sai", effectiveSessionId, "scratch"));
+        Files.createDirectories(Paths.get(settings.scratchDir()));
 
         // On resume: restore model and persona from the saved session extra data.
         // CLI flags (--model / --persona) always take priority over saved values.

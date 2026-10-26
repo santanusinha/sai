@@ -17,6 +17,7 @@ package io.appform.sai;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -89,5 +90,16 @@ public class Settings {
                         throw new IllegalStateException(e);
                     }
                 });
+    }
+
+    /**
+     * Directory the agent can use to store temporary files for this session. Lives under the
+     * session data in {@link #dataDir} so it follows the same XDG-style location (and the
+     * {@code --data-dir} override) as the rest of the session state.
+     *
+     * @return the scratch directory path for this session
+     */
+    public String scratchDir() {
+        return Paths.get(dataDir, "sessions", sessionId, "scratch").toString();
     }
 }
