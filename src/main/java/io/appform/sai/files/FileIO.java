@@ -89,12 +89,14 @@ public class FileIO {
         }
         final var content = currentContent.getContent();
         try {
-            final var lines = editLines(content, edits);
+            final var corrections = new ArrayList<String>();
+            final var lines = editLines(content, edits, corrections);
             final var editedContent = String.join(System.lineSeparator(), lines);
             Files.writeString(path, editedContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             final var newChecksum = calculateChecksum(editedContent.getBytes(StandardCharsets.UTF_8));
             return ToolIO.FileEditResponse.builder()
                     .newChecksum(newChecksum)
+                    .corrections(corrections)
                     .build();
         }
         catch (Exception e) {
@@ -235,7 +237,9 @@ public class FileIO {
         return actual != null && expected != null && actual.trim().equalsIgnoreCase(expected.trim());
     }
 
-    private static List<String> editLines(String content, List<ToolIO.FileEditOperation> edits) {
+    private static List<String> editLines(String content,
+                                          List<ToolIO.FileEditOperation> edits,
+                                          List<String> corrections) {
         final var lines = new ArrayList<String>(Arrays.asList(content.split(System.lineSeparator(), -1)));
         // Apply edits from the bottom of the file upwards so that each edit's line numbers
         // still refer to the original content. This must NOT depend on the order the caller
@@ -256,7 +260,17 @@ public class FileIO {
                                                            + " overlaps a later edit starting at line "
                                                            + previousStartLine + ".");
             }
+            // Lines just outside the range are not part of the replacement, so a replacement
+            // line that copies one of them is an accidental duplicate the model echoed.
+            final var lineBefore = startLine > 1 && startLine - 2 < lines.size() ? lines.get(startLine - 2) : null;
+            final var lineAfter = effectiveEnd < lines.size() ? lines.get(effectiveEnd) : null;
             applyEdit(lines, startLine, endLine, replacement.getContent());
+            removeBoundaryDuplicates(lines,
+                                     startLine,
+                                     replacement.getContent(),
+                                     lineBefore,
+                                     lineAfter,
+                                     corrections);
             previousStartLine = startLine;
         }
         return lines;
@@ -270,6 +284,47 @@ public class FileIO {
         return ToolIO.FileEditResponse.builder()
                 .error(message)
                 .build();
+    }
+
+    /**
+     * Removes accidental boundary echoes: models often repeat the untouched line just outside
+     * the edit range at the edge of the replacement block. If the first replacement line equals
+     * the line that sits before the range, or the last replacement line equals the line that
+     * sits after it, the duplicate copy inside the range is dropped and recorded in
+     * {@code corrections}.
+     *
+     * @param lines       the file lines after the replacement was applied
+     * @param startLine   1-based line number the replacement block starts at
+     * @param lineBefore  the untouched line immediately before the edit range, or null at the top of the file
+     * @param lineAfter   the untouched line immediately after the edit range, or null at the bottom of the file
+     * @param corrections collector for lines that were removed as duplicates
+     */
+    private static void removeBoundaryDuplicates(List<String> lines,
+                                                 int startLine,
+                                                 String replacementContent,
+                                                 String lineBefore,
+                                                 String lineAfter,
+                                                 List<String> corrections) {
+        final var trimmedContent = replacementContent != null && replacementContent.endsWith("\n")
+                ? replacementContent.substring(0, replacementContent.length() - 1)
+                : replacementContent;
+        if (Strings.isNullOrEmpty(trimmedContent)) {
+            // Deletions insert no lines, so there is nothing to echo.
+            return;
+        }
+        final var replacementLineCount = trimmedContent.split(System.lineSeparator(), -1).length;
+        var count = replacementLineCount;
+        final var firstIdx = startLine - 1;
+        if (lineBefore != null && firstIdx < lines.size() && lineBefore.equals(lines.get(firstIdx))) {
+            corrections.add(lines.remove(firstIdx));
+            count--;
+        }
+        if (count > 0) {
+            final var lastIdx = firstIdx + count - 1;
+            if (lineAfter != null && lastIdx < lines.size() && lineAfter.equals(lines.get(lastIdx))) {
+                corrections.add(lines.remove(lastIdx));
+            }
+        }
     }
 
     private static Path safePath(final String filePath) {

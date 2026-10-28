@@ -19,6 +19,8 @@ package io.appform.sai.tools;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+import java.util.List;
+
 import lombok.Builder;
 import lombok.Value;
 import lombok.experimental.UtilityClass;
@@ -70,6 +72,9 @@ public class ToolIO {
 
         @JsonPropertyDescription("The new SHA-256 checksum of the file after all replacements.")
         String newChecksum;
+
+        @JsonPropertyDescription("Boundary lines that were removed as accidental duplicates. The tool detects a replacement block that starts or ends with a copy of the untouched line just outside the edit range, and removes the duplicate automatically. Empty when no correction was made.")
+        List<String> corrections;
     }
 
     /**

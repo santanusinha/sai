@@ -191,6 +191,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 final var error = response.getError();
                 if (Strings.isNullOrEmpty(error)) {
                     messages.add(Printer.systemMessage("File edited successfully."));
+                    final var corrections = response.getCorrections();
+                    if (corrections != null && !corrections.isEmpty()) {
+                        messages.add(Printer.systemMessage("Removed duplicate boundary lines ("
+                                + corrections.size() + "): "
+                                + String.join(" | ", corrections)));
+                    }
                 }
                 else {
                     messages.add(Printer.systemMessage("Error editing file: %s".formatted(error))

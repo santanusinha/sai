@@ -119,6 +119,22 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void editDeleteDoesNotReportCorrections() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("").build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getCorrections());
+        assertTrue(result.getCorrections().isEmpty());
+        assertEquals("line1\nline4\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void editDeleteRange() {
         final var content = "line1\nline2\nline3\nline4";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -220,6 +236,50 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void editKeepsFirstReplacementLineWhenItEqualsTheOriginalFirstReplacedLine() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // The first replacement line equals the original first replaced line, not the
+        // untouched neighbour: this is a normal partial rewrite and must be kept.
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(2)
+                                          .endLine(4)
+                                          .content("line2\nline3 new\nline4 new")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getCorrections());
+        assertTrue(result.getCorrections().isEmpty());
+        assertEquals("line1\nline2\nline3 new\nline4 new\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void editKeepsRepeatedLineWhenNeighbourDiffers() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // A repeated line inside the replacement that does NOT copy the untouched
+        // neighbours must be kept as-is: it may be intentional.
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(2)
+                                          .endLine(4)
+                                          .content("line2 new\nline2 new\nline2 new")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getCorrections());
+        assertTrue(result.getCorrections().isEmpty());
+        assertEquals("line1\nline2 new\nline2 new\nline2 new\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void editMultipleEditsAppliedInReverseOrder() {
         final var content = "A\nB\nC\nD\nE";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -236,6 +296,72 @@ class FileIOTest {
         assertTrue(written.contains("A"));
         assertTrue(written.contains("C"));
         assertTrue(written.contains("E"));
+    }
+
+    @Test
+    @SneakyThrows
+    void editRemovesDuplicatedBoundaryLinesOnBothEdges() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(2)
+                                          .endLine(4)
+                                          .content("line1\nline2 new\nline3 new\nline4 new\nline5")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getCorrections());
+        assertEquals(2, result.getCorrections().size());
+        assertEquals("line1\nline2 new\nline3 new\nline4 new\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void editRemovesDuplicatedFirstBoundaryLine() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // Model echoes line 1 (the untouched line before the range) as the first replacement line
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(2)
+                                          .endLine(4)
+                                          .content("line1\nline2 new\nline3 new\nline4 new")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        assertNotNull(result.getCorrections());
+        assertEquals(1, result.getCorrections().size());
+        assertEquals("line1", result.getCorrections().get(0));
+        assertEquals("line1\nline2 new\nline3 new\nline4 new\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void editRemovesDuplicatedLastBoundaryLine() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        // Model echoes line 5 (the untouched line after the range) as the last replacement line
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(2)
+                                          .endLine(4)
+                                          .content("line2 new\nline3 new\nline4 new\nline5")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        assertNotNull(result.getCorrections());
+        assertEquals(1, result.getCorrections().size());
+        assertEquals("line5", result.getCorrections().get(0));
+        assertEquals("line1\nline2 new\nline3 new\nline4 new\nline5", Files.readString(testFile));
     }
 
     @Test
@@ -298,6 +424,26 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void editReportsNoCorrectionsForCleanEdit() {
+        final var content = "line1\nline2\nline3\nline4\nline5";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(3)
+                                          .endLine(3)
+                                          .content("line3 new")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getCorrections());
+        assertTrue(result.getCorrections().isEmpty());
+        assertEquals("line1\nline2\nline3 new\nline4\nline5", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void editReturnsNewChecksum() {
         final var content = "line1\nline2\nline3";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -338,6 +484,7 @@ class FileIOTest {
         assertEquals("", result.getContent());
         assertNotNull(result.getChecksum());
     }
+
 
     @Test
     void readFileNotFound() {
@@ -430,7 +577,6 @@ class FileIOTest {
             deleteRecursive(tmpDir);
         }
     }
-
 
     @Test
     @SneakyThrows
