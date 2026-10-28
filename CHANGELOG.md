@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- **Scratch Directory Under XDG State**: The agent scratch directory moved from
+  `/tmp/sai/<sessionId>/scratch` to `<dataDir>/sessions/<sessionId>/scratch`
+  - Follows the XDG-style data location and honors `--data-dir`
+  - `Settings.scratchDir()` exposes the path; the agent prompt uses it
+- **Edit-Tool Boundary Deduplication**: The edit tool auto-removes duplicated
+  boundary lines that models frequently echo at chunk edges
+  - If replacement content starts or ends with a copy of the untouched line
+    just outside the edit range, the duplicate is removed automatically
+  - Removed lines are reported in the new `corrections` field of the edit-file
+    response so the model knows a correction happened
+  - The tool description tells the model about this behavior; the renderer
+    prints the corrections in the terminal output
 - **Interrupt Handling**: Press Ctrl-C during agent execution to cancel running tasks
   - Uses portable JLine-based terminal monitoring
   - Works across Linux, macOS, and Windows
