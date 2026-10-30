@@ -74,6 +74,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String FILE_EDIT_TOOL = "core_tool_box_edit_file";
         public static final String LINE_EDIT_TOOL = "core_tool_box_line_edit";
         public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
+        public static final String READ_IMAGE_TOOL = "core_tool_box_read_image";
         public static final String TASK_START_TOOL = "task_tools_extension_task_start";
         public static final String TODO_ADD_TOOL = "task_tools_extension_todo_add";
         public static final String TODO_UPDATE_TOOL = "task_tools_extension_todo_update";
@@ -84,6 +85,13 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String NOTE_WRITE_TOOL = "task_tools_extension_note_write";
         public static final String NOTE_READ_TOOL = "task_tools_extension_note_read";
     }
+
+    /**
+     * Maximum number of characters printed for a generic tool-call argument or
+     * response payload. Longer payloads are truncated to keep base64 and other
+     * bulk data out of the terminal output.
+     */
+    private static final int GENERIC_PAYLOAD_LIMIT = 500;
 
     private static final XmlMapper xmlMapper = new XmlMapper();
 
@@ -133,17 +141,18 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                     // Print it directly and skip the tool-specific parsers.
                     messages.add(Printer.systemMessage("Error: %s - %s"
                             .formatted(toolCallResponse.getErrorType(),
-                                       toolCallResponse.getResponse()))
+                                       truncatePayload(toolCallResponse.getResponse())))
                             .withSeverity(Severity.ERROR));
                     return messages;
                 }
                 try {
                     switch (toolCallResponse.getToolName()) {
                         case KnownToolNames.PRINT_TOOL -> {
-                            // Do nothing
                         }
                         case KnownToolNames.BASH_TOOL -> printBashToolResponse(toolCallResponse, messages);
                         case KnownToolNames.READ_TOOL -> printReadToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.READ_IMAGE_TOOL -> printReadImageToolResponse(toolCallResponse,
+                                                                                          messages);
                         case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolResponse(toolCallResponse, messages);
                         case KnownToolNames.LINE_EDIT_TOOL -> printEditToolResponse(toolCallResponse, messages);
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
@@ -184,6 +193,27 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 return messages;
             }
 
+            /**
+             * Renders a read_image tool response as a one-line summary with the
+             * file path and size. Payload data is never printed.
+             */
+            @SneakyThrows
+            private List<Update> printReadImageToolResponse(ToolCallResponse toolCallResponse,
+                                                            List<Update> messages) {
+                final var response = mapper.readValue(toolCallResponse.getResponse(),
+                                                      ToolIO.ImageReadResponse.class);
+                if (!Strings.isNullOrEmpty(response.getError())) {
+                    messages.add(Printer.systemMessage("Error reading image: %s".formatted(response.getError()))
+                            .withSeverity(Severity.ERROR));
+                    return messages;
+                }
+                messages.add(Printer.systemMessage("🖼 %s (%s, detail %s)"
+                        .formatted(response.getFilePath(),
+                                   dataSizeText(response.getBytes()),
+                                   Strings.nullToEmpty(response.getImageDetail()))));
+                return messages;
+            }
+
             private List<Update> printGenericToolResponse(ToolCallResponse toolCallResponse, List<Update> messages) {
                 if (toolCallResponse
                         .getErrorType() != null && toolCallResponse
@@ -196,18 +226,19 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         final var node = mapper.readTree(toolCallResponse.getResponse());
                         final var prettyResponse = mapper.writerWithDefaultPrettyPrinter()
                                 .writeValueAsString(node);
-                        messages.add(Printer.raw(Printer.Colours.GRAY + prettyResponse
+                        messages.add(Printer.raw(Printer.Colours.GRAY + truncatePayload(prettyResponse)
                                 + Printer.Colours.RESET));
                     }
                     catch (JsonProcessingException e) {
-                        messages.add(Printer.raw(Printer.Colours.GRAY + toolCallResponse.getResponse()
+                        messages.add(Printer.raw(Printer.Colours.GRAY + truncatePayload(
+                                                                                        toolCallResponse.getResponse())
                                 + Printer.Colours.RESET));
                     }
                 }
                 else {
                     messages.add(Printer.systemMessage("Error: %s - %s"
                             .formatted(toolCallResponse.getErrorType(),
-                                       toolCallResponse.getResponse()))
+                                       truncatePayload(toolCallResponse.getResponse())))
                             .withSeverity(Severity.ERROR));
 
                 }
@@ -240,7 +271,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
             @Override
             public List<Update> visit(UserPrompt userPrompt) {
                 final var messages = new ArrayList<Update>();
-                messages.add(Printer.userMessage(" " + prompt(userPrompt.getContent()) + " "));
+                messages.add(Printer.userMessage(" " + promptDisplayText(userPrompt) + " "));
                 messages.add(Printer.empty());
                 if (!historical) {
                     messages.add(Printer.statusUpdate(" Processing run: " + Printer.Colours.GRAY
@@ -249,6 +280,50 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 return messages;
             }
         });
+    }
+
+    /**
+     * Builds the display text for a user prompt. A text prompt prints its
+     * content. A media prompt prints a short summary line with the payload
+     * size, never the base64 payload itself.
+     */
+    private static String promptDisplayText(UserPrompt userPrompt) {
+        final var contentType = userPrompt.getContentType();
+        return switch (contentType) {
+            case TEXT -> prompt(userPrompt.getContent());
+            case IMAGE_URL -> "🖼 image url: " + userPrompt.getContent();
+            case IMAGE_DATA -> "🖼 image data: " + dataSizeText(base64DataUrlLength(userPrompt.getContent()));
+            case AUDIO -> "🔊 audio data: " + dataSizeText(base64DataUrlLength(userPrompt.getContent()));
+            case FILE -> "📎 file: " + Strings.nullToEmpty(userPrompt.getFileName())
+                    + " (" + userPrompt.getContent().length() + " chars)";
+        };
+    }
+
+    /**
+     * Returns the decoded byte count of a base64 payload. Accepts a full data
+     * URL ({@code data:<mime>;base64,<payload>}) or a bare base64 payload.
+     */
+    private static long base64DataUrlLength(String content) {
+        if (content == null) {
+            return 0;
+        }
+        final var payload = content.contains(",") && content.startsWith("data:")
+                ? content.substring(content.indexOf(',') + 1)
+                : content;
+        return payload.length() * 3L / 4;
+    }
+
+    /**
+     * Formats a byte count for display, e.g. {@code 12 KB} or {@code 1.4 MB}.
+     */
+    private static String dataSizeText(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return "%.1f KB".formatted(bytes / 1024.0);
+        }
+        return "%.1f MB".formatted(bytes / (1024.0 * 1024.0));
     }
 
     @Override
@@ -288,6 +363,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         }
                         case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                         case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
+                        case KnownToolNames.READ_IMAGE_TOOL -> printReadImageToolRequest(toolCall, messages);
                         case KnownToolNames.FILE_EDIT_TOOL -> printFileEditToolRequest(toolCall, messages);
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolRequest(toolCall, messages);
                         case KnownToolNames.WRITE_TOOL -> printWriteToolRequest(toolCall, messages);
@@ -302,10 +378,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                                 final var node = mapper.readTree(toolCall.getArguments());
                                 final var content = mapper.writerWithDefaultPrettyPrinter()
                                         .writeValueAsString(node);
-                                messages.add(Printer.raw(Printer.Colours.GRAY + content + Printer.Colours.RESET));
+                                messages.add(Printer.raw(Printer.Colours.GRAY + truncatePayload(content)
+                                        + Printer.Colours.RESET));
                             }
                             catch (JsonProcessingException e) {
-                                messages.add(Printer.raw(Printer.Colours.GRAY + toolCall.getArguments()
+                                messages.add(Printer.raw(Printer.Colours.GRAY + truncatePayload(
+                                                                                                toolCall.getArguments())
                                         + Printer.Colours.RESET));
                             }
                         }
@@ -513,6 +591,20 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 + Printer.Colours.RESET));
     }
 
+    /**
+     * Renders a read_image tool call as a one-line summary with the file path
+     * and detail level. The tool never carries payload data in its arguments.
+     */
+    @SneakyThrows
+    private void printReadImageToolRequest(ToolCall toolCall, List<Update> messages) {
+        final var node = mapper.readTree(toolCall.getArguments());
+        final var filePath = node.has("filePath") ? node.get("filePath").asText() : "?";
+        final var detail = node.has("imageDetail") ? node.get("imageDetail").asText() : "AUTO";
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "🖼 Read image: " + Printer.Colours.WHITE
+                + filePath + Printer.Colours.GRAY + " (detail " + detail + ")"
+                + Printer.Colours.RESET));
+    }
+
     @SneakyThrows
     private void printReadToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
         final var response = mapper.readValue(toolCallResponse.getResponse(), ToolIO.ReadResponse.class);
@@ -544,15 +636,15 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                                "requestReason",
                                "filePath",
                                "searchText",
-                               "replaceText",
-                               "occurrence")) {
+                               "replaceText")) {
             return;
         }
+        final var replaceAll = node.has("replaceAll") && node.get("replaceAll").asBoolean();
         messages.add(Printer.assistantMessage(node.get("requestReason").asText()));
         messages.add(Printer.empty());
         messages.add(Printer.raw(Printer.Colours.YELLOW + "Find/Replace: " + Printer.Colours.WHITE
                 + node.get("filePath").asText()
-                + Printer.Colours.GRAY + " (Occurrence: " + node.get("occurrence").asText() + ")"
+                + Printer.Colours.GRAY + (replaceAll ? " (replace all)" : " (unique match)")
                 + Printer.Colours.RESET));
         messages.add(Printer.empty());
         Arrays.stream(node.get("searchText").asText().split(System.lineSeparator()))
@@ -632,6 +724,20 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var head = String.join("\n", Arrays.copyOfRange(lines, 0, headLines));
         final var tail = String.join("\n", Arrays.copyOfRange(lines, lines.length - tailLines, lines.length));
         return head + "\n...\n" + tail;
+    }
+
+    /**
+     * Truncates a generic tool-call payload for display. Payloads up to
+     * {@link #GENERIC_PAYLOAD_LIMIT} characters are returned as-is; longer
+     * payloads keep the head and append an ellipsis with the omitted character
+     * count, so bulk data such as base64 never floods the terminal.
+     */
+    private static String truncatePayload(String payload) {
+        if (payload == null || payload.length() <= GENERIC_PAYLOAD_LIMIT) {
+            return Strings.nullToEmpty(payload);
+        }
+        return payload.substring(0, GENERIC_PAYLOAD_LIMIT)
+                + "\n... (" + (payload.length() - GENERIC_PAYLOAD_LIMIT) + " more chars)";
     }
 
     @SneakyThrows

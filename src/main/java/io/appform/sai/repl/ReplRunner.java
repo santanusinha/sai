@@ -69,6 +69,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ReplRunner {
 
+    /**
+     * Maximum number of messages replayed when a session is opened. Older
+     * messages stay in the session store; only the replay view is capped.
+     */
+    public static final int HISTORY_REPLAY_LIMIT = 100;
+
     private final Settings settings;
     private final ObjectMapper mapper;
     private final EventBus eventBus;
@@ -273,19 +279,28 @@ public class ReplRunner {
             printer.print(Update.builder()
                     .actor(Actor.SYSTEM)
                     .severity(Severity.INFO)
-                    .colour(Printer.Colours.BOLD_YELLOW)
                     .data("Resumed with \u2014 model: %s, persona: %s"
                             .formatted(modelPointer,
                                        Strings.isNullOrEmpty(persona) ? "(default)" : persona))
                     .build());
         }
         final var response = sessionStore.readMessages(effectiveSessionId,
-                                                       Integer.MAX_VALUE,
+                                                       HISTORY_REPLAY_LIMIT,
                                                        true,
                                                        null,
                                                        QueryDirection.OLDER);
+        final var items = response.getItems();
+        if (items.size() >= HISTORY_REPLAY_LIMIT && !settings.isHeadless()) {
+            printer.print(Update.builder()
+                    .actor(Actor.SYSTEM)
+                    .severity(Severity.INFO)
+                    .colour(Printer.Colours.BOLD_YELLOW)
+                    .data("Showing the last %d messages; older messages are omitted."
+                            .formatted(HISTORY_REPLAY_LIMIT))
+                    .build());
+        }
         final var messagePrinter = new MessagePrinter(printer, mapper, true);
-        response.getItems().forEach(message -> {
+        items.forEach(message -> {
             final var updates = message.accept(messagePrinter);
             printer.print(updates);
         });

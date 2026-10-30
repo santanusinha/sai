@@ -25,7 +25,14 @@ import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.session.QueryDirection;
 import com.phonepe.sentinelai.session.SessionSummary;
 
+import io.appform.sai.Settings;
 import io.appform.sai.cli.slash.SlashRootCommand;
+import io.appform.sai.render.TodoCalloutRenderer;
+import io.appform.sai.tasks.TaskIO.TodoItemView;
+import io.appform.sai.tasks.TaskModels.Task;
+import io.appform.sai.tasks.TaskModels.TodoItem;
+import io.appform.sai.tasks.TaskModels.TodoState;
+import io.appform.sai.tasks.TaskStore;
 import io.appform.sai.term.Printer;
 
 import java.nio.file.Files;
@@ -51,6 +58,11 @@ public class InfoCommand implements Runnable {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
+
+    /**
+     * Maximum number of work-note lines shown in the /info output.
+     */
+    private static final int NOTE_PREVIEW_LINES = 8;
 
     @ParentCommand
     private SlashRootCommand parent;
@@ -104,6 +116,7 @@ public class InfoCommand implements Runnable {
         final var summary = sessionSummaryOpt.get();
         final var sb = new StringBuilder();
         appendSessionMetadata(sb, summary);
+        appendTaskState(sb, settings);
         appendMessageStats(sb, sessionStore, summary.getSessionId());
         sb.append(Printer.Colours.GRAY).append("-".repeat(80)).append(Printer.Colours.RESET);
         printer.print(Printer.raw(sb.toString()));
@@ -183,6 +196,75 @@ public class InfoCommand implements Runnable {
         sb.append(G).append("Updated At:              ").append(R).append(W).append(updatedAt).append(R).append('\n');
     }
 
+    /**
+     * Appends the current task, its todo list, and the work note state.
+     * Reads a fresh {@link TaskStore} from the session scratch dir so the
+     * output always reflects the journal on disk. Quietly skips the section
+     * when task tooling data is unavailable.
+     */
+    private void appendTaskState(final StringBuilder sb, final Settings settings) {
+        final TaskStore store;
+        try {
+            store = new TaskStore(Paths.get(settings.scratchDir(), "task-todo"),
+                                  JsonUtils.createMapper());
+        }
+        catch (Exception e) {
+            log.warn("Could not open task store for /info: {}", e.getMessage());
+            return;
+        }
+
+        final var G = Printer.Colours.GRAY;
+        final var W = Printer.Colours.WHITE;
+        final var Y = Printer.Colours.YELLOW;
+        final var R = Printer.Colours.RESET;
+
+        sb.append('\n');
+        final var activeTaskOpt = store.activeTask();
+        if (activeTaskOpt.isEmpty()) {
+            sb.append(Y).append("Active Task:").append(R).append('\n')
+                    .append(G).append("  none").append(R).append('\n');
+            appendTaskSummaryLine(sb, store);
+            return;
+        }
+
+        final Task task = activeTaskOpt.get();
+        sb.append(Y).append("Active Task:").append(R).append('\n')
+                .append(G).append("  ").append(task.getId()).append("  ").append(R)
+                .append(W).append(task.getTitle()).append(R).append('\n');
+
+        final var todos = store.activeTaskTodos().stream().map(this::view).toList();
+        sb.append(TodoCalloutRenderer.renderTodoList("  Todos:", todos)).append('\n');
+
+        final var note = store.readNote();
+        sb.append(G).append("  Work Note:      ").append(R);
+        if (note == null || note.isBlank()) {
+            sb.append(G).append("none").append(R).append('\n');
+        }
+        else {
+            final var lines = note.lines().toList();
+            sb.append(W).append(lines.size()).append(" lines").append(R).append('\n');
+            lines.stream().limit(NOTE_PREVIEW_LINES).forEach(line -> sb
+                    .append(G).append("    ").append(R).append(W).append(line).append(R).append('\n'));
+            if (lines.size() > NOTE_PREVIEW_LINES) {
+                sb.append(G).append("    ...").append(R).append('\n');
+            }
+        }
+        appendTaskSummaryLine(sb, store);
+    }
+
+    /**
+     * Appends completed-task and deferred-todo counts.
+     */
+    private void appendTaskSummaryLine(final StringBuilder sb, final TaskStore store) {
+        final var G = Printer.Colours.GRAY;
+        final var W = Printer.Colours.WHITE;
+        final var R = Printer.Colours.RESET;
+        sb.append(G).append("  Completed Tasks: ").append(R).append(W)
+                .append(store.completedTasks().size()).append(R);
+        sb.append(G).append("   Deferred Todos: ").append(R).append(W)
+                .append(store.todosInState(TodoState.DEFERRED).size()).append(R).append('\n');
+    }
+
     private void appendTokenUsage(StringBuilder sb, List<AgentMessage> messages) {
         long requestTokens = 0;
         long responseTokens = 0;
@@ -220,5 +302,18 @@ public class InfoCommand implements Runnable {
 
     private long countByType(List<AgentMessage> messages, AgentMessageType type) {
         return messages.stream().filter(m -> m.getMessageType() == type).count();
+    }
+
+    /**
+     * Maps a {@link TodoItem} to the view used by {@link TodoCalloutRenderer}.
+     */
+    private TodoItemView view(final TodoItem todo) {
+        return TodoItemView.builder()
+                .id(todo.getId())
+                .taskId(todo.getTaskId())
+                .text(todo.getText())
+                .state(todo.getState() == null ? "" : todo.getState().name())
+                .reason(todo.getReason())
+                .build();
     }
 }

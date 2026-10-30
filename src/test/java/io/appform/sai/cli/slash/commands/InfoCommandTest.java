@@ -35,6 +35,9 @@ import io.appform.sai.Settings;
 import io.appform.sai.agent.AgentFactory;
 import io.appform.sai.cli.slash.SlashCommandContext;
 import io.appform.sai.cli.slash.SlashCommandDispatcher;
+import io.appform.sai.tasks.TaskModels;
+import io.appform.sai.tasks.TaskModels.TodoState;
+import io.appform.sai.tasks.TaskStore;
 import io.appform.sai.term.Printer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -42,7 +45,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -79,6 +86,43 @@ class InfoCommandTest {
 
     private CapturingPrinter printer;
     private SlashCommandDispatcher dispatcher;
+
+    @Test
+    void infoPrintsActiveTaskTodosAndWorkNote() {
+        final var store = newTaskStore();
+        store.startTask("task-0001", "Fix the login bug");
+        appendTodo(store, "todo-0001", "task-0001", "Reproduce the bug");
+        appendTodo(store, "todo-0002", "task-0001", "Write the fix");
+        store.transition("todo-0001", TodoState.DONE, "", "agent");
+        store.writeNote("# Work note\nInvestigating the login bug.");
+
+        dispatcher.dispatch("info", printer);
+
+        assertTrue(capturedContains("Active Task:"));
+        assertTrue(capturedContains("task-0001"));
+        assertTrue(capturedContains("Fix the login bug"));
+        assertTrue(capturedContains("todo-0001"));
+        assertTrue(capturedContains("Reproduce the bug"));
+        assertTrue(capturedContains("todo-0002"));
+        assertTrue(capturedContains("Write the fix"));
+        assertTrue(capturedContains("Work Note:"));
+        assertTrue(capturedContains("Investigating the login bug."));
+        assertTrue(capturedContains("Completed Tasks:"));
+        assertTrue(capturedContains("Deferred Todos:"));
+    }
+
+    @Test
+    void infoWithNoActiveTaskPrintsNone() {
+        final var store = newTaskStore();
+        store.startTask("task-0001", "Old task");
+        store.completeTask("task-0001", null);
+
+        dispatcher.dispatch("info", printer);
+
+        assertTrue(capturedContains("Active Task:"));
+        assertTrue(capturedContains("none"));
+        assertTrue(capturedContains("Completed Tasks: 1"));
+    }
 
     @Test
     void infoWithNoSessionDataDirPrintsNoSessionDataMessage() {
@@ -228,6 +272,30 @@ class InfoCommandTest {
         printer.close();
     }
 
+    /**
+     * Appends a todo-created event to the journal directly (append is package-private
+     * in TaskStore, so the test writes the journal line the way todoAdd does).
+     */
+    @SneakyThrows
+    private void appendTodo(final TaskStore store,
+                            final String todoId,
+                            final String taskId,
+                            final String text) {
+        final var line = new ObjectMapper().writeValueAsString(TaskModels.JournalEvent.builder()
+                .ts(LocalDateTime.now().toString())
+                .event("created")
+                .todoId(todoId)
+                .taskId(taskId)
+                .text(text)
+                .build());
+        Files.writeString(tempDir.resolve("sessions").resolve(TEST_SESSION_ID)
+                .resolve("scratch").resolve("task-todo").resolve("todo-journal.jsonl"),
+                          line + System.lineSeparator(),
+                          StandardCharsets.UTF_8,
+                          StandardOpenOption.CREATE,
+                          StandardOpenOption.APPEND);
+    }
+
     private boolean capturedContains(String substring) {
         try {
             Thread.sleep(200);
@@ -235,7 +303,20 @@ class InfoCommandTest {
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        // Output contains ANSI colour codes between labels and values, so strip
+        // them before matching, otherwise "Label: value" substrings never match.
+        final var ansiPattern = java.util.regex.Pattern.compile("\\u001B\\[[0-9;]*m");
         return printer.captured.stream()
-                .anyMatch(u -> u.getData() != null && u.getData().contains(substring));
+                .anyMatch(u -> u.getData() != null
+                        && ansiPattern.matcher(u.getData()).replaceAll("").contains(substring));
+    }
+
+    /**
+     * Creates a task store at the session scratch location that /info reads.
+     */
+    private TaskStore newTaskStore() {
+        return new TaskStore(tempDir.resolve("sessions").resolve(TEST_SESSION_ID)
+                .resolve("scratch").resolve("task-todo"),
+                             JsonUtils.createMapper());
     }
 }
