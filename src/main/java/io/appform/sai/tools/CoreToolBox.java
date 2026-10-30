@@ -90,6 +90,21 @@ public class CoreToolBox implements ToolBox {
         };
     }
 
+    /**
+     * Builds a short preview of the edit with a few lines of surrounding context,
+     * so the model can verify the change without re-reading the file.
+     */
+    private static String diffPreview(final String searchText, final String replaceText) {
+        final var builder = new StringBuilder();
+        for (final var line : searchText.split("\\R", -1)) {
+            builder.append("- ").append(line).append('\n');
+        }
+        for (final var line : Strings.nullToEmpty(replaceText).split("\\R", -1)) {
+            builder.append("+ ").append(line).append('\n');
+        }
+        return builder.toString();
+    }
+
     private static Set<String> normalize(@Nullable Collection<String> allowedTools) {
         if (allowedTools == null || allowedTools.isEmpty()) {
             return Set.of();
@@ -132,7 +147,7 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.FileEditResponse editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
                                             @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
                                             @JsonPropertyDescription("Reason for editing the file.") String requestReason,
-                                            @JsonPropertyDescription("The id of the todo item this edit belongs to (e.g. todo-0003). The id must exist in the current todo list; obtain it from todo_add or todo_list. Every file edit must be attributed to a todo.") String todoItemId,
+                                            @JsonPropertyDescription("Optional: the id of the todo item this edit belongs to (e.g. todo-0003). Pass it when the edit is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for exploratory edits; omission is fine and never an error.") String todoItemId,
                                             @JsonPropertyDescription("The expected checksum of the file before editing. Use the checksum from a previous read operation to edit existing file or empty string to create a new file.") String expectedChecksum) {
         final var attributionError = TaskStateRegistry.getInstance().validateTodoRef(todoItemId);
         if (attributionError != null) {
@@ -416,20 +431,38 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    //@Tool("Search and replace text in a file. Use this for precise text substitutions.")
+    @Tool("""
+            Edit an existing file by replacing one occurrence of an exact text with new text.
+            The searchText must match the file contents exactly, including all whitespace, indentation and line breaks.
+            Unless replaceAll is true, the searchText must appear exactly ONCE in the file: include 3-5 lines of surrounding
+            context to make it unique. If it appears multiple times, the tool fails and asks for more context.
+            To delete text, send a non-empty searchText and an empty replaceText.
+            Use writeFile to create a new file or rewrite a file completely.
+            """)
     public ToolIO.SearchReplaceResponse searchReplace(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
-                                                      @JsonPropertyDescription("The exact text to search for in the file. Include enough context to make the match unique.") String searchText,
-                                                      @JsonPropertyDescription("The text to replace the search text with.") String replaceText,
-                                                      @JsonPropertyDescription("Which occurrence to replace: 1 for first, 2 for second, etc. Use 0 or negative to replace ALL occurrences.") int occurrence,
-                                                      @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.") String expectedChecksum,
-                                                      @JsonPropertyDescription("Reason for editing the file.") String requestReason) {
+                                                      @JsonPropertyDescription("The exact text to search for in the file. It must match exactly, including all whitespace and indentation. Include enough surrounding lines to make it unique unless replaceAll is true.") String searchText,
+                                                      @JsonPropertyDescription("The text to replace the searchText with. Use an empty string to delete the searchText.") String replaceText,
+                                                      @JsonPropertyDescription("Set true to replace every occurrence of the searchText. Set false (default) to replace a single occurrence; the searchText must then be unique in the file.") boolean replaceAll,
+                                                      @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation. This is an optimistic lock: the edit fails if the file changed since it was last read.") String expectedChecksum,
+                                                      @JsonPropertyDescription("Reason for editing the file.") String requestReason,
+                                                      @JsonPropertyDescription("Optional: the id of the todo item this edit belongs to (e.g. todo-0003). Pass it when the edit is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for exploratory edits; omission is fine and never an error.") String todoItemId) {
         log.info("Search and replace in file: {}", filePath);
+        final var attributionError = TaskStateRegistry.getInstance().validateTodoRef(todoItemId);
+        if (attributionError != null) {
+            return ToolIO.SearchReplaceResponse.builder()
+                    .error(attributionError)
+                    .build();
+        }
         try {
+            if (Strings.isNullOrEmpty(searchText)) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .error("Search text cannot be empty. Use writeFile to create or fully rewrite a file.")
+                        .build();
+            }
             final var path = Path.of(filePath);
             if (!Files.exists(path)) {
                 return ToolIO.SearchReplaceResponse.builder()
-                        .success(false)
-                        .error("File not found: " + filePath)
+                        .error("File not found: " + filePath + ". Use writeFile to create a new file.")
                         .build();
             }
 
@@ -438,74 +471,67 @@ public class CoreToolBox implements ToolBox {
 
             if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.SearchReplaceResponse.builder()
-                        .success(false)
-                        .error("Checksum mismatch. Expected: " + expectedChecksum + ", Actual: "
-                                + currentChecksum + ". Re-read the file to get the current checksum.")
+                        .error("Checksum mismatch. The file changed since it was last read."
+                                + " Re-read the file to get the current checksum and re-apply the edit.")
                         .build();
             }
 
-            if (Strings.isNullOrEmpty(searchText)) {
+            // Count non-overlapping occurrences.
+            int count = 0;
+            int index = 0;
+            while ((index = content.indexOf(searchText, index)) != -1) {
+                count++;
+                index += searchText.length();
+            }
+            if (count == 0) {
                 return ToolIO.SearchReplaceResponse.builder()
-                        .success(false)
-                        .error("Search text cannot be empty.")
+                        .error("Search text not found in file. Make sure the search text matches exactly,"
+                                + " including all whitespace and line breaks.")
                         .build();
             }
-
-            if (!content.contains(searchText)) {
+            if (!replaceAll && count > 1) {
                 return ToolIO.SearchReplaceResponse.builder()
-                        .success(false)
-                        .error("Search text not found in file. Make sure the search text matches exactly, including whitespace and newlines.")
+                        .error("Found %d matches of the search text. To replace a single occurrence, include more"
+                                .formatted(count)
+                                + " surrounding lines so the search text is unique."
+                                + " To replace every occurrence, set replaceAll to true.")
                         .build();
             }
 
-            final var replacement = replaceText != null ? replaceText : "";
-            String newContent;
-            int replacementCount;
-
-            if (occurrence <= 0) {
-                // Replace all occurrences
+            final var replacement = Strings.nullToEmpty(replaceText);
+            final String newContent;
+            final int replacementCount;
+            if (replaceAll) {
                 newContent = content.replace(searchText, replacement);
-                // Count occurrences
-                int count = 0;
-                int index = 0;
-                while ((index = content.indexOf(searchText, index)) != -1) {
-                    count++;
-                    index += searchText.length();
-                }
                 replacementCount = count;
             }
             else {
-                // Replace specific occurrence
-                int index = -1;
-                for (int i = 0; i < occurrence; i++) {
-                    index = content.indexOf(searchText, index + 1);
-                    if (index == -1) {
-                        return ToolIO.SearchReplaceResponse.builder()
-                                .success(false)
-                                .error("Occurrence " + occurrence + " not found. Only found " + i + " occurrence(s).")
-                                .build();
-                    }
-                }
-                newContent = content.substring(0, index) + replacement
-                        + content.substring(index + searchText.length());
+                final var firstIndex = content.indexOf(searchText);
+                newContent = content.substring(0, firstIndex) + replacement
+                        + content.substring(firstIndex + searchText.length());
                 replacementCount = 1;
             }
+            if (Strings.isNullOrEmpty(newContent)) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .error("Refusing to edit: the replacement would make the file completely empty.")
+                        .build();
+            }
 
-            // Write the new content
             Files.writeString(path, newContent, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             final var newChecksum = FileIO.calculateChecksum(newContent.getBytes(StandardCharsets.UTF_8));
 
+            TaskStateRegistry.getInstance().recordEdit(todoItemId, filePath, "edit");
             return ToolIO.SearchReplaceResponse.builder()
                     .success(true)
                     .newChecksum(newChecksum)
                     .replacementCount(replacementCount)
+                    .diff(diffPreview(searchText, replacement))
                     .build();
         }
         catch (Exception e) {
             final var errorMessage = "Error during search and replace: " + AgentUtils.rootCause(e).getMessage();
             log.error(errorMessage, e);
             return ToolIO.SearchReplaceResponse.builder()
-                    .success(false)
                     .error(errorMessage)
                     .build();
         }
@@ -522,7 +548,7 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                           @JsonPropertyDescription("The content to write to the file.") String content,
                                           @JsonPropertyDescription("Reason for writing the file.") String requestReason,
-                                          @JsonPropertyDescription("The id of the todo item this write belongs to (e.g. todo-0003). The id must exist in the current todo list; obtain it from todo_add or todo_list. Every file write must be attributed to a todo.") String todoItemId,
+                                          @JsonPropertyDescription("Optional: the id of the todo item this write belongs to (e.g. todo-0003). Pass it when the write is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for exploratory writes; omission is fine and never an error.") String todoItemId,
                                           @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
         final var attributionError = TaskStateRegistry.getInstance().validateTodoRef(todoItemId);
         if (attributionError != null) {

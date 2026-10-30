@@ -138,25 +138,6 @@ public class ToolIO {
     }
 
     @Value
-    @JsonClassDescription("Input for the search and replace tool. Use this to find and replace text in a file.")
-    @Builder
-    @Jacksonized
-    public static class SearchReplaceRequest {
-        @JsonPropertyDescription("The absolute path to the file to edit.")
-        String path;
-        @JsonPropertyDescription("The exact text to search for in the file. Include enough context to make the match unique.")
-        String searchText;
-        @JsonPropertyDescription("The text to replace the search text with.")
-        String replaceText;
-        @JsonPropertyDescription("Which occurrence to replace: 1 for first, 2 for second, etc. Use 0 or negative to replace ALL occurrences.")
-        int occurrence;
-        @JsonPropertyDescription("The expected SHA-256 checksum of the file before editing. Use the checksum from a previous read operation.")
-        String expectedChecksum;
-        @JsonPropertyDescription("Reason for editing the file.")
-        String requestReason;
-    }
-
-    @Value
     @Builder
     @Jacksonized
     public static class SearchReplaceResponse {
@@ -166,6 +147,8 @@ public class ToolIO {
         String newChecksum;
         @JsonPropertyDescription("Number of replacements made.")
         int replacementCount;
+        @JsonPropertyDescription("Preview of the changed lines with context. '-' lines are the removed text, '+' lines are the inserted text and ' ' lines are unchanged context. Use this to verify the edit without re-reading the file.")
+        String diff;
         @JsonPropertyDescription("Error message if any.")
         String error;
     }

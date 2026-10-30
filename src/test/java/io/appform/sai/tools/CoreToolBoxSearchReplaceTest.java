@@ -60,9 +60,10 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "Hello",
                                                  "Hi",
-                                                 0, // Replace all
+                                                 true,
                                                  checksum,
-                                                 "Test replace all");
+                                                 "Test replace all",
+                                                 null);
 
         assertTrue(response.isSuccess());
         assertEquals(3, response.getReplacementCount());
@@ -71,19 +72,23 @@ class CoreToolBoxSearchReplaceTest {
 
     @Test
     @SneakyThrows
-    void testSearchReplaceChecksumMismatch() {
+    void testSearchReplaceChecksumMismatchDoesNotLeakChecksum() {
         String content = "Hello world!";
         Files.writeString(testFile, content);
 
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "Hello",
                                                  "Hi",
-                                                 1,
+                                                 false,
                                                  "wrong-checksum",
-                                                 "Test checksum mismatch");
+                                                 "Test checksum mismatch",
+                                                 null);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("Checksum mismatch"));
+        // The error must not print the actual checksum: the model should re-read, not echo it back.
+        assertFalse(response.getError().contains("Actual"));
+        assertEquals(content, Files.readString(testFile));
     }
 
     @Test
@@ -96,12 +101,13 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "",
                                                  "Hi",
-                                                 1,
+                                                 false,
                                                  checksum,
-                                                 "Test empty search text");
+                                                 "Test empty search text",
+                                                 null);
 
         assertFalse(response.isSuccess());
-        assertTrue(response.getError().contains("empty"));
+        assertTrue(response.getError().contains("cannot be empty"));
     }
 
     @Test
@@ -109,31 +115,13 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace("/nonexistent/file.txt",
                                                  "Hello",
                                                  "Hi",
-                                                 1,
+                                                 false,
                                                  "any",
-                                                 "Test file not found");
+                                                 "Test file not found",
+                                                 null);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("not found"));
-    }
-
-    @Test
-    @SneakyThrows
-    void testSearchReplaceFirstOccurrence() {
-        String content = "foo bar foo baz foo";
-        Files.writeString(testFile, content);
-        String checksum = calculateChecksum(content);
-
-        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
-                                                 "foo",
-                                                 "qux",
-                                                 1, // Replace first occurrence
-                                                 checksum,
-                                                 "Test replace first occurrence");
-
-        assertTrue(response.isSuccess());
-        assertEquals(1, response.getReplacementCount());
-        assertEquals("qux bar foo baz foo", Files.readString(testFile));
     }
 
     @Test
@@ -146,9 +134,10 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "old code",
                                                  "new code\nextra line",
-                                                 1,
+                                                 false,
                                                  checksum,
-                                                 "Test multiline replace");
+                                                 "Test multiline replace",
+                                                 null);
 
         assertTrue(response.isSuccess());
         assertEquals("line1\nnew code\nextra line\nline3", Files.readString(testFile));
@@ -156,25 +145,7 @@ class CoreToolBoxSearchReplaceTest {
 
     @Test
     @SneakyThrows
-    void testSearchReplaceOccurrenceNotFound() {
-        String content = "apple banana";
-        Files.writeString(testFile, content);
-        String checksum = calculateChecksum(content);
-
-        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
-                                                 "apple",
-                                                 "orange",
-                                                 5, // Only 1 occurrence exists
-                                                 checksum,
-                                                 "Test occurrence not found");
-
-        assertFalse(response.isSuccess());
-        assertTrue(response.getError().contains("Occurrence"));
-    }
-
-    @Test
-    @SneakyThrows
-    void testSearchReplaceSpecificOccurrence() {
+    void testSearchReplaceMultipleMatchesRejectedWithoutReplaceAll() {
         String content = "apple banana apple cherry apple";
         Files.writeString(testFile, content);
         String checksum = calculateChecksum(content);
@@ -182,13 +153,56 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "apple",
                                                  "orange",
-                                                 2, // Replace second occurrence
+                                                 false,
                                                  checksum,
-                                                 "Test replace specific occurrence");
+                                                 "Test multiple matches",
+                                                 null);
+
+        assertFalse(response.isSuccess());
+        assertTrue(response.getError().contains("3 matches"));
+        assertEquals(content, Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void testSearchReplaceOverlappingMatches() {
+        // "aa" appears at indexes 0 and 1 in "aaa" when overlaps count.
+        // The tool must count non-overlapping matches only: 1 match.
+        String content = "aaa";
+        Files.writeString(testFile, content);
+        String checksum = calculateChecksum(content);
+
+        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
+                                                 "aa",
+                                                 "b",
+                                                 false,
+                                                 checksum,
+                                                 "Test overlapping matches",
+                                                 null);
 
         assertTrue(response.isSuccess());
         assertEquals(1, response.getReplacementCount());
-        assertEquals("apple banana orange cherry apple", Files.readString(testFile));
+        assertEquals("ba", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void testSearchReplaceRefusesToEmptyTheFile() {
+        String content = "only this";
+        Files.writeString(testFile, content);
+        String checksum = calculateChecksum(content);
+
+        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
+                                                 "only this",
+                                                 "",
+                                                 false,
+                                                 checksum,
+                                                 "Test refuse empty result",
+                                                 null);
+
+        assertFalse(response.isSuccess());
+        assertTrue(response.getError().contains("empty"));
+        assertEquals(content, Files.readString(testFile));
     }
 
     @Test
@@ -201,12 +215,35 @@ class CoreToolBoxSearchReplaceTest {
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "Goodbye",
                                                  "Hi",
-                                                 1,
+                                                 false,
                                                  checksum,
-                                                 "Test text not found");
+                                                 "Test text not found",
+                                                 null);
 
         assertFalse(response.isSuccess());
         assertTrue(response.getError().contains("not found"));
+    }
+
+    @Test
+    @SneakyThrows
+    void testSearchReplaceUniqueMatch() {
+        String content = "line1\nold code\nline3";
+        Files.writeString(testFile, content);
+        String checksum = calculateChecksum(content);
+
+        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
+                                                 "old code",
+                                                 "new code",
+                                                 false,
+                                                 checksum,
+                                                 "Test unique match",
+                                                 null);
+
+        assertTrue(response.isSuccess());
+        assertEquals(1, response.getReplacementCount());
+        assertEquals("line1\nnew code\nline3", Files.readString(testFile));
+        assertTrue(response.getDiff().contains("- old code"));
+        assertTrue(response.getDiff().contains("+ new code"));
     }
 
     @Test
@@ -218,10 +255,11 @@ class CoreToolBoxSearchReplaceTest {
 
         var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
                                                  "remove_this ",
-                                                 "", // Delete by replacing with empty
-                                                 1,
+                                                 "",
+                                                 false,
                                                  checksum,
-                                                 "Test delete via replace");
+                                                 "Test delete via replace",
+                                                 null);
 
         assertTrue(response.isSuccess());
         assertEquals("keep this keep this too", Files.readString(testFile));
