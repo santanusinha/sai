@@ -80,12 +80,26 @@ public class MidRunInputReader implements AutoCloseable {
 
     /**
      * Stops the reader. Safe to call when not started.
+     *
+     * <p>Waits (bounded) for the reader thread to exit so it stops consuming
+     * terminal input before the JLine prompt reader takes over. Without this
+     * wait, a keystroke typed just as a run ends can be consumed by the still
+     * running reader thread and lost, because it lands in the thread-private
+     * line buffer and is only flushed on Enter.
      */
     public void stop() {
         running.set(false);
         final var thread = readerThread;
         if (thread != null) {
             thread.interrupt();
+            try {
+                // The poll loop checks the running flag every 100 ms, so the
+                // thread exits within one poll cycle. Join with a margin.
+                thread.join(250);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
