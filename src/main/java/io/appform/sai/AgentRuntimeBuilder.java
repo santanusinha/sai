@@ -211,7 +211,7 @@ public final class AgentRuntimeBuilder {
                     .agentId("sai-agent")
                     .name("Sai Agent")
                     .description("An AI agent that can execute tasks and answer questions.")
-                    .model("copilot/claude-haiku-4.5")
+                    .model("copilot/claude-haiku-5.5")
                     .build();
         }
         final var resolvedPath = AgentConfigLoader.resolvePersonaPath(persona, configDir);

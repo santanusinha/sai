@@ -68,6 +68,7 @@ public class Printer implements AutoCloseable {
         public static final String PURPLE = "\u001B[35m";
         public static final String CYAN = "\u001B[36m";
         public static final String GRAY = "\u001B[90m";
+        public static final String STRIKETHROUGH = "\u001B[9m";
         public static final String RESET = "\u001B[0m";
         public static final String BOLD_WHITE_ON_GRAY_BACKGROUND = "\u001B[1;37;100m";
         public static final String BOLD_WHITE_ON_RED_BACKGROUND = "\u001B[1;37;41m";

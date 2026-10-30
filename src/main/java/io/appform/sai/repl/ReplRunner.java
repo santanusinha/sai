@@ -18,6 +18,8 @@ package io.appform.sai.repl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.events.EventBus;
+import com.phonepe.sentinelai.core.hooks.PendingMessageInjector;
+import com.phonepe.sentinelai.core.hooks.PendingMessagesQueue;
 import com.phonepe.sentinelai.filesystem.session.FileSystemSessionStore;
 import com.phonepe.sentinelai.filesystem.skills.AgentSkillsExtension;
 import com.phonepe.sentinelai.session.AgentSessionExtension;
@@ -41,12 +43,15 @@ import io.appform.sai.models.Severity;
 import io.appform.sai.render.EventPrinter;
 import io.appform.sai.render.MessagePrinter;
 import io.appform.sai.repl.CommandProcessor.InputCommand;
+import io.appform.sai.tasks.CompletedTodoPruningSelector;
+import io.appform.sai.tasks.TaskToolsExtension;
 import io.appform.sai.term.Printer;
 import io.appform.sai.term.Printer.Update;
 import io.appform.sai.term.SlashCommandCompleter;
 import io.appform.sai.term.StartupBanner;
 import io.appform.sai.tools.CoreToolBox;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -165,13 +170,32 @@ public class ReplRunner {
                 .build()
                 .start()) {
             // Setup rest of the connections
-            agent.registerToolbox(new CoreToolBox(printer, agentConfig.getTools()));
+            // Task tools: bound to the session scratch dir so todos/notes survive compaction and resume.
+            final var taskTools = new TaskToolsExtension(Path.of(settings.scratchDir(), "task-todo"),
+                                                         mapper,
+                                                         effectiveSessionId,
+                                                         sessionExtension,
+                                                         sessionStore,
+                                                         agentRef::get);
+            io.appform.sai.tasks.TaskStateRegistry.getInstance().bind(taskTools.getStore());
+            // Pending messages: media/images queued by tools (e.g. readImage) and additional
+            // user input queued mid-run are injected into the next agent->model call.
+            final var pendingMessages = new PendingMessagesQueue();
+            agent.registerAgentMessagesPreProcessor(new PendingMessageInjector(pendingMessages));
+            agent.registerToolbox(taskTools);
+            agent.registerToolbox(new CoreToolBox(printer,
+                                                  agentConfig.getTools(),
+                                                  pendingMessages,
+                                                  effectiveSessionId));
+            // Prune tool-call traffic of completed todos from the model's view of history
+            // (replaced by one summary line per pruned todo). Read-path only: persistence is unaffected.
+            sessionExtension.addMessageSelector(new CompletedTodoPruningSelector(taskTools.getStore(), mapper));
             printer.updateContextInfo(agentConfig.getName(), modelPointer);
             final var eventPrinter = new EventPrinter(printer, mapper);
+            // There might be events for other LLM events like for example compaction,
+            // memory extraction etc, so we filter based on session id to avoid printing irrelevant events
             eventBus.onEvent().connect(event -> {
                 final var eventSessionId = event.getSessionId();
-                // There might be events for other LLM events like for example compaction,
-                // memory extraction etc, so we filter based on session id to avoid printing irrelevant events
                 if (!Strings.isNullOrEmpty(eventSessionId) && effectiveSessionId.equals(eventSessionId)) {
                     event.accept(eventPrinter);
                 }
@@ -179,26 +203,35 @@ public class ReplRunner {
 
             final var slashContext = buildSlashContext(agentRef, printer);
             slashContext.setOnAgentRebuilt(newAgent -> {
+                // The rebuilt agent needs the toolboxes re-registered; task tools
+                // share the session-bound store, so a single instance is reused.
+                newAgent.registerAgentMessagesPreProcessor(new PendingMessageInjector(pendingMessages));
+                newAgent.registerToolbox(taskTools);
                 newAgent.registerToolbox(new CoreToolBox(printer,
-                                                         slashContext.getCurrentAgentConfig().get().getTools()));
+                                                         slashContext.getCurrentAgentConfig().get().getTools(),
+                                                         pendingMessages,
+                                                         effectiveSessionId));
                 printer.updateContextInfo(slashContext.getCurrentAgentConfig().get().getName(),
                                           slashContext.getCurrentModel().get());
             });
-
             final var commandProcessor = AgentRuntimeBuilder.buildCommandProcessor(agentRef.get(),
                                                                                    settings,
                                                                                    printer,
                                                                                    agentExecutor,
                                                                                    modelDetails.httpClient());
             final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
+            // Mid-run input: while a run is in flight, a daemon thread polls the terminal
+            // for typed lines and queues them as additional user messages.
+            final var midRunInputReader = new MidRunInputReader(printer, pendingMessages, effectiveSessionId);
             try {
                 printWelcomeAndBanner(printer, agent);
                 if (sessionIdProvided) {
                     replayHistory(printer);
                 }
-                runLoop(printer, slashContext, agentRef, commandProcessor, interruptMonitor);
+                runLoop(printer, slashContext, agentRef, commandProcessor, interruptMonitor, midRunInputReader);
             }
             finally {
+                midRunInputReader.close();
                 interruptMonitor.close();
                 commandProcessor.close();
             }
@@ -263,7 +296,8 @@ public class ReplRunner {
                          final SlashCommandContext slashContext,
                          final AtomicReference<SaiAgent> agentRef,
                          final CommandProcessor commandProcessor,
-                         final InterruptMonitor interruptMonitor) {
+                         final InterruptMonitor interruptMonitor,
+                         final MidRunInputReader midRunInputReader) {
         final var dispatcher = new SlashCommandDispatcher(slashContext);
         final var cliCommandRegistry = new CliCommandRegistry(List.of(new ShellCommandHandler(),
                                                                       new SlashCommandHandler(dispatcher)));
@@ -300,9 +334,11 @@ public class ReplRunner {
                                                           parsedInput.getMedia());
                 try {
                     interruptMonitor.runStarted();
+                    midRunInputReader.start();
                     commandProcessor.handleInput(inputCommand);
                 }
                 finally {
+                    midRunInputReader.stop();
                     interruptMonitor.runFinished();
                     userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                 }

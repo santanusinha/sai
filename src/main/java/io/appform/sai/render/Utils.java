@@ -23,9 +23,8 @@ import io.appform.sai.term.Printer;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
-import lombok.experimental.UtilityClass;
+import javax.annotation.Nullable;
 
-@UtilityClass
 public class Utils {
 
     private static final String C = Printer.Colours.CYAN;
@@ -34,6 +33,40 @@ public class Utils {
     private static final String Y = Printer.Colours.YELLOW;
     private static final String GR = Printer.Colours.GREEN;
     private static final String R = Printer.Colours.RESET;
+
+    /**
+     * Context-usage segment appended to the token summary line after a run:
+     * how full the model context window is (estimated over the messages after
+     * the last compaction, mirroring the auto-compaction trigger) and the
+     * threshold percentage at which auto compaction kicks in. Colour escalates
+     * from green to yellow at the threshold and red at 90% so the user can see
+     * at a glance whether {@code /compact} is worth calling.
+     *
+     * @param contextUsagePercent        estimated context window usage in percent
+     * @param compactionThresholdPercent auto-compaction trigger threshold in percent
+     * @return the rendered segment, or {@code null} when the inputs are unusable
+     */
+    @Nullable
+    public static String contextUsageSummary(final int contextUsagePercent,
+                                             final int compactionThresholdPercent) {
+        if (contextUsagePercent < 0 || compactionThresholdPercent < 0) {
+            return null;
+        }
+        final String usageColour;
+        if (contextUsagePercent >= 90) {
+            usageColour = Printer.Colours.RED;
+        }
+        else if (contextUsagePercent >= compactionThresholdPercent) {
+            usageColour = Y;
+        }
+        else {
+            usageColour = GR;
+        }
+        final var hint = contextUsagePercent >= compactionThresholdPercent ? " — /compact recommended" : "";
+        return C + "🧮 Context" + G + ":" + usageColour + "%d%%".formatted(contextUsagePercent)
+                + G + " (compacts at " + W + "%d%%".formatted(compactionThresholdPercent) + G + ")"
+                + usageColour + hint + R;
+    }
 
     public static float elapsedTimeInSeconds(final Stopwatch stopwatch) {
         return toSeconds(stopwatch.elapsed(TimeUnit.MILLISECONDS));

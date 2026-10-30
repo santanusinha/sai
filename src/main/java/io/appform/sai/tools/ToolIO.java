@@ -77,6 +77,25 @@ public class ToolIO {
         List<String> corrections;
     }
 
+    @Value
+    @Builder
+    @Jacksonized
+    @JsonClassDescription("Output of the read image tool")
+    public static class ImageReadResponse {
+        @JsonPropertyDescription("Whether the image was queued for delivery to the model successfully. When true, the image itself arrives as a user message right after this tool response; do not call the tool again for the same file.")
+        boolean attached;
+        @JsonPropertyDescription("The absolute path of the image file that was read.")
+        String filePath;
+        @JsonPropertyDescription("Detected image format (png or jpeg).")
+        String format;
+        @JsonPropertyDescription("The image detail level the image will be sent with.")
+        String imageDetail;
+        @JsonPropertyDescription("Size of the image file in bytes.")
+        long bytes;
+        @JsonPropertyDescription("Error message if any.")
+        String error;
+    }
+
     /**
      * Operations supported by the line-based edit tool.
      */

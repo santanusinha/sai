@@ -42,6 +42,8 @@ import com.phonepe.sentinelai.core.model.ModelUsageStats;
 
 import io.appform.sai.models.Actor;
 import io.appform.sai.models.Severity;
+import io.appform.sai.tasks.TaskIO;
+import io.appform.sai.tasks.TaskIO.TodoItemView;
 import io.appform.sai.term.Printer;
 import io.appform.sai.term.Printer.Colours;
 import io.appform.sai.term.Printer.Update;
@@ -72,6 +74,15 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String FILE_EDIT_TOOL = "core_tool_box_edit_file";
         public static final String LINE_EDIT_TOOL = "core_tool_box_line_edit";
         public static final String SEARCH_REPLACE_TOOL = "core_tool_box_search_replace";
+        public static final String TASK_START_TOOL = "task_tools_extension_task_start";
+        public static final String TODO_ADD_TOOL = "task_tools_extension_todo_add";
+        public static final String TODO_UPDATE_TOOL = "task_tools_extension_todo_update";
+        public static final String MARK_TASK_COMPLETE_TOOL = "task_tools_extension_mark_task_complete";
+        public static final String TODO_LIST_TOOL = "task_tools_extension_todo_list";
+        public static final String DEFERRED_TODOS_TOOL = "task_tools_extension_deferred_todos";
+        public static final String ARCHIVED_NOTES_TOOL = "task_tools_extension_archived_notes";
+        public static final String NOTE_WRITE_TOOL = "task_tools_extension_note_write";
+        public static final String NOTE_READ_TOOL = "task_tools_extension_note_read";
     }
 
     private static final XmlMapper xmlMapper = new XmlMapper();
@@ -138,6 +149,26 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         case KnownToolNames.SEARCH_REPLACE_TOOL -> printSearchReplaceToolResponse(toolCallResponse,
                                                                                                   messages);
                         case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.TASK_START_TOOL -> printTaskStartToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.TODO_ADD_TOOL -> printTodoAddToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.TODO_UPDATE_TOOL -> printTodoUpdateToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.MARK_TASK_COMPLETE_TOOL -> printTaskCompleteToolResponse(toolCallResponse,
+                                                                                                     messages);
+                        case KnownToolNames.TODO_LIST_TOOL -> printTodoListToolResponse(toolCallResponse,
+                                                                                        messages,
+                                                                                        "Todos");
+                        case KnownToolNames.DEFERRED_TODOS_TOOL -> printTodoListToolResponse(toolCallResponse,
+                                                                                             messages,
+                                                                                             "Deferred todos");
+                        case KnownToolNames.ARCHIVED_NOTES_TOOL -> printTodoListToolResponse(toolCallResponse,
+                                                                                             messages,
+                                                                                             "Completed tasks");
+                        case KnownToolNames.NOTE_WRITE_TOOL -> printNoteToolResponse(toolCallResponse,
+                                                                                     messages,
+                                                                                     "Note updated");
+                        case KnownToolNames.NOTE_READ_TOOL -> printNoteToolResponse(toolCallResponse,
+                                                                                    messages,
+                                                                                    "Note");
                         case Agent.OUTPUT_GENERATOR_ID -> {
                             messages.add(Printer.debug(Actor.SYSTEM, "Output Generator Tool call completed."));
                         }
@@ -248,8 +279,12 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 }
                 try {
                     switch (toolCall.getToolName()) {
-                        case KnownToolNames.PRINT_TOOL -> {
-                            // Do nothing
+                        case KnownToolNames.PRINT_TOOL, KnownToolNames.TASK_START_TOOL, KnownToolNames.TODO_ADD_TOOL,
+                                KnownToolNames.TODO_UPDATE_TOOL, KnownToolNames.MARK_TASK_COMPLETE_TOOL,
+                                KnownToolNames.TODO_LIST_TOOL, KnownToolNames.DEFERRED_TODOS_TOOL,
+                                KnownToolNames.ARCHIVED_NOTES_TOOL, KnownToolNames.NOTE_WRITE_TOOL,
+                                KnownToolNames.NOTE_READ_TOOL -> {
+                            // Task tool calls are rendered from their responses; the raw call JSON is noise.
                         }
                         case KnownToolNames.BASH_TOOL -> printBashRequest(toolCall, messages);
                         case KnownToolNames.READ_TOOL -> printReadToolRequest(toolCall, messages);
@@ -614,6 +649,114 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         final var content = node.get("content").asText();
         messages.add(Printer.raw(Printer.Colours.GRAY + truncatePreview(content, 8, 5, 3)
                 + Printer.Colours.RESET));
+    }
+
+    @SneakyThrows
+    private void printTaskStartToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TaskStartResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error starting task: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        messages.add(Printer.raw(Printer.Colours.YELLOW + "\uD83D\uDDC2 " + Printer.Colours.WHITE
+                + "Task started: " + response.getTaskId() + Printer.Colours.RESET));
+    }
+
+    @SneakyThrows
+    private void printTaskCompleteToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TaskCompleteResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error completing task: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        if (response.getIncomplete() != null && !response.getIncomplete().isEmpty()) {
+            messages.add(Printer.raw(Printer.Colours.RED + "\u26A0 Task cannot be completed yet:"
+                    + Printer.Colours.RESET));
+            response.getIncomplete().forEach(todo -> messages.add(Printer.raw("  "
+                    + TodoCalloutRenderer.renderTodoLine(todo))));
+            return;
+        }
+        messages.add(Printer.raw(Printer.Colours.GREEN + "\u2705 Task completed: " + response.getTaskId()
+                + Printer.Colours.RESET));
+        if (response.isCompactionTriggered()) {
+            messages.add(Printer.systemMessage("Compaction triggered on the session."));
+        }
+    }
+
+    /**
+     * Renders a todo-list style task tool response (todo_list, deferred_todos,
+     * archived_notes) as a callout list instead of the raw tool JSON. Errors are
+     * surfaced as system messages.
+     */
+    @SneakyThrows
+    private void printTodoListToolResponse(ToolCallResponse toolCallResponse,
+                                           ArrayList<Update> messages,
+                                           String title) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TodoListResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error listing todos: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        messages.add(Printer.raw(TodoCalloutRenderer.renderTodoList(title, response.getTodos())));
+    }
+
+    /**
+     * Renders a note tool response (note_write, note_read) by passing the note
+     * markdown through the markdown renderer instead of printing the raw tool
+     * JSON. Errors are surfaced as system messages.
+     */
+    @SneakyThrows
+    private void printNoteToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages, String title) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.NoteResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error reading note: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        final var content = Strings.nullToEmpty(response.getContent());
+        if (content.isBlank()) {
+            messages.add(Printer.systemMessage("%s: (empty)".formatted(title)));
+            return;
+        }
+        messages.add(Printer.raw(Printer.Colours.YELLOW + title + Printer.Colours.RESET));
+        for (final var line : content.split("\\R")) {
+            final var rendered = MarkdownRenderer.toAnsi(line);
+            if (rendered != null && !rendered.isBlank()) {
+                messages.add(Printer.raw(rendered));
+            }
+        }
+    }
+
+    @SneakyThrows
+    private void printTodoAddToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TodoUpdateResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error adding todo: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        messages.add(Printer.raw(Printer.Colours.WHITE + "+ " + response.getTodoId() + "  "
+                + Printer.Colours.WHITE + Strings.nullToEmpty(response.getText())
+                + Printer.Colours.GRAY + " (new todo)" + Printer.Colours.RESET));
+    }
+
+    @SneakyThrows
+    private void printTodoUpdateToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TodoUpdateResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error updating todo: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        final var todo = TodoItemView.builder()
+                .id(response.getTodoId())
+                .state(response.getNewState())
+                .text(Strings.nullToEmpty(response.getText()))
+                .build();
+        messages.add(Printer.raw(TodoCalloutRenderer.renderTodoStateChange(todo)));
     }
 
     @SneakyThrows

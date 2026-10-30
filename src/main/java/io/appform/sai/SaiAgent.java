@@ -84,6 +84,14 @@ public class SaiAgent extends Agent<String, String, SaiAgent> {
                         - You can use %s directory to store any temporary files like todo lists, modified files list and whatever other files you may need during the conversation. No need to clean up the files, they will be automatically deleted after the session ends.
                         - If working on a coding project, first look for and read any AGENTS.md file in the project directory for any specific instructions or guidelines related to the project. If such a file exists, make sure to follow the instructions provided in it while working on the project.
                         - The current working directory is: %s
+
+                        Task workflow (task-scoped compaction):
+
+                        - For any multi-step work, start a task with task_start, break it into todos with todo_add, and keep the work note current with note_write (what you are doing, decisions, where you are). The note and todo list survive compaction, so they are the source of truth for in-flight state — always keep them up to date.
+                        - Every file edit or write requires a todoItemId parameter referencing a todo from the current list. If a write does not fit an existing todo, add a todo for it first.
+                        - Resolve todos as you go with todo_update: done when finished, abandoned or deferred with a reason when dropped or parked. Deferred todos can be listed with deferred_todos and resurrected into a new task.
+                        - When all todos of a task are resolved, complete the task with mark_task_complete. This archives the note and triggers session compaction when the context is large enough to be worth compacting.
+                        - After any compaction, consult the current task state facts (active task, todos, work note) to resume exactly where you left off.
                         """
                         .formatted(config.getName(),
                                    settings.scratchDir(),

@@ -10,6 +10,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - **Interrupt Handling**: Press Ctrl-C to cancel running agent tasks and return to prompt
 - **Optimized File Operations**: Checksum-based read optimization and write safety checks.
 - **Agent Skills**: Extensible skill system following the [Agent Skills specification](https://agentskills.io/specification)
+- **Task-Scoped Compaction**: Durable task/todo/notes state; completed todos are pruned from model history and session state survives compaction
 - **Clean Terminal UX**: Streaming output with real-time event updates
 
 ## Technical Details
@@ -27,6 +28,7 @@ SAI is a command-line AI agent built on the Sentinel AI framework. It connects t
 - Quick Start
 - Configuration
 - Running the Agent
+- Tasks, Todos, and Task-Scoped Compaction
 - CLI Reference
 - Examples
 - Data and Sessions
@@ -134,7 +136,7 @@ Token is stored at `~/.config/sai/copilot_token` by default. Set `COPILOT_TOKEN_
 After authentication, use the `copilot` provider:
 
 ```bash
-sai --model copilot/claude-haiku-4.5
+sai --model copilot/claude-haiku-5.5
 ```
 
 ## Quick Start
@@ -162,7 +164,7 @@ For example:
 - `-m copilot/claude-sonnet4.6` - Command line
 - `-m copilot/claude-sonnet4.6/coding` - Command line with mode
 - `model: azure/gpt-4.1` - In the Persona YAML file
-If no model is passed anywhere, it defaults to `copilot/claude-haiku-4.5`.
+If no model is passed anywhere, it defaults to `copilot/claude-haiku-5.5`.
 
 ### Providers
 SAI supports the following provider types:
@@ -419,7 +421,7 @@ Slash commands give you live control over the session without leaving SAI. Type 
 ```text
 # Check which model is active
 > /model
-Current model: copilot/claude-haiku-4.5
+Current model: copilot/claude-haiku-5.5
 
 # Switch model for the rest of the session
 > /model openai/gpt-4
@@ -441,9 +443,25 @@ Persona loaded: Code Reviewer (model: copilot/claude-sonnet-4.6)
 > /skills
 ```
 
-### Interrupt handling
+### Usage summary and context usage
 
-Press **Ctrl-C** at any time to cancel the current task and return to the input prompt.
+After each run, SAI prints a usage summary line with token stats (input/output tokens,
+cache hit rate, reasoning tokens, tool calls, requests) plus a context-usage segment:
+
+```text
+┤ 📥 In:8381  📤 Out:4  💾 Cached:4861 (58.0%)  🔄 Requests:1 ├  🧮 Context:7% (compacts at 50%)
+```
+
+The 🧮 Context segment estimates how full the model's context window is, based on the
+provider-reported token usage of the run (average input plus output tokens per model
+call), and shows the threshold percentage at which auto compaction kicks in. When usage
+reaches the threshold, a `— /compact recommended` hint appears so you can run
+`/compact` manually before the next run.
+
+### Shell execution (`!`)
+compaction vs the model's context window), and shows the threshold percentage at which
+auto compaction kicks in. When usage reaches the threshold, a `— /compact recommended`
+hint appears so you can run `/compact` manually before the next run.
 
 ### Shell execution (`!`)
 
@@ -460,6 +478,75 @@ Standard output is printed on success; the exit code and stderr are shown on fai
 ## Agent Skills
 
 SAI supports Agent Skills, a standard format for extending AI agent capabilities with specialized knowledge and workflows. Skills are discovered and loaded on-demand following a progressive disclosure pattern.
+
+## Tasks, Todos, and Task-Scoped Compaction
+
+SAI includes a built-in task/todo/notes toolset that keeps durable work state on
+disk and gates session compaction to task boundaries.
+
+### Workflow
+
+1. `task_start <title>` — start a new task (only one active at a time). SAI
+   creates a live work note for the task.
+2. `todo_add <text>` — add todo items; the response contains the todo id
+   (e.g. `todo-0003`).
+3. Work through the todos; every `editFile`/`writeFile` call requires a
+   `todoItemId` parameter so each file edit is attributed to a todo.
+4. `todo_update <id> <done|abandoned|deferred> [reason]` — resolve todos.
+   `abandoned` and `deferred` require a reason. `deferred` items can later be
+   resurrected into a new task (`deferred -> incomplete`).
+5. `note_write <content>` — keep the live work note current; it survives
+   compaction and session resume.
+6. `mark_task_complete` — requires all todos to be resolved. Archives the note to
+   `notes/<task-id>.md` and completes the task. Session history is handled by the
+   completed-todo pruning below plus automatic compaction.
+
+Additional tools: `todo_list`, `note_read`, `deferred_todos`, `archived_notes`.
+
+### Completed-todo history pruning
+
+Once a todo is marked done, its tool-call traffic (the call arguments and the
+raw responses the model saw while working on it) is pruned from the history sent
+to the model and replaced with a single summary line, e.g.
+`[todo-0003] Completed: Fix N+1 in query`. This keeps the model's context lean
+as work progresses without waiting for compaction.
+
+- Tool calls are attributed to todos via the `todoItemId` parameter of
+  `editFile`/`writeFile` (required there), the optional `todoItemId` parameter
+  of `bash`/`readFile`, and the `todoId` in task-tool responses.
+- Only `done` todos are pruned; incomplete and deferred todos keep their traffic,
+  and unattributed calls (e.g. `bash` without a `todoItemId`) are kept.
+- This is a read-path view only: the full session history on disk is untouched,
+  and session export/replay still contains everything.
+
+### Terminal callouts
+
+Todo activity is rendered as coloured callouts in the interactive terminal:
+resolved todos (done, abandoned, deferred) are dim grey with strikethrough,
+incomplete todos are white, and state changes carry an emoji marker
+(✅ done, ❌ abandoned, ⏳ deferred, ↻ reopened). Task starts and completions
+get their own callouts, and a blocked `mark_task_complete` lists the
+incomplete todos that are holding it up.
+
+### State and files
+
+All state is journal-backed in `<dataDir>/sessions/<sessionId>/scratch/task-todo/`:
+
+```
+task-todo/
+├── todo-journal.jsonl     # append-only journal; single source of truth
+└── notes/
+    ├── current.md         # live work note (one per session)
+    └── task-NNNN.md       # notes frozen at task completion
+```
+
+The current todo list and task index are derived by folding the journal, so
+there is no separate mutable state file that can drift. Deferred todos live only
+in the journal and are surfaced via tools; they are never copied into current
+state.
+
+The active task, its todos, and the current note are re-injected as facts on
+ every agent run, so state survives compaction and session resume.
 
 ### What are Skills?
 
@@ -513,8 +600,8 @@ You can restrict which local (built-in) tools a persona can use with the `tools`
 allow-list. When set, only the listed tool names are exposed to the model for
 that persona. When empty or omitted, all local tools are exposed.
 
-The local tools are `bash`, `editFile`, `readFile`, and `writeFile`. Matching is
-case-insensitive. Blank entries are ignored.
+The local tools are `bash`, `editFile`, `readFile`, `writeFile`, and `readImage`.
+Matching is case-insensitive. Blank entries are ignored.
 
 ```yaml
 agentId: read-only-agent
@@ -522,6 +609,7 @@ name: Read-Only Agent
 description: Can read files but not modify the system.
 tools:
   - readFile
+  - readImage   # allows visual inspection of PNG/JPEG images
   - bash        # still allows shell access; omit to restrict further
 ```
 
@@ -580,7 +668,7 @@ Sai AI Agent
                                starts with '@', read input from the specified
                                file.
   -m, --model[=<model>]      Model to use, in the format 'provider/model[/mode]'
-                               (e.g. 'copilot/claude-haiku-4.5'). Overrides
+                               (e.g. 'copilot/claude-haiku-5.5'). Overrides
                                model specified in persona file.
   -p, --persona=<persona>    Path to AgentConfig persona file (.yaml/.yml/.json)
   -s, --session[=<sessionId>]

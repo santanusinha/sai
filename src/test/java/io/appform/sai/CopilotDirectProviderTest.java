@@ -52,6 +52,28 @@ class CopilotDirectProviderTest {
         assertEquals(1800, r.refreshIn());
     }
 
+    @Test
+    void copilotTokenResponseIgnoresUnknownFieldsFromTokenEndpoint() throws Exception {
+        final var mapper = new ObjectMapper();
+        // GitHub's /copilot_internal/v2/token response has grown extra fields over time
+        // (e.g. "agent_mode_auto_approval"); deserialization must not break on them.
+        final var json = """
+                {
+                  "token": "tok",
+                  "expires_at": 999,
+                  "refresh_in": 1800,
+                  "agent_mode_auto_approval": true,
+                  "some_future_field": "whatever"
+                }
+                """;
+
+        final var parsed = mapper.readValue(json, CopilotDirectProvider.CopilotTokenResponse.class);
+
+        assertEquals("tok", parsed.token());
+        assertEquals(999L, parsed.expiresAt());
+        assertEquals(1800, parsed.refreshIn());
+    }
+
     // -------------------------------------------------------------------------
     // resolveTokenPath / resolveCachedTokenPath
     // -------------------------------------------------------------------------

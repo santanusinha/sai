@@ -34,7 +34,7 @@ This file is intended for AI coding agents working on the SAI codebase. For full
     │   │   │   ├── repl/      # REPL loop (ReplRunner, CommandProcessor, InterruptMonitor, BufferedOutputPrinter)
     │   │   │   ├── term/      # Terminal I/O (Printer, AtFileCompleter, SlashCommandCompleter, StartupBanner)
     │   │   │   ├── skills/    # Agent Skills extension
-    │   │   │   ├── transform/ # Jolt-based request payload transforms
+    │   │   │   ├── tasks/    # Task-scoped todos, notes, history pruning, and compaction (TaskModels, TaskStore, TaskIO, TaskToolsExtension, TaskStateRegistry, CompletedTodoPruningSelector)
     │   │   │   └── tools/     # Tool implementations (Bash, CoreToolBox)
     │   │   └── resources/     # Logging config (logback.xml)
     │   └── test/

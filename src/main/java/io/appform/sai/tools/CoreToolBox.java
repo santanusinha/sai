@@ -17,13 +17,18 @@ package io.appform.sai.tools;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.google.common.base.Strings;
+import com.phonepe.sentinelai.core.agentmessages.MediaTypes.ImageDetail;
+import com.phonepe.sentinelai.core.agentmessages.requests.UserPrompt;
+import com.phonepe.sentinelai.core.hooks.PendingMessagesQueue;
 import com.phonepe.sentinelai.core.tools.ExecutableTool;
 import com.phonepe.sentinelai.core.tools.Tool;
 import com.phonepe.sentinelai.core.tools.ToolBox;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 import com.phonepe.sentinelai.core.utils.ToolUtils;
 
+import io.appform.sai.MediaParser;
 import io.appform.sai.files.FileIO;
+import io.appform.sai.tasks.TaskStateRegistry;
 import io.appform.sai.term.Printer;
 import io.appform.sai.tools.ToolIO.LineEditOperation;
 
@@ -32,11 +37,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -53,13 +60,28 @@ public class CoreToolBox implements ToolBox {
 
     private final Set<String> allowedTools;
 
+    @Nullable
+    private final PendingMessagesQueue pendingMessages;
+
+    @Nullable
+    private final String sessionId;
+
     public CoreToolBox(Printer printer) {
-        this(printer, null);
+        this(printer, null, null, null);
     }
 
     public CoreToolBox(Printer printer, @Nullable Collection<String> allowedTools) {
+        this(printer, allowedTools, null, null);
+    }
+
+    public CoreToolBox(Printer printer,
+                       @Nullable Collection<String> allowedTools,
+                       @Nullable PendingMessagesQueue pendingMessages,
+                       @Nullable String sessionId) {
         this.printer = printer;
         this.allowedTools = normalize(allowedTools);
+        this.pendingMessages = pendingMessages;
+        this.sessionId = sessionId;
         this.messageConsumer = line -> {
             printer.print(Printer.raw(Printer.Colours.GRAY
                     + line
@@ -83,7 +105,8 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.BashResponse bash(
                                     @JsonPropertyDescription("Reason for requesting the tool. This is shown to the user for informational purposes.") String requestReason,
                                     @JsonPropertyDescription("The bash command to execute. This should be a single line command. Multi-line commands are not supported.") String command,
-                                    @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes. A value of -1 disables the timeout entirely, allowing the command to run indefinitely. Use -1 only when you genuinely need an unbounded execution (e.g., long-running servers or interactive processes); do not use it as a general/default case.") int timeoutSeconds) {
+                                    @JsonPropertyDescription("The timeout for the bash command execution in seconds. If the command does not complete within this time, it will be terminated. Default is 30 seconds. Adjust this if you expect the command to take longer to execute, but be cautious as setting it too high may lead to hanging processes. A value of -1 disables the timeout entirely, allowing the command to run indefinitely. Use -1 only when you genuinely need an unbounded execution (e.g., long-running servers or interactive processes); do not use it as a general/default case.") int timeoutSeconds,
+                                    @JsonPropertyDescription("Optional: the id of the todo item this command belongs to (e.g. todo-0003). Pass it when the command is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for general commands; omission is fine and never an error.") String todoItemId) {
         log.info("Executing bash command: {}", command);
         try {
             final var effectiveTimeout = timeoutSeconds == -1
@@ -109,8 +132,19 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.FileEditResponse editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
                                             @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
                                             @JsonPropertyDescription("Reason for editing the file.") String requestReason,
+                                            @JsonPropertyDescription("The id of the todo item this edit belongs to (e.g. todo-0003). The id must exist in the current todo list; obtain it from todo_add or todo_list. Every file edit must be attributed to a todo.") String todoItemId,
                                             @JsonPropertyDescription("The expected checksum of the file before editing. Use the checksum from a previous read operation to edit existing file or empty string to create a new file.") String expectedChecksum) {
-        return FileIO.editFile(filePath, edits, expectedChecksum);
+        final var attributionError = TaskStateRegistry.getInstance().validateTodoRef(todoItemId);
+        if (attributionError != null) {
+            return ToolIO.FileEditResponse.builder()
+                    .error(attributionError)
+                    .build();
+        }
+        final var result = FileIO.editFile(filePath, edits, expectedChecksum);
+        if (Strings.isNullOrEmpty(result.getError())) {
+            TaskStateRegistry.getInstance().recordEdit(todoItemId, filePath, "edit");
+        }
+        return result;
     }
 
     //@Tool("Edit a file by line number. Use this to insert, replace, or delete lines at specific positions.")
@@ -276,7 +310,8 @@ public class CoreToolBox implements ToolBox {
             """)
     public ToolIO.ReadResponse readFile(@JsonPropertyDescription("Reason for reading the file.") String requestReason,
                                         @JsonPropertyDescription("The absolute path to the file to read.") String filePath,
-                                        @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty if not known.") String knownChecksum) {
+                                        @JsonPropertyDescription("Last known SHA-256 of the file if known. Send empty if not known.") String knownChecksum,
+                                        @JsonPropertyDescription("Optional: the id of the todo item this read belongs to (e.g. todo-0003). Pass it when the read is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for general reads; omission is fine and never an error.") String todoItemId) {
         final var readResult = FileIO.readFile(filePath, 1, -1, true);
         if (!Strings.isNullOrEmpty(readResult.getError())) {
             return ToolIO.ReadResponse.builder()
@@ -296,6 +331,89 @@ public class CoreToolBox implements ToolBox {
         return ToolIO.ReadResponse.builder()
                 .checksum(checksum)
                 .build();
+    }
+
+    @Tool("""
+            Read an image file and attach it to the conversation for visual inspection. Use this tool when you need to
+            see what an image looks like (screenshots, photos, diagrams, charts). PNG and JPEG images up to 20 MB are
+            supported. The image is NOT returned in this response: it is queued and arrives as a user message immediately
+            after this tool response, so you can view it in the same turn without calling any other tool.
+
+            IMPORTANT: Call this tool EXACTLY ONCE per file. A response with "attached": true means the image is
+            guaranteed to be delivered as the very next user message — do not call this tool again for the same file, do
+            not retry, and do not call it again to "verify". Every additional call attaches another duplicate copy of
+            the image and wastes tokens. Only call it again if the previous call returned an error, and only after fixing
+            the cause of the error (e.g. a different file path).
+            """)
+    public ToolIO.ImageReadResponse readImage(
+                                              @JsonPropertyDescription("Reason for reading the image.") String requestReason,
+                                              @JsonPropertyDescription("The absolute path to the image file (PNG or JPEG).") String filePath,
+                                              @JsonPropertyDescription("The image detail level to send the image with: LOW (fastest, low resolution), HIGH (slower, high resolution) or AUTO (provider default). Defaults to AUTO.") String imageDetail,
+                                              @JsonPropertyDescription("Optional: the id of the todo item this read belongs to (e.g. todo-0003). Pass it when the read is part of a specific todo's work so its history can be pruned once the todo is done. Omit it for general reads; omission is fine and never an error.") String todoItemId) {
+        if (pendingMessages == null) {
+            return ToolIO.ImageReadResponse.builder()
+                    .error("Image reading is not available in this session (no pending message queue is configured).")
+                    .build();
+        }
+        try {
+            final var path = Path.of(filePath).toAbsolutePath().normalize();
+            if (!Files.exists(path)) {
+                return ToolIO.ImageReadResponse.builder()
+                        .filePath(path.toString())
+                        .error("File not found: " + filePath)
+                        .build();
+            }
+            final var size = Files.size(path);
+            if (size > MediaParser.maxMediaSizeBytes()) {
+                return ToolIO.ImageReadResponse.builder()
+                        .filePath(path.toString())
+                        .bytes(size)
+                        .error("Image file is too large (%d bytes). Maximum supported size is %d bytes."
+                                .formatted(size, MediaParser.maxMediaSizeBytes()))
+                        .build();
+            }
+            final var bytes = Files.readAllBytes(path);
+            final var detected = MediaParser.detectImageMime(bytes);
+            if (!("png".equals(detected) || "jpeg".equals(detected))) {
+                return ToolIO.ImageReadResponse.builder()
+                        .filePath(path.toString())
+                        .format(detected)
+                        .bytes(size)
+                        .error("Unsupported image format '%s'. Only PNG and JPEG images are supported."
+                                .formatted(detected))
+                        .build();
+            }
+            final var detail = switch (Strings.nullToEmpty(imageDetail).trim().toUpperCase()) {
+                case "LOW" -> ImageDetail.LOW;
+                case "HIGH" -> ImageDetail.HIGH;
+                default -> ImageDetail.AUTO;
+            };
+            final var dataUrl = "data:image/%s;base64,%s"
+                    .formatted(detected, java.util.Base64.getEncoder().encodeToString(bytes));
+            final var effectiveSessionId = Strings.isNullOrEmpty(sessionId) ? "session" : sessionId;
+            final var userPrompt = UserPrompt.imageData(effectiveSessionId,
+                                                        "run-" + UUID.randomUUID(),
+                                                        dataUrl,
+                                                        detail,
+                                                        LocalDateTime.now());
+            pendingMessages.add(userPrompt);
+            log.info("Queued image for model delivery: {} ({} bytes, detail {})", path, size, detail);
+            return ToolIO.ImageReadResponse.builder()
+                    .attached(true)
+                    .filePath(path.toString())
+                    .format(detected)
+                    .imageDetail(detail.name())
+                    .bytes(size)
+                    .build();
+        }
+        catch (Exception e) {
+            final var errorMessage = "Error reading image: " + AgentUtils.rootCause(e).getMessage();
+            log.error(errorMessage, e);
+            return ToolIO.ImageReadResponse.builder()
+                    .filePath(filePath)
+                    .error(errorMessage)
+                    .build();
+        }
     }
 
     //@Tool("Search and replace text in a file. Use this for precise text substitutions.")
@@ -404,8 +522,19 @@ public class CoreToolBox implements ToolBox {
     public ToolIO.WriteResponse writeFile(@JsonPropertyDescription("The absolute path to the file to write.") String filePath,
                                           @JsonPropertyDescription("The content to write to the file.") String content,
                                           @JsonPropertyDescription("Reason for writing the file.") String requestReason,
+                                          @JsonPropertyDescription("The id of the todo item this write belongs to (e.g. todo-0003). The id must exist in the current todo list; obtain it from todo_add or todo_list. Every file write must be attributed to a todo.") String todoItemId,
                                           @JsonPropertyDescription("The expected SHA-256 checksum of the file before writing. Use the checksum from a previous read operation. This is used to prevent overwriting changes if the file has been modified since it was last read. Send empty if file is not known.") String expectedChecksum) {
-        return FileIO.write(filePath, content, expectedChecksum);
+        final var attributionError = TaskStateRegistry.getInstance().validateTodoRef(todoItemId);
+        if (attributionError != null) {
+            return ToolIO.WriteResponse.builder()
+                    .error(attributionError)
+                    .build();
+        }
+        final var result = FileIO.write(filePath, content, expectedChecksum);
+        if (result.isSuccess()) {
+            TaskStateRegistry.getInstance().recordEdit(todoItemId, filePath, "write");
+        }
+        return result;
     }
 
 

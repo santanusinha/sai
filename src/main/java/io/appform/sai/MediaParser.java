@@ -83,6 +83,51 @@ public class MediaParser {
         }
     }
 
+    public static String detectImageMime(byte[] bytes) {
+        if (bytes.length >= 8
+                && (bytes[0] & 0xFF) == 0x89
+                && bytes[1] == 0x50
+                && bytes[2] == 0x4E
+                && bytes[3] == 0x47
+                && bytes[4] == 0x0D
+                && bytes[5] == 0x0A
+                && bytes[6] == 0x1A
+                && bytes[7] == 0x0A) {
+            return "png";
+        }
+        if (bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF) {
+            return "jpeg";
+        }
+        if (bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F') {
+            return "gif";
+        }
+        if (bytes.length >= 12
+                && bytes[0] == 'R'
+                && bytes[1] == 'I'
+                && bytes[2] == 'F'
+                && bytes[3] == 'F'
+                && bytes[8] == 'W'
+                && bytes[9] == 'E'
+                && bytes[10] == 'B'
+                && bytes[11] == 'P') {
+            return "webp";
+        }
+        // The clipboard command requests image/png, so default to png.
+        return "png";
+    }
+
+    /**
+     * The maximum supported media file size in bytes.
+     *
+     * @return the maximum media size in bytes
+     */
+    public static int maxMediaSizeBytes() {
+        return MAX_MEDIA_SIZE_BYTES;
+    }
+
     /**
      * Scans the input for media references, reads and encodes the referenced files,
      * and returns the cleaned text prompt with the media list.
@@ -157,42 +202,6 @@ public class MediaParser {
                     : unavailable("xclip", "xclip");
         }
         return null;
-    }
-
-    static String detectImageMime(byte[] bytes) {
-        if (bytes.length >= 8
-                && (bytes[0] & 0xFF) == 0x89
-                && bytes[1] == 0x50
-                && bytes[2] == 0x4E
-                && bytes[3] == 0x47
-                && bytes[4] == 0x0D
-                && bytes[5] == 0x0A
-                && bytes[6] == 0x1A
-                && bytes[7] == 0x0A) {
-            return "png";
-        }
-        if (bytes.length >= 3
-                && (bytes[0] & 0xFF) == 0xFF
-                && (bytes[1] & 0xFF) == 0xD8
-                && (bytes[2] & 0xFF) == 0xFF) {
-            return "jpeg";
-        }
-        if (bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F') {
-            return "gif";
-        }
-        if (bytes.length >= 12
-                && bytes[0] == 'R'
-                && bytes[1] == 'I'
-                && bytes[2] == 'F'
-                && bytes[3] == 'F'
-                && bytes[8] == 'W'
-                && bytes[9] == 'E'
-                && bytes[10] == 'B'
-                && bytes[11] == 'P') {
-            return "webp";
-        }
-        // The clipboard command requests image/png, so default to png.
-        return "png";
     }
 
     static MediaInput readImageFromProcess(String[] command) throws IOException {

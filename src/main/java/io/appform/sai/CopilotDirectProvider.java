@@ -15,6 +15,7 @@
  */
 package io.appform.sai;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -373,6 +374,7 @@ public class CopilotDirectProvider implements ModelFactory, AutoCloseable {
     /**
      * Trimmed representation of the {@code /copilot_internal/v2/token} response.
      */
+    @JsonIgnoreProperties(ignoreUnknown = true)
     record CopilotTokenResponse(
             @JsonProperty("token") String token,
             @JsonProperty("expires_at") long expiresAt,

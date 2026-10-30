@@ -21,7 +21,11 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.phonepe.sentinelai.core.agent.AgentInput;
 import com.phonepe.sentinelai.core.agent.AgentRequestMetadata;
+import com.phonepe.sentinelai.core.agent.AgentSetup;
 import com.phonepe.sentinelai.core.errors.ErrorType;
+import com.phonepe.sentinelai.core.model.ModelAttributes;
+import com.phonepe.sentinelai.core.model.ModelSettings;
+import com.phonepe.sentinelai.core.model.ModelUsageStats;
 import com.phonepe.sentinelai.core.utils.AgentUtils;
 
 import io.appform.sai.CancellableExecutorService;
@@ -182,8 +186,12 @@ public class CommandProcessor implements AutoCloseable {
                 infoMessage += Printer.Colours.GRAY + " (Time taken: %.3f seconds)"
                         .formatted(elapsedTimeInSeconds(elapsedTimeCounter));
                 messages.add(Printer.assistantMessage(infoMessage));
+                final var tokenSummary = Utils.tokenSummary(runUsage);
+                final var contextSummary = contextUsageSummary(agent.get(), runUsage);
                 messages.add(Printer.assistantMessage(Printer.Colours.GRAY
-                        + Utils.tokenSummary(runUsage)));
+                        + (contextSummary == null
+                                ? tokenSummary
+                                : tokenSummary + Printer.Colours.GRAY + "  " + contextSummary)));
             }
             else {
                 errorMessage = "Sentinel error: [%s] %s".formatted(error
@@ -252,6 +260,58 @@ public class CommandProcessor implements AutoCloseable {
         }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Estimates how full the model context window is after this run and renders
+     * it as a summary segment (usage percent + auto-compaction threshold).
+     *
+     * <p>The estimate uses the provider-reported token usage of this run: input
+     * tokens grow monotonically across a run's model calls, so the average
+     * input tokens per request (plus the final output) approximates the context
+     * size the model saw at the end of the run. This includes the system prompt
+     * and skills content, which a session-history-based estimate cannot see
+     * (system prompts are not persisted), and uses real provider counts instead
+     * of local encoding estimates.
+     *
+     * @param agent    the active agent (post-rebuild safe)
+     * @param runUsage usage stats of the just-finished run
+     * @return the rendered segment, or {@code null} when it cannot be computed
+     */
+    private String contextUsageSummary(final SaiAgent agent, final ModelUsageStats runUsage) {
+        if (agent == null || runUsage == null) {
+            return null;
+        }
+        try {
+            final AgentSetup setup = agent.getSetup();
+            final var compactionSetup = setup.getAutoCompactionSetup();
+            if (compactionSetup == null) {
+                return null;
+            }
+            final var contextWindow = AgentUtils.getIfNotNull(setup.getModelSettings(),
+                                                              ModelSettings::getModelAttributes,
+                                                              ModelAttributes.DEFAULT_MODEL_ATTRIBUTES)
+                    .getContextWindowSize();
+            if (contextWindow <= 0) {
+                return null;
+            }
+            final var requests = Math.max(1, runUsage.getRequestsForRun());
+            // Context after this run ≈ last request's input tokens + its output.
+            // Per-run stats are cumulative sums; input size grows monotonically
+            // across a run, so average input/request + average output/request is a
+            // good approximation of the final context size.
+            final var approxContextTokens = (runUsage.getRequestTokens() + runUsage.getResponseTokens()) / requests;
+            if (approxContextTokens <= 0) {
+                return null;
+            }
+            final int percent = (int) Math.min(100, (approxContextTokens * 100L) / contextWindow);
+            return Utils.contextUsageSummary(percent,
+                                             compactionSetup.getCompactionTriggerThresholdPercentage());
+        }
+        catch (Exception e) {
+            log.debug("Context usage estimation failed, skipping summary: {}", e.getMessage());
+            return null;
         }
     }
 
