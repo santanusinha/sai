@@ -143,7 +143,7 @@ public class CoreToolBox implements ToolBox {
         }
     }
 
-    @Tool("Edit specific parts of an existing file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool. If the replacement content starts or ends with a copy of the untouched line just outside the edit range, the tool removes the duplicate automatically and lists the removed lines in the 'corrections' field of the response, so do not repeat the line before or after the edit range inside the replacement content.")
+    //@Tool("Edit specific parts of an existing file. Use this to make surgical edits to a file. Pass a list of edits to perform multiple edits in one operation. Edits will be applied in the reverse order of the list, so that line numbers in the edits refer to the original file content. Use line numbers as returned by the read tool. If the replacement content starts or ends with a copy of the untouched line just outside the edit range, the tool removes the duplicate automatically and lists the removed lines in the 'corrections' field of the response, so do not repeat the line before or after the edit range inside the replacement content.")
     public ToolIO.FileEditResponse editFile(@JsonPropertyDescription("The absolute path to the file to edit.") String filePath,
                                             @JsonPropertyDescription("List of chunk replacement specifications") List<ToolIO.FileEditOperation> edits,
                                             @JsonPropertyDescription("Reason for editing the file.") String requestReason,

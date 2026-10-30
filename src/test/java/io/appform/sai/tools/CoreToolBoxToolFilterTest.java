@@ -28,7 +28,6 @@ import java.util.List;
 class CoreToolBoxToolFilterTest {
 
     private static final List<String> ALL_TOOLS = List.of("bash",
-                                                          "editFile",
                                                           "searchReplace",
                                                           "readFile",
                                                           "writeFile",
@@ -42,9 +41,15 @@ class CoreToolBoxToolFilterTest {
     }
 
     @Test
+    void editFileIsNotExposed() {
+        final var names = exposedNames(null);
+        assertFalse(names.contains("editFile"));
+    }
+
+    @Test
     void emptyListAllowsAllTools() {
         final var names = exposedNames(List.of());
-        assertEquals(6, names.size());
+        assertEquals(5, names.size());
         ALL_TOOLS.forEach(name -> assertTrue(names.contains(name), "Missing tool: " + name));
     }
 
@@ -77,7 +82,7 @@ class CoreToolBoxToolFilterTest {
     @Test
     void nullAllowsAllTools() {
         final var names = exposedNames(null);
-        assertEquals(6, names.size());
+        assertEquals(5, names.size());
         ALL_TOOLS.forEach(name -> assertTrue(names.contains(name), "Missing tool: " + name));
     }
 
