@@ -187,6 +187,10 @@ public class ReplRunner {
             // Pending messages: media/images queued by tools (e.g. readImage) and additional
             // user input queued mid-run are injected into the next agent->model call.
             final var pendingMessages = new PendingMessagesQueue();
+            // Pause gate: registered BEFORE the injector so a paused model call first waits
+            // for the user, then has the queued line drained by the same call.
+            final var pauseGate = new PauseGate(() -> {});
+            agent.registerAgentMessagesPreProcessor(pauseGate);
             agent.registerAgentMessagesPreProcessor(new PendingMessageInjector(pendingMessages));
             agent.registerToolbox(taskTools);
             agent.registerToolbox(new CoreToolBox(printer,
@@ -211,6 +215,7 @@ public class ReplRunner {
             slashContext.setOnAgentRebuilt(newAgent -> {
                 // The rebuilt agent needs the toolboxes re-registered; task tools
                 // share the session-bound store, so a single instance is reused.
+                newAgent.registerAgentMessagesPreProcessor(pauseGate);
                 newAgent.registerAgentMessagesPreProcessor(new PendingMessageInjector(pendingMessages));
                 newAgent.registerToolbox(taskTools);
                 newAgent.registerToolbox(new CoreToolBox(printer,
@@ -226,9 +231,13 @@ public class ReplRunner {
                                                                                    agentExecutor,
                                                                                    modelDetails.httpClient());
             final var interruptMonitor = new InterruptMonitor(commandProcessor, printer);
-            // Mid-run input: while a run is in flight, a daemon thread polls the terminal
-            // for typed lines and queues them as additional user messages.
-            final var midRunInputReader = new MidRunInputReader(printer, pendingMessages, effectiveSessionId);
+            // Mid-run input: while a run is in flight, a daemon thread waits for the
+            // pause key (Ctrl-Q/Esc) and opens an additional-input prompt that
+            // pauses the run at the next model call via the pause gate.
+            final var midRunInputReader = new MidRunInputReader(printer,
+                                                                pendingMessages,
+                                                                effectiveSessionId,
+                                                                pauseGate);
             try {
                 printWelcomeAndBanner(printer, agent);
                 if (sessionIdProvided) {

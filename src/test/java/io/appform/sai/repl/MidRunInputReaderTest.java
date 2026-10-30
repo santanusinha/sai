@@ -54,7 +54,10 @@ class MidRunInputReaderTest {
 
     @Test
     void restartAfterStopStartsANewThread() {
-        final var reader = new MidRunInputReader(printerWithDumbTerminal(), new PendingMessagesQueue(), "session-1");
+        final var reader = new MidRunInputReader(printerWithDumbTerminal(),
+                                                 new PendingMessagesQueue(),
+                                                 "session-1",
+                                                 new PauseGate(() -> {}));
         reader.start();
         final var first = readerThreadOf(reader);
         reader.stop();
@@ -66,7 +69,10 @@ class MidRunInputReaderTest {
 
     @Test
     void secondStopIsSafe() {
-        final var reader = new MidRunInputReader(printerWithDumbTerminal(), new PendingMessagesQueue(), "session-1");
+        final var reader = new MidRunInputReader(printerWithDumbTerminal(),
+                                                 new PendingMessagesQueue(),
+                                                 "session-1",
+                                                 new PauseGate(() -> {}));
         reader.start();
         reader.stop();
         reader.stop();
@@ -74,7 +80,10 @@ class MidRunInputReaderTest {
 
     @Test
     void stopJoinsReaderThreadBeforeReturning() {
-        final var reader = new MidRunInputReader(printerWithDumbTerminal(), new PendingMessagesQueue(), "session-1");
+        final var reader = new MidRunInputReader(printerWithDumbTerminal(),
+                                                 new PendingMessagesQueue(),
+                                                 "session-1",
+                                                 new PauseGate(() -> {}));
         reader.start();
         reader.stop();
         final var thread = readerThreadOf(reader);
@@ -83,7 +92,10 @@ class MidRunInputReaderTest {
 
     @Test
     void stopWhenNeverStartedIsSafe() {
-        final var reader = new MidRunInputReader(printerWithDumbTerminal(), new PendingMessagesQueue(), "session-1");
+        final var reader = new MidRunInputReader(printerWithDumbTerminal(),
+                                                 new PendingMessagesQueue(),
+                                                 "session-1",
+                                                 new PauseGate(() -> {}));
         reader.stop();
     }
 }
