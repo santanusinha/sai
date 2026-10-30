@@ -126,6 +126,26 @@ class CoreToolBoxSearchReplaceTest {
 
     @Test
     @SneakyThrows
+    void testSearchReplaceMissingChecksumReturnsDistinctError() {
+        String content = "Hello world!";
+        Files.writeString(testFile, content);
+
+        var response = coreToolBox.searchReplace(testFile.toAbsolutePath().toString(),
+                                                 "Hello",
+                                                 "Hi",
+                                                 false,
+                                                 null,
+                                                 "Test missing checksum",
+                                                 null);
+
+        assertFalse(response.isSuccess());
+        assertTrue(response.getError().contains("expectedChecksum"), response.getError());
+        assertFalse(response.getError().contains("Checksum mismatch"), response.getError());
+        assertEquals(content, Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void testSearchReplaceMultiLine() {
         String content = "line1\nold code\nline3";
         Files.writeString(testFile, content);

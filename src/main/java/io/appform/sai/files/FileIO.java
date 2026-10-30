@@ -80,12 +80,17 @@ public class FileIO {
         if (!Strings.isNullOrEmpty(currentContent.error)) {
             return error(currentContent.error);
         }
+        if (Strings.isNullOrEmpty(expectedChecksum)) {
+            return error("The expectedChecksum parameter is missing. Read the file with readFile and set"
+                    + " expectedChecksum to the checksum from the read response.");
+        }
         if (!checksumMatches(currentContent.checksum, expectedChecksum)) {
             log.error("Checksum mismatch for file {}. Expected: [{}], actual: [{}].",
                       filePath,
                       expectedChecksum,
                       currentContent.checksum);
-            return error("Checksum mismatch. Re-read the file and try again with the latest checksum.");
+            return error("Checksum mismatch. The file changed since it was last read. Re-read the file with readFile"
+                    + " and set expectedChecksum to the checksum from the read response.");
         }
         final var content = currentContent.getContent();
         try {
@@ -172,8 +177,18 @@ public class FileIO {
                 // we return that error instead of proceeding with edits.
                 return ToolIO.WriteResponse.builder().error(currentContent.error).build();
             }
+            if (Strings.isNullOrEmpty(expectedChecksum)) {
+                final var errorMessage = "The expectedChecksum parameter is missing for an existing file."
+                        + " Read the file with readFile and set expectedChecksum to the checksum from the read"
+                        + " response. To create a new file, the path must not already exist.";
+                return ToolIO.WriteResponse.builder()
+                        .error(errorMessage)
+                        .build();
+            }
             if (!checksumMatches(currentContent.checksum, expectedChecksum)) {
-                final var errorMessage = "Checksum mismatch. Re-read the file and try again with the latest checksum.";
+                final var errorMessage = "Checksum mismatch. The file changed since it was last read."
+                        + " Re-read the file with readFile and set expectedChecksum to the checksum from the read"
+                        + " response.";
                 log.error("Checksum mismatch for file {}. Expected: [{}], actual: [{}].",
                           filePath,
                           expectedChecksum,

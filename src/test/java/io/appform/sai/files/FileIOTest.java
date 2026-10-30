@@ -280,6 +280,22 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
+    void editMissingChecksumReturnsDistinctError() {
+        Files.writeString(testFile, "line1\nline2\nline3", StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder().startLine(1).endLine(1).content("replaced")
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, null);
+
+        assertNotNull(result.getError());
+        assertTrue(result.getError().contains("expectedChecksum"), result.getError());
+        assertFalse(result.getError().contains("Checksum mismatch"), result.getError());
+        assertEquals("line1\nline2\nline3", Files.readString(testFile));
+    }
+
+    @Test
+    @SneakyThrows
     void editMultipleEditsAppliedInReverseOrder() {
         final var content = "A\nB\nC\nD\nE";
         Files.writeString(testFile, content, StandardCharsets.UTF_8);
@@ -651,6 +667,20 @@ class FileIOTest {
         assertNull(response.getError());
         assertTrue(Files.exists(newFile));
         assertEquals("", Files.readString(newFile));
+    }
+
+    @Test
+    @SneakyThrows
+    void writeExistingFileWithMissingChecksumReturnsDistinctError() {
+        final var content = "some content";
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+
+        final var response = FileIO.write(testFile.toString(), "new content", null);
+
+        assertNotNull(response.getError());
+        assertTrue(response.getError().contains("expectedChecksum"), response.getError());
+        assertFalse(response.getError().contains("Checksum mismatch"), response.getError());
+        assertEquals(content, Files.readString(testFile));
     }
 
     @Test

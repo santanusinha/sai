@@ -469,10 +469,16 @@ public class CoreToolBox implements ToolBox {
             final var content = Files.readString(path, StandardCharsets.UTF_8);
             final var currentChecksum = FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8));
 
+            if (Strings.isNullOrEmpty(expectedChecksum)) {
+                return ToolIO.SearchReplaceResponse.builder()
+                        .error("The expectedChecksum parameter is missing. Read the file with readFile and set"
+                                + " expectedChecksum to the checksum from the read response.")
+                        .build();
+            }
             if (!currentChecksum.equals(expectedChecksum)) {
                 return ToolIO.SearchReplaceResponse.builder()
-                        .error("Checksum mismatch. The file changed since it was last read."
-                                + " Re-read the file to get the current checksum and re-apply the edit.")
+                        .error("Checksum mismatch. The file changed since it was last read. Re-read the file with"
+                                + " readFile and set expectedChecksum to the checksum from the read response.")
                         .build();
             }
 
