@@ -104,12 +104,18 @@ class TaskStoreTest {
     }
 
     @Test
-    void doneIsTerminal() {
+    void doneTodoCanBeReopenedOrMoved() {
         store.startTask("task-0001", "write tests");
         appendTodo("task-0001", "todo-0001", "add coverage");
         store.transition("todo-0001", TodoState.DONE, null, "agent");
-        assertThatThrownBy(() -> store.transition("todo-0001", TodoState.DEFERRED, "reason", "agent"))
-                .isInstanceOf(IllegalArgumentException.class);
+
+        // Lenient transitions: done can move on (defer, reopen) so work can be redone.
+        store.transition("todo-0001", TodoState.DEFERRED, "revisit later", "agent");
+        assertThat(store.resolveTodo("todo-0001").orElseThrow().getState()).isEqualTo(TodoState.DEFERRED);
+
+        store.transition("todo-0001", TodoState.INCOMPLETE, null, "agent");
+        assertThat(store.resolveTodo("todo-0001").orElseThrow().getState()).isEqualTo(TodoState.INCOMPLETE);
+        assertThat(store.resolveTodo("todo-0001").orElseThrow().getResolvedAt()).isNull();
     }
 
     @Test
@@ -177,6 +183,18 @@ class TaskStoreTest {
         store.writeNote("first version");
         store.writeNote("second version");
         assertThat(store.readNote()).isEqualTo("second version");
+    }
+
+    @Test
+    void sameStateTransitionIsANoOp() {
+        store.startTask("task-0001", "write tests");
+        appendTodo("task-0001", "todo-0001", "add coverage");
+        store.transition("todo-0001", TodoState.DONE, null, "agent");
+        final var eventsBefore = store.journal().size();
+
+        store.transition("todo-0001", TodoState.DONE, null, "agent");
+        assertThat(store.journal()).hasSize(eventsBefore);
+        assertThat(store.resolveTodo("todo-0001").orElseThrow().getState()).isEqualTo(TodoState.DONE);
     }
 
     @BeforeEach

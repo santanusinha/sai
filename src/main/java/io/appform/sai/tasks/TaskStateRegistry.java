@@ -56,7 +56,8 @@ public class TaskStateRegistry {
      * Records an attributed edit to the journal (audit trail).
      */
     public synchronized void recordEdit(final String todoId, final String file, final String op) {
-        if (store == null) {
+        if (store == null || todoId == null || todoId.isBlank()) {
+            // No store bound or no attribution requested: nothing to journal.
             return;
         }
         final var todo = store.resolveTodo(todoId.trim()).orElse(null);
@@ -81,16 +82,15 @@ public class TaskStateRegistry {
     /**
      * Validates a todo reference for file edit/write attribution.
      *
-     * @return null when valid, or an error message when the id is unknown
+     * <p>A blank id is allowed: the edit proceeds unattributed. This keeps
+     * exploratory edits possible when no todo applies.
+     *
+     * @return null when valid or blank, or an error message when the id is unknown
      */
     public synchronized String validateTodoRef(final String todoId) {
-        if (store == null) {
-            // Task tooling not bound: edits pass through unattributed (backwards compat).
+        if (store == null || todoId == null || todoId.isBlank()) {
+            // Task tooling not bound or no attribution requested: edits pass unattributed.
             return null;
-        }
-        if (todoId == null || todoId.isBlank()) {
-            return "todoItemId is required for file edits. Add the work to the todo list with todo_add and pass its id (e.g. todo-0003). "
-                    + "If this edit is exploratory and genuinely belongs to no todo, add a todo for it first — every edit must be attributable.";
         }
         return store.resolveTodo(todoId.trim()).isPresent()
                 ? null

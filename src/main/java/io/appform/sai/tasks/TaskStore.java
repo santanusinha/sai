@@ -384,7 +384,11 @@ public class TaskStore {
     }
 
     /**
-     * Appends a state transition event with validation of the state machine.
+     * Appends a state transition event. Transitions are deliberately lenient:
+     * any todo can move to any state, so a todo can be reopened (e.g. done ->
+     * incomplete to redo it) when the work turns out to be unfinished. The only
+     * hard rules are that the todo must exist, a reason is required to abandon
+     * or defer, and a same-state transition is a no-op (nothing is journaled).
      */
     public void transition(final String todoId,
                            final TodoState to,
@@ -393,26 +397,14 @@ public class TaskStore {
         final var todo = todos().get(todoId);
         Preconditions.checkArgument(todo != null, "Unknown todo id: %s", todoId);
         final var from = todo.getState();
-        switch (to) {
-            case DONE -> Preconditions.checkArgument(from == TodoState.INCOMPLETE,
-                                                     "Only incomplete todos can be marked done (todo %s is %s)",
-                                                     todoId,
-                                                     from);
-            case ABANDONED, DEFERRED -> {
-                Preconditions.checkArgument(from == TodoState.INCOMPLETE,
-                                            "Only incomplete todos can be %s (todo %s is %s)",
-                                            to,
-                                            todoId,
-                                            from);
-                Preconditions.checkArgument(!Strings.isNullOrEmpty(reason),
-                                            "A reason is required to %s todo %s",
-                                            to.toString().toLowerCase(),
-                                            todoId);
-            }
-            case INCOMPLETE -> Preconditions.checkArgument(from == TodoState.DEFERRED,
-                                                           "Only deferred todos can be resurrected (todo %s is %s)",
-                                                           todoId,
-                                                           from);
+        if (from == to) {
+            return;
+        }
+        if (to == TodoState.ABANDONED || to == TodoState.DEFERRED) {
+            Preconditions.checkArgument(!Strings.isNullOrEmpty(reason),
+                                        "A reason is required to %s todo %s",
+                                        to.toString().toLowerCase(),
+                                        todoId);
         }
         append(JournalEvent.builder()
                 .ts(now())

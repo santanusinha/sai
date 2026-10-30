@@ -137,6 +137,32 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
         resumeCounters();
     }
 
+    /**
+     * Parses a user- or model-supplied state name into a {@link TodoState}. Accepts the
+     * canonical enum names case-insensitively plus common aliases (in_progress, pending,
+     * reopened, completed, cancelled, ...), so a reasonable guess such as "in_progress"
+     * works instead of failing with "Unknown state".
+     *
+     * @return the state, or null if the name is not recognized
+     */
+    @Nullable
+    static TodoState parseTodoState(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        final var normalized = raw.trim().toLowerCase().replace(' ', '_').replace('-', '_');
+        return switch (normalized) {
+            case "incomplete", "in_progress", "pending", "todo", "open", "active", "reopened", "reopen", "not_done",
+                    "not_done_yet" ->
+                TodoState.INCOMPLETE;
+            case "done", "complete", "completed", "complete_d", "finished", "resolved" -> TodoState.DONE;
+            case "abandoned", "abandon", "cancel", "cancelled", "canceled", "dropped", "kill", "killed" ->
+                TodoState.ABANDONED;
+            case "deferred", "defer", "park", "parked", "blocked", "postponed", "postpone" -> TodoState.DEFERRED;
+            default -> null;
+        };
+    }
+
     private static void bumpCounter(final AtomicInteger counter, final String id) {
         final var parts = id.split("-");
         if (parts.length != 2) {
@@ -175,6 +201,10 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
                 .build();
     }
 
+    // ------------------------------------------------------------------
+    // Tools
+    // ------------------------------------------------------------------
+
     @Tool("""
             List todos that were deferred from earlier tasks. These are candidates to pull into a
             new task via todo_update (deferred -> incomplete after starting a task that will own them).
@@ -185,10 +215,6 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
                 .todos(store.todosInState(TodoState.DEFERRED).stream().map(this::view).toList())
                 .build();
     }
-
-    // ------------------------------------------------------------------
-    // Tools
-    // ------------------------------------------------------------------
 
     @Override
     public List<FactList> facts(final String request,
@@ -361,6 +387,10 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
                 .build();
     }
 
+    // ------------------------------------------------------------------
+    // AgentExtension
+    // ------------------------------------------------------------------
+
     @Tool("""
             List todos. By default lists the todos of the active task. Set status to list todos
             in a specific state across all tasks (e.g. status=DEFERRED to see deferred work you
@@ -369,13 +399,11 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
     public TaskIO.TodoListResponse todoList(
                                             @JsonPropertyDescription("Optional filter: INCOMPLETE, DONE, ABANDONED or DEFERRED. Omit to list the active task's todos.") String status) {
         if (status != null && !status.isBlank()) {
-            final TodoState state;
-            try {
-                state = TodoState.valueOf(status.trim().toUpperCase());
-            }
-            catch (IllegalArgumentException e) {
+            final TodoState state = parseTodoState(status);
+            if (state == null) {
                 return TaskIO.TodoListResponse.builder()
-                        .error("Unknown status: " + status)
+                        .error("Unknown status: " + status
+                                + ". Use INCOMPLETE, DONE, ABANDONED or DEFERRED.")
                         .filtered(true)
                         .todos(List.of())
                         .build();
@@ -397,28 +425,21 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
                 .build();
     }
 
-    // ------------------------------------------------------------------
-    // AgentExtension
-    // ------------------------------------------------------------------
-
     @Tool("""
-            Update the state of a todo item. Allowed transitions:
-            incomplete -> done; incomplete -> abandoned (requires reason);
-            incomplete -> deferred (requires reason); deferred -> incomplete (resurrection).
-            done and abandoned are terminal.
+            Update the state of a todo item. Any todo can move to any state, including reopening
+            (e.g. done -> incomplete to redo the work). A reason is required when abandoning or
+            deferring; optional otherwise.
             """)
     public TaskIO.TodoUpdateResponse todoUpdate(
                                                 @JsonPropertyDescription("The todo id, e.g. todo-0003.") String todoId,
-                                                @JsonPropertyDescription("New state: done, abandoned, deferred or incomplete.") String newState,
+                                                @JsonPropertyDescription("New state: done, abandoned, deferred or incomplete. Common aliases (in_progress, pending, reopened, completed, ...) are accepted.") String newState,
                                                 @JsonPropertyDescription("Required reason when abandoning or deferring; optional otherwise.") String reason) {
-        final TodoState to;
-        try {
-            to = TodoState.valueOf(newState.trim().toUpperCase());
-        }
-        catch (IllegalArgumentException e) {
+        final TodoState to = parseTodoState(newState);
+        if (to == null) {
             return TaskIO.TodoUpdateResponse.builder()
                     .todoId(todoId)
-                    .error("Unknown state: " + newState)
+                    .error("Unknown state: " + newState
+                            + ". Use done, abandoned, deferred or incomplete (aliases such as in_progress are also accepted).")
                     .build();
         }
         try {

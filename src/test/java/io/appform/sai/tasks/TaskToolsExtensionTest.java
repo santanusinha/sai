@@ -240,7 +240,48 @@ class TaskToolsExtensionTest {
     }
 
     @Test
-    void todoUpdateEnforcesStateMachine() {
+    void todoUpdateAcceptsStateAliases() {
+        final var tools = extension();
+        tools.taskStart("task");
+        final var todo = tools.todoAdd("work item");
+
+        // the alias that motivated this: "in_progress" must mean incomplete, not error
+        assertThat(tools.todoUpdate(todo.getTodoId(), "in_progress", null).getError()).isNull();
+        assertThat(tools.todoList("in_progress").getTodos()).extracting(view -> view.getId())
+                .containsExactly(todo.getTodoId());
+        assertThat(tools.todoUpdate(todo.getTodoId(), "pending", null).getError()).isNull();
+        assertThat(tools.todoUpdate(todo.getTodoId(), "completed", null).getError()).isNull();
+        assertThat(tools.todoUpdate(todo.getTodoId(), "reopened", null).getError()).isNull();
+        // spaces and case are tolerated
+        assertThat(tools.todoUpdate(todo.getTodoId(), " IN PROGRESS ", null).getError()).isNull();
+        assertThat(tools.todoUpdate(todo.getTodoId(), "In-Progress", null).getError()).isNull();
+    }
+
+    @Test
+    void todoUpdateAllowsRedoOfDoneTodo() {
+        final var tools = extension();
+        tools.taskStart("task");
+        final var todo = tools.todoAdd("work item");
+        tools.todoUpdate(todo.getTodoId(), "done", null);
+
+        // work turns out to be unfinished: reopen and redo
+        final var reopened = tools.todoUpdate(todo.getTodoId(), "incomplete", null);
+        assertThat(reopened.getError()).isNull();
+        assertThat(tools.todoList("incomplete").getTodos()).extracting(view -> view.getId())
+                .containsExactly(todo.getTodoId());
+
+        // same-state transition is a harmless no-op
+        assertThat(tools.todoUpdate(todo.getTodoId(), "incomplete", null).getError()).isNull();
+
+        // done again; deferred -> abandoned also allowed now (state machine is lenient)
+        tools.todoUpdate(todo.getTodoId(), "deferred", "park it");
+        final var abandoned = tools.todoUpdate(todo.getTodoId(), "abandoned", "changed my mind");
+        assertThat(abandoned.getError()).isNull();
+        assertThat(abandoned.getNewState()).isEqualTo("ABANDONED");
+    }
+
+    @Test
+    void todoUpdateEnforcesBasicRules() {
         final var tools = extension();
         tools.taskStart("task");
         final var todo = tools.todoAdd("work item");
@@ -251,8 +292,6 @@ class TaskToolsExtensionTest {
         assertThat(tools.todoUpdate(todo.getTodoId(), "abandoned", null).getError()).isNotNull();
         // done works
         assertThat(tools.todoUpdate(todo.getTodoId(), "done", null).getError()).isNull();
-        // done is terminal
-        assertThat(tools.todoUpdate(todo.getTodoId(), "deferred", "reason").getError()).isNotNull();
         // unknown todo
         assertThat(tools.todoUpdate("todo-9999", "done", null).getError()).isNotNull();
     }

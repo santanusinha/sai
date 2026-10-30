@@ -31,9 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Tests that {@code CoreToolBox} file edits/writes are gated by the
- * {@code todoItemId} attribution parameter: rejected when blank or unknown,
- * recorded to the journal when valid.
+ * Tests that {@code CoreToolBox} file edits/writes accept an optional
+ * {@code todoItemId} attribution parameter: blank passes unattributed,
+ * unknown is rejected, and valid ids are recorded to the journal.
  */
 class CoreToolBoxTodoAttributionTest {
 
@@ -48,17 +48,20 @@ class CoreToolBoxTodoAttributionTest {
     Path workDir;
 
     @Test
-    void editFileWithoutTodoIdIsRejected() throws Exception {
+    void editFileWithoutTodoIdSucceedsUnattributed() throws Exception {
         final var file = workDir.resolve("out.txt");
         Files.writeString(file, "line1\nline2\n");
+        final var expectedChecksum = io.appform.sai.files.FileIO.calculateChecksum(
+                                                                                   Files.readAllBytes(file));
 
         final var response = toolBox.editFile(file.toString(),
                                               java.util.List.of(),
                                               "test",
                                               null,
-                                              "");
+                                              expectedChecksum);
 
-        assertThat(response.getError()).isNotNull().contains("todoItemId");
+        assertThat(response.getError()).isNull();
+        assertThat(store.journal()).noneMatch(event -> "edit".equals(event.getEvent()));
     }
 
     @BeforeEach
@@ -75,23 +78,27 @@ class CoreToolBoxTodoAttributionTest {
     }
 
     @Test
-    void writeBlankTodoIdIsRejected() throws Exception {
+    void writeBlankTodoIdSucceedsUnattributed() throws Exception {
         final var file = workDir.resolve("out.txt");
 
         final var response = toolBox.writeFile(file.toString(), "content", "test", "   ", "");
 
-        assertThat(response.getError()).isNotNull().contains("todoItemId");
-        assertThat(Files.exists(file)).isFalse();
+        assertThat(response.getError()).isNull();
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(Files.readString(file)).isEqualTo("content");
+        assertThat(store.journal()).noneMatch(event -> "edit".equals(event.getEvent()));
     }
 
     @Test
-    void writeFileWithoutTodoIdIsRejected() throws Exception {
+    void writeFileWithoutTodoIdSucceedsUnattributed() throws Exception {
         final var file = workDir.resolve("out.txt");
 
         final var response = toolBox.writeFile(file.toString(), "content", "test", null, "");
 
-        assertThat(response.getError()).isNotNull().contains("todoItemId");
-        assertThat(Files.exists(file)).isFalse();
+        assertThat(response.getError()).isNull();
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(Files.readString(file)).isEqualTo("content");
+        assertThat(store.journal()).noneMatch(event -> "edit".equals(event.getEvent()));
     }
 
     @Test

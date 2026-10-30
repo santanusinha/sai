@@ -43,10 +43,11 @@ class TaskStateRegistryTest {
     Path workDir;
 
     @Test
-    void blankTodoRefIsRejectedWhenStoreIsBound() {
-        assertThat(registry.validateTodoRef(null)).isNotNull();
-        assertThat(registry.validateTodoRef("")).isNotNull();
-        assertThat(registry.validateTodoRef("   ")).isNotNull();
+    void blankTodoRefIsAllowedWhenStoreIsBound() {
+        // Exploratory edits with no attribution are fine.
+        assertThat(registry.validateTodoRef(null)).isNull();
+        assertThat(registry.validateTodoRef("")).isNull();
+        assertThat(registry.validateTodoRef("   ")).isNull();
     }
 
     @Test
