@@ -54,10 +54,30 @@ public final class InputResolver {
      * @return the entered line, or empty on interrupt/EOF
      */
     public static Optional<String> readInput(final Printer printer) {
+        return readInput(printer, "");
+    }
+
+    /**
+     * Reads one line from the interactive prompt, pre-loading the given
+     * initial buffer. Characters typed while the previous run was in flight
+     * are carried over this way, so they appear as if typed at this prompt.
+     *
+     * @param printer       the active printer (owns the JLine terminal)
+     * @param initialBuffer text to pre-load into the prompt (may be empty)
+     * @return the entered line, or empty on interrupt/EOF
+     */
+    public static Optional<String> readInput(final Printer printer, final String initialBuffer) {
         try {
             printer.getTerminal().writer().print("\007");
             printer.getTerminal().writer().flush();
-            return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
+            if (Strings.isNullOrEmpty(initialBuffer)) {
+                return Optional.of(printer.getLineReader().readLine(printer.buildPrompt()));
+            }
+            return Optional.of(printer.getLineReader()
+                    .readLine(printer.buildPrompt(),
+                              null,
+                              (org.jline.reader.MaskingCallback) null,
+                              initialBuffer));
         }
         catch (EndOfFileException | UserInterruptException e) {
             return Optional.empty();

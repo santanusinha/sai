@@ -327,9 +327,11 @@ public class ReplRunner {
                                                                       new SlashCommandHandler(dispatcher)));
         printer.addCompleter(new SlashCommandCompleter(dispatcher.getCommandLine()));
         var userInput = effectiveInput;
+        var carryOver = "";
         while (Strings.isNullOrEmpty(userInput) || !userInput.equalsIgnoreCase("exit")) {
             if (Strings.isNullOrEmpty(userInput)) {
-                userInput = InputResolver.readInput(printer).orElse("exit");
+                userInput = InputResolver.readInput(printer, carryOver).orElse("exit");
+                carryOver = "";
             }
             else {
                 // Check for client-side CLI commands (e.g. ! for shell, / for slash) before forwarding to agent
@@ -364,6 +366,10 @@ public class ReplRunner {
                 finally {
                     midRunInputReader.stop();
                     interruptMonitor.runFinished();
+                    // Characters typed during the run are carried into the next
+                    // prompt, so nothing the user typed while the run was in
+                    // flight is lost.
+                    carryOver = midRunInputReader.drainCarryOver();
                     userInput = !Strings.isNullOrEmpty(effectiveInput) ? "exit" : null;
                 }
             }

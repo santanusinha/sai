@@ -37,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.slf4j.Slf4j;
@@ -77,6 +78,7 @@ public class MidRunInputReader implements AutoCloseable {
     private final String sessionId;
     private final PauseGate pauseGate;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final ConcurrentLinkedQueue<Character> carryOver = new ConcurrentLinkedQueue<>();
     private volatile Thread readerThread;
 
     public MidRunInputReader(Printer printer,
@@ -92,6 +94,20 @@ public class MidRunInputReader implements AutoCloseable {
     @Override
     public void close() {
         stop();
+    }
+
+    /**
+     * Drains and returns the characters typed during the last run, in order.
+     * The REPL loop passes this text to the next prompt as the initial buffer,
+     * so nothing the user typed while the run was in flight is lost.
+     */
+    public String drainCarryOver() {
+        final var builder = new StringBuilder();
+        Character c;
+        while ((c = carryOver.poll()) != null) {
+            builder.append(c);
+        }
+        return builder.toString();
     }
 
     /**
@@ -151,6 +167,27 @@ public class MidRunInputReader implements AutoCloseable {
             keyMap.bind(new Reference(LineReader.SEND_BREAK), key);
         }
         return previous;
+    }
+
+    /**
+     * Buffers a key that is not the pause key, so characters typed while the
+     * run is in flight are not lost. The next main prompt pre-loads this
+     * buffer, so the text appears as if the user typed it there. Ctrl-C and
+     * other control keys are not buffered: Ctrl-C is handled by the interrupt
+     * monitor, which cancels the run.
+     */
+    private void bufferCarryOver(final int key) {
+        if (key == 127 || key == 8) {
+            // Backspace / Ctrl-H: drop the last buffered char if any.
+            final var last = new java.util.ArrayList<Character>(carryOver);
+            if (!last.isEmpty()) {
+                carryOver.removeAll(java.util.List.of(last.get(last.size() - 1)));
+            }
+        }
+        else if (key >= 32 && key < 127) {
+            carryOver.add((char) key);
+        }
+        // Other control keys (arrow keys, etc.) are not buffered.
     }
 
     /**
@@ -228,9 +265,9 @@ public class MidRunInputReader implements AutoCloseable {
                 if (available == CTRL_Q || available == KeyMap.esc().charAt(0)) {
                     openPrompt();
                 }
-                // All other keys are ignored: the prompt is the only way to
-                // send mid-run input, and Ctrl-C is handled by the interrupt
-                // monitor, which cancels the run.
+                else {
+                    bufferCarryOver(available);
+                }
             }
         }
         catch (Exception e) {
