@@ -72,6 +72,18 @@ public final class TaskIO {
     @Value
     @Builder
     @Jacksonized
+    public static class TodoAddAllResponse {
+        @JsonPropertyDescription("Ids of the created todos, in the same order as the input items.")
+        List<String> todoIds;
+        @JsonPropertyDescription("The created todo items, in the same order as the input items.")
+        List<TodoItemView> todos;
+        @JsonPropertyDescription("Error message if the batch was rejected.")
+        String error;
+    }
+
+    @Value
+    @Builder
+    @Jacksonized
     public static class TodoItemView {
         @JsonPropertyDescription("Todo id, e.g. todo-0003. Use this id to attribute file edits.")
         String id;

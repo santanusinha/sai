@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.stream.Collectors;
 
 
@@ -198,6 +199,44 @@ class TaskToolsExtensionTest {
         final var tools = extension();
         tools.taskStart("my task");
         assertThat(tools.noteRead(null).getContent()).contains("# Task: my task");
+    }
+
+    @Test
+    void todoAddAllCreatesTodosInOrder() {
+        final var tools = extension();
+        tools.taskStart("planned task");
+        final var response = tools.todoAddAll(List.of("first step", "second step", "third step"));
+
+        assertThat(response.getError()).isNull();
+        assertThat(response.getTodoIds()).containsExactly("todo-0001", "todo-0002", "todo-0003");
+        assertThat(response.getTodos()).hasSize(3);
+        assertThat(response.getTodos()).extracting(view -> view.getText())
+                .containsExactly("first step", "second step", "third step");
+        assertThat(response.getTodos()).extracting(view -> view.getState())
+                .containsOnly("INCOMPLETE");
+
+        // the batch todos behave like todo_add todos: listable and updatable
+        final var listed = tools.todoList(null);
+        assertThat(listed.getTodos()).extracting(view -> view.getId())
+                .containsExactlyElementsOf(response.getTodoIds());
+        assertThat(tools.todoUpdate("todo-0002", "done", null).getError()).isNull();
+    }
+
+    @Test
+    void todoAddAllWithEmptyItemsErrors() {
+        final var tools = extension();
+        tools.taskStart("task");
+        assertThat(tools.todoAddAll(List.of()).getError()).isNotNull();
+        assertThat(tools.todoAddAll(null).getError()).isNotNull();
+        assertThat(tools.getStore().activeTask().orElseThrow().getId()).isEqualTo("task-0001");
+    }
+
+    @Test
+    void todoAddAllWithoutActiveTaskErrors() {
+        final var tools = extension();
+        final var response = tools.todoAddAll(List.of("orphan one", "orphan two"));
+        assertThat(response.getError()).isNotNull();
+        assertThat(tools.getStore().todos()).isEmpty();
     }
 
     @Test

@@ -387,6 +387,49 @@ public class TaskToolsExtension implements AgentExtension<String, String, SaiAge
                 .build();
     }
 
+    @Tool("""
+            Add several todo items to the active task in one call. Prefer this over todo_add when
+            adding multiple items (e.g. when planning work). Returns the created todo ids in the
+            same order as the input items; use those ids to attribute file edits.
+            """)
+    public TaskIO.TodoAddAllResponse todoAddAll(
+                                                @JsonPropertyDescription("Descriptions of the todo items, in the order they should be created.") List<String> items) {
+        final var task = store.activeTask().orElse(null);
+        if (task == null) {
+            return TaskIO.TodoAddAllResponse.builder()
+                    .error("No active task. Start one with task_start first.")
+                    .build();
+        }
+        if (items == null || items.isEmpty()) {
+            return TaskIO.TodoAddAllResponse.builder()
+                    .error("items is empty. Pass at least one todo description.")
+                    .build();
+        }
+        final var ids = new ArrayList<String>(items.size());
+        final var todos = new ArrayList<TodoItemView>(items.size());
+        for (final var text : items) {
+            final var todoId = nextTodoId();
+            ids.add(todoId);
+            store.append(JournalEvent.builder()
+                    .ts(LocalDateTime.now().toString())
+                    .event("created")
+                    .todoId(todoId)
+                    .taskId(task.getId())
+                    .text(text)
+                    .build());
+            todos.add(TodoItemView.builder()
+                    .id(todoId)
+                    .taskId(task.getId())
+                    .text(text)
+                    .state("INCOMPLETE")
+                    .build());
+        }
+        return TaskIO.TodoAddAllResponse.builder()
+                .todoIds(ids)
+                .todos(todos)
+                .build();
+    }
+
     // ------------------------------------------------------------------
     // AgentExtension
     // ------------------------------------------------------------------
