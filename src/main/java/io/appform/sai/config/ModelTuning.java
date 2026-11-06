@@ -214,17 +214,17 @@ public class ModelTuning {
                 && temperature == null
                 && topP == null
                 && timeout == null
+                && seed == null
+                && presencePenalty == null
+                && frequencyPenalty == null
+                && logitBias == null
+                && reasoning == null
                 && disableTools == null
                 && protocol == null
                 && encodingType == null
                 && contextWindowSize == null
                 && toolChoice == null
                 && reasoningReplay == null
-                && reasoning == null
-                && disableTools == null
-                && protocol == null
-                && encodingType == null
-                && toolChoice == null
                 && compactionOutputGenerationMode == null
                 && compactionTriggerThresholdPercentage == null
                 && (extraArgs == null || extraArgs.isEmpty())

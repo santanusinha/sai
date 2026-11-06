@@ -22,14 +22,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.appform.sai.Settings;
 import io.appform.sai.term.Printer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.SneakyThrows;
 
@@ -70,6 +75,16 @@ class BufferedOutputPrinterTest {
 
     private CapturingPrinter printer;
     private BufferedOutputPrinter bop;
+
+    static Stream<Arguments> detectModeArgs() {
+        return Stream.of(
+                         Arguments.of("plain line", "Hello world", BufferedOutputPrinter.Mode.NORMAL),
+                         Arguments.of("triple backtick fence", "```java", BufferedOutputPrinter.Mode.CODE),
+                         Arguments.of("tilde fence", "~~~", BufferedOutputPrinter.Mode.CODE),
+                         Arguments.of("pipe-delimited row", "| A | B |", BufferedOutputPrinter.Mode.TABLE),
+                         Arguments.of("separator row", "|---|---|", BufferedOutputPrinter.Mode.TABLE),
+                         Arguments.of("row with trailing space", "| A | B |  ", BufferedOutputPrinter.Mode.TABLE));
+    }
 
     @Test
     void abbreviationDrDoesNotBreakSentence() {
@@ -131,13 +146,6 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
-    void codeBlockContentIsRendered() {
-        feed("```java\nint x = 1;\n```\n");
-        final var out = renderedOutput();
-        assertTrue(out.contains("int x = 1;"), "code literal must appear in output");
-    }
-
-    @Test
     void codeBlockDoesNotContainSpuriousBlankLineBeforeClosingFence() {
         // blockBuffer already ends with '\n'; adding another '\n' before the
         // closing fence would create a blank line inside the rendered block.
@@ -176,12 +184,6 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("line2"));
     }
 
-    @Test
-    void codeBlockWithoutLanguageRendersCorrectly() {
-        feed("```\nplain code\n```\n");
-        assertTrue(renderedOutput().contains("plain code"));
-    }
-
     // -------------------------------------------------------------------------
     // Mode detection unit tests
     // -------------------------------------------------------------------------
@@ -198,40 +200,15 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("Then he paid."), "the real boundary should flush");
     }
 
-    @Test
-    void detectModeReturnsCodeForTildeFence() {
-        assertEquals(BufferedOutputPrinter.Mode.CODE, bop.detectMode("~~~"));
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("detectModeArgs")
+    void detectModeReturnsExpectedMode(String description, String line, BufferedOutputPrinter.Mode expected) {
+        assertEquals(expected, bop.detectMode(line));
     }
 
     // -------------------------------------------------------------------------
     // NORMAL mode — basic line handling
     // -------------------------------------------------------------------------
-
-    @Test
-    void detectModeReturnsCodeForTripleBacktick() {
-        assertEquals(BufferedOutputPrinter.Mode.CODE, bop.detectMode("```java"));
-    }
-
-    @Test
-    void detectModeReturnsNormalForPlainLine() {
-        assertEquals(BufferedOutputPrinter.Mode.NORMAL, bop.detectMode("Hello world"));
-    }
-
-    @Test
-    void detectModeReturnsTableForPipeDelimitedLine() {
-        assertEquals(BufferedOutputPrinter.Mode.TABLE, bop.detectMode("| A | B |"));
-    }
-
-    @Test
-    void detectModeReturnsTableForSeparatorRow() {
-        assertEquals(BufferedOutputPrinter.Mode.TABLE, bop.detectMode("|---|---|"));
-    }
-
-    @Test
-    void detectModeReturnsTableWhenLineHasTrailingSpace() {
-        // Trailing whitespace must be stripped before matching
-        assertEquals(BufferedOutputPrinter.Mode.TABLE, bop.detectMode("| A | B |  "));
-    }
 
     // -------------------------------------------------------------------------
     // CODE block rendering
@@ -393,20 +370,11 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
-    void numberedListItemStaysOnOneLineWhenStreamedCharByChar() {
+    void numberedListItemStaysOnOneLineEvenWhenStreamedCharByChar() {
         final var text = "1. First do this. Then that.\n2. Second item.\n";
         for (final var c : text.toCharArray()) {
             feed(String.valueOf(c));
         }
-        final var parts = renderedParts();
-        assertEquals(2, parts.size());
-        assertEquals("1. First do this. Then that.", parts.get(0));
-        assertEquals("2. Second item.", parts.get(1));
-    }
-
-    @Test
-    void numberedListItemWithSentencesStaysOnOneLine() {
-        feed("1. First do this. Then that.\n2. Second item.\n");
         final var parts = renderedParts();
         assertEquals(2, parts.size(), "each list item must be one print call");
         assertEquals("1. First do this. Then that.", parts.get(0));
@@ -583,38 +551,24 @@ class BufferedOutputPrinterTest {
     }
 
     @Test
-    void tableHeaderAndBodyCellsAreRendered() {
+    void tableRendersBoxDrawingBordersAndAllCells() {
         feed("| Language | Stars |\n|----------|-------|\n| Java     | 9999  |\n| Kotlin   | 8888  |\n");
-        bop.markDone();
-        final var out = renderedOutput();
-        assertTrue(out.contains("Language"), "header cell 'Language'");
-        assertTrue(out.contains("Stars"), "header cell 'Stars'");
-        assertTrue(out.contains("Java"), "body cell 'Java'");
-        assertTrue(out.contains("Kotlin"), "body cell 'Kotlin'");
-        assertTrue(out.contains("9999"), "body cell '9999'");
-        assertTrue(out.contains("8888"), "body cell '8888'");
-    }
-
-    @Test
-    void tableHeaderSeparatorIsRendered() {
-        feed("| Name | Age |\n|------|-----|\n| Bob  | 25  |\n");
-        bop.markDone();
-        final var out = renderedOutput();
-        assertTrue(out.contains("├"), "header/body separator left junction");
-        assertTrue(out.contains("┤"), "header/body separator right junction");
-    }
-
-    @Test
-    void tableRendersBoxDrawingBorders() {
-        feed("| Name | Age |\n|------|-----|\n| Alice | 30 |\n");
         bop.markDone();
         final var out = renderedOutput();
         assertTrue(out.contains("┌"), "top-left corner");
         assertTrue(out.contains("┐"), "top-right corner");
         assertTrue(out.contains("└"), "bottom-left corner");
         assertTrue(out.contains("┘"), "bottom-right corner");
+        assertTrue(out.contains("├"), "header/body separator left junction");
+        assertTrue(out.contains("┤"), "header/body separator right junction");
         assertTrue(out.contains("│"), "vertical separators");
         assertTrue(out.contains("─"), "horizontal lines");
+        assertTrue(out.contains("Language"), "header cell 'Language'");
+        assertTrue(out.contains("Stars"), "header cell 'Stars'");
+        assertTrue(out.contains("Java"), "body cell 'Java'");
+        assertTrue(out.contains("Kotlin"), "body cell 'Kotlin'");
+        assertTrue(out.contains("9999"), "body cell '9999'");
+        assertTrue(out.contains("8888"), "body cell '8888'");
     }
 
     @Test
@@ -678,6 +632,7 @@ class BufferedOutputPrinterTest {
         assertTrue(out.contains("1") && out.contains("2"), "body cells should be present");
     }
 
+    @AfterEach
     void tearDown() throws IOException {
         printer.close();
     }

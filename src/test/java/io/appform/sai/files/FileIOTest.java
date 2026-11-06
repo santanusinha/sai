@@ -48,6 +48,48 @@ class FileIOTest {
     private Path tempDir;
     private Path testFile;
 
+    static Stream<Arguments> editMatrix() {
+        return Stream.of(
+                         Arguments.of("replace single line",
+                                      "line1\nline2\nline3",
+                                      2,
+                                      2,
+                                      "replaced",
+                                      "line1\nreplaced\nline3"),
+                         Arguments.of("replace range with single line",
+                                      "line1\nline2\nline3",
+                                      2,
+                                      3,
+                                      "replaced",
+                                      "line1\nreplaced"),
+                         Arguments.of("replace range with multiple lines",
+                                      "before\nold1\nold2\nafter",
+                                      2,
+                                      3,
+                                      "new1\nnew2\nnew3",
+                                      "before\nnew1\nnew2\nnew3\nafter"),
+                         Arguments.of("delete single line", "line1\nline2\nline3", 2, 2, "", "line1\nline3"),
+                         Arguments.of("delete range", "line1\nline2\nline3\nline4", 2, 3, "", "line1\nline4"),
+                         Arguments.of("trailing newline stripped from replacement",
+                                      "line1\nline2\nline3",
+                                      2,
+                                      2,
+                                      "replaced\n",
+                                      "line1\nreplaced\nline3"),
+                         Arguments.of("negative end line replaces to end of file",
+                                      "line1\nline2\nline3\nline4",
+                                      3,
+                                      -1,
+                                      "replaced",
+                                      "line1\nline2\nreplaced"),
+                         Arguments.of("negative end line deletes to end of file",
+                                      "line1\nline2\nline3",
+                                      2,
+                                      -1,
+                                      "",
+                                      "line1"));
+    }
+
     static Stream<Arguments> invalidLineRangeArgs() {
         return Stream.of(
                          Arguments.of("zero start line", 0, 2),
@@ -77,28 +119,43 @@ class FileIOTest {
     }
 
     @Test
-    void checksumDifferentContent() {
-        final var a = "hello".getBytes(StandardCharsets.UTF_8);
-        final var b = "world".getBytes(StandardCharsets.UTF_8);
-        assertNotEquals(FileIO.calculateChecksum(a), FileIO.calculateChecksum(b));
-    }
-
-    @Test
-    void checksumEmpty() {
-        final var result = FileIO.calculateChecksum(new byte[0]);
-        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", result);
-    }
-
-    @Test
-    void checksumIsLowercaseHex() {
+    void checksumBehaviour() {
+        // SHA-256 of the empty byte array is a fixed, well-known value.
+        assertEquals("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                     FileIO.calculateChecksum(new byte[0]));
+        final var content = "hello world".getBytes(StandardCharsets.UTF_8);
+        assertEquals(FileIO.calculateChecksum(content), FileIO.calculateChecksum(content));
+        assertNotEquals(FileIO.calculateChecksum("hello".getBytes(StandardCharsets.UTF_8)),
+                        FileIO.calculateChecksum("world".getBytes(StandardCharsets.UTF_8)));
         final var checksum = FileIO.calculateChecksum("test".getBytes(StandardCharsets.UTF_8));
         assertTrue(checksum.matches("[0-9a-f]{64}"), "not 64 lowercase hex chars: " + checksum);
     }
 
-    @Test
-    void checksumSameContent() {
-        final var content = "hello world".getBytes(StandardCharsets.UTF_8);
-        assertEquals(FileIO.calculateChecksum(content), FileIO.calculateChecksum(content));
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("editMatrix")
+    @SneakyThrows
+    void editAppliesOperation(String description,
+                              String content,
+                              int startLine,
+                              int endLine,
+                              String replacement,
+                              String expected) {
+        Files.writeString(testFile, content, StandardCharsets.UTF_8);
+        final var edits = List.of(
+                                  ToolIO.FileEditOperation.builder()
+                                          .startLine(startLine)
+                                          .endLine(endLine)
+                                          .content(replacement)
+                                          .build());
+
+        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
+
+        assertNull(result.getError());
+        assertNotNull(result.getNewChecksum());
+        assertEquals(checksum(expected), result.getNewChecksum());
+        assertNotNull(result.getCorrections());
+        assertTrue(result.getCorrections().isEmpty());
+        assertEquals(expected, Files.readString(testFile));
     }
 
     @Test
@@ -119,59 +176,6 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
-    void editDeleteDoesNotReportCorrections() {
-        final var content = "line1\nline2\nline3\nline4\nline5";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("").build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getCorrections());
-        assertTrue(result.getCorrections().isEmpty());
-        assertEquals("line1\nline4\nline5", Files.readString(testFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void editDeleteRange() {
-        final var content = "line1\nline2\nline3\nline4";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("").build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum());
-        final var written = Files.readString(testFile);
-        assertFalse(written.contains("line2"));
-        assertFalse(written.contains("line3"));
-        assertTrue(written.contains("line1"));
-        assertTrue(written.contains("line4"));
-    }
-
-    @Test
-    @SneakyThrows
-    void editDeleteSingleLine() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("").build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum());
-        final var written = Files.readString(testFile);
-        assertFalse(written.contains("line2"));
-        assertTrue(written.contains("line1"));
-        assertTrue(written.contains("line3"));
-    }
-
-    @Test
-    @SneakyThrows
     void editDetectsExternalModificationAfterRead() {
         // The edit tool also computes the checksum from the file on disk at every call.
         Files.writeString(testFile, "line1\nline2", StandardCharsets.UTF_8);
@@ -186,39 +190,6 @@ class FileIOTest {
         assertNotNull(response.getError());
         assertTrue(response.getError().contains("Checksum mismatch"), response.getError());
         assertEquals("changed externally", Files.readString(testFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void editEndLineMinusOneDeleteToEnd() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(-1).content("")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("line1", written);
-    }
-
-    @Test
-    @SneakyThrows
-    void editEndLineMinusOneReplacesToEnd() {
-        final var content = "line1\nline2\nline3\nline4";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(3).endLine(-1).content("replaced")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nline2\nreplaced", written);
     }
 
     @Test
@@ -381,117 +352,6 @@ class FileIOTest {
     }
 
     @Test
-    @SneakyThrows
-    void editReplaceRange() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("replaced")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertTrue(written.contains("replaced"));
-        assertFalse(written.contains("line2"));
-        assertFalse(written.contains("line3"));
-        assertTrue(written.contains("line1"));
-    }
-
-    @Test
-    @SneakyThrows
-    void editReplaceRangeWithMultipleLines() {
-        final var content = "before\nold1\nold2\nafter";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(3).content("new1\nnew2\nnew3")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertTrue(written.contains("new1"));
-        assertTrue(written.contains("new2"));
-        assertTrue(written.contains("new3"));
-        assertFalse(written.contains("old1"));
-        assertFalse(written.contains("old2"));
-        assertTrue(written.contains("before"));
-        assertTrue(written.contains("after"));
-    }
-
-    @Test
-    @SneakyThrows
-    void editReplaceSingleLine() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nreplaced\nline3", written);
-    }
-
-    @Test
-    @SneakyThrows
-    void editReportsNoCorrectionsForCleanEdit() {
-        final var content = "line1\nline2\nline3\nline4\nline5";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder()
-                                          .startLine(3)
-                                          .endLine(3)
-                                          .content("line3 new")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getCorrections());
-        assertTrue(result.getCorrections().isEmpty());
-        assertEquals("line1\nline2\nline3 new\nline4\nline5", Files.readString(testFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void editReturnsNewChecksum() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("changed")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        assertNotNull(result.getNewChecksum());
-        final var written = Files.readString(testFile);
-        assertEquals(checksum(written), result.getNewChecksum());
-    }
-
-    @Test
-    @SneakyThrows
-    void editTrailingNewlineStripped() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("replaced\n")
-                                          .build());
-
-        final var result = FileIO.editFile(testFile.toString(), edits, checksum(content));
-
-        assertNull(result.getError());
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nreplaced\nline3", written);
-    }
-
-    @Test
     void readEmptyFile() {
 
         final var result = FileIO.readFile(testFile.toString(), 1, -1, false);
@@ -500,7 +360,6 @@ class FileIOTest {
         assertEquals("", result.getContent());
         assertNotNull(result.getChecksum());
     }
-
 
     @Test
     void readFileNotFound() {
@@ -548,17 +407,6 @@ class FileIOTest {
 
         assertNull(result.getError());
         assertEquals(content, result.getContent());
-        assertNotNull(result.getChecksum());
-    }
-
-    @Test
-    @SneakyThrows
-    void readWholeFileChecksumMatchesContent() {
-        final var content = "hello";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-
-        final var result = FileIO.readFile(testFile.toString(), 1, -1, false);
-
         assertEquals(FileIO.calculateChecksum(content.getBytes(StandardCharsets.UTF_8)), result.getChecksum());
     }
 
@@ -578,37 +426,24 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
-    void safePathAllowsPathUnderTmp() {
+    void safePathAllowsFilesUnderTmp() {
         final var tmpDir = Files.createTempDirectory("sai-test-");
-        final var tmpFile = tmpDir.resolve("test.txt");
         try {
-            final var content = "tmp content";
-            final var response = FileIO.write(tmpFile.toString(), content, "");
-            assertNull(response.getError());
-            final var readResult = FileIO.readFile(tmpFile.toString(), 1, -1, false);
-            assertNull(readResult.getError());
-            assertEquals(content, readResult.getContent());
+            for (final var relative : List.of("test.txt", "nested/sub.txt")) {
+                final var tmpFile = tmpDir.resolve(relative);
+                Files.createDirectories(tmpFile.getParent());
+                final var content = "tmp content";
+
+                final var response = FileIO.write(tmpFile.toString(), content, "");
+                assertNull(response.getError());
+
+                final var readResult = FileIO.readFile(tmpFile.toString(), 1, -1, false);
+                assertNull(readResult.getError());
+                assertEquals(content, readResult.getContent());
+            }
         }
         finally {
             deleteRecursive(tmpDir);
-        }
-    }
-
-    @Test
-    @SneakyThrows
-    void safePathAllowsSubdirectoryUnderTmp() {
-        final var tmpSubDir = Files.createTempDirectory("sai-subdir-");
-        final var tmpSubFile = tmpSubDir.resolve("nested.txt");
-        try {
-            final var content = "nested tmp content";
-            final var response = FileIO.write(tmpSubFile.toString(), content, "");
-            assertNull(response.getError());
-            final var readResult = FileIO.readFile(tmpSubFile.toString(), 1, -1, false);
-            assertNull(readResult.getError());
-            assertEquals(content, readResult.getContent());
-        }
-        finally {
-            deleteRecursive(tmpSubDir);
         }
     }
 
@@ -622,15 +457,6 @@ class FileIOTest {
     @AfterEach
     void tearDown() throws IOException {
         deleteRecursive(tempDir);
-    }
-
-    @Test
-    void writeBytesWrittenMatchesContentLength() {
-        final var newFile = tempDir.resolve("bytes.txt");
-        final var content = "abcde";
-
-        final var response = FileIO.write(newFile.toString(), content, "");
-        assertEquals(content.length(), response.getCharsWritten());
     }
 
     @Test
@@ -685,13 +511,25 @@ class FileIOTest {
 
     @Test
     @SneakyThrows
-    void writeFileTooLargeReturnsError() {
+    void writeFileSizeLimits() {
+        final var atLimit = tempDir.resolve("at-limit.txt");
+        final var atLimitContent = "x".repeat(1024 * 1024);
+
+        final var atLimitResponse = FileIO.write(atLimit.toString(), atLimitContent, "");
+
+        assertNull(atLimitResponse.getError());
+        assertEquals(1024L * 1024L, Files.size(atLimit));
+
         Files.write(testFile, new byte[1024 * 1024 + 1]);
+        final var overLimitExisting = FileIO.write(testFile.toString(), "small content", "any");
+        assertNotNull(overLimitExisting.getError());
+        assertTrue(overLimitExisting.getError().contains("1 MB"), overLimitExisting.getError());
 
-        final var response = FileIO.write(testFile.toString(), "small content", "any");
-
-        assertNotNull(response.getError());
-        assertTrue(response.getError().contains("1 MB"), response.getError());
+        final var overLimitNew = tempDir.resolve("too-large-new.txt");
+        final var overLimitNewResponse = FileIO.write(overLimitNew.toString(), "x".repeat(1024 * 1024 + 1), "");
+        assertNotNull(overLimitNewResponse.getError());
+        assertTrue(overLimitNewResponse.getError().contains("1 MB"), overLimitNewResponse.getError());
+        assertFalse(Files.exists(overLimitNew));
     }
 
     @Test
@@ -703,35 +541,9 @@ class FileIOTest {
         final var response = FileIO.write(newFile.toString(), content, "");
 
         assertNull(response.getError());
-        assertTrue(response.getCharsWritten() > 0);
+        assertEquals(content.length(), response.getCharsWritten());
         assertTrue(Files.exists(newFile));
         assertEquals(content, Files.readString(newFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void writeNewFileExactlyAtLimitSucceeds() {
-        final var newFile = tempDir.resolve("at-limit.txt");
-        final var content = "x".repeat(1024 * 1024);
-
-        final var response = FileIO.write(newFile.toString(), content, "");
-
-        assertNull(response.getError());
-        assertTrue(Files.exists(newFile));
-        assertEquals(1024L * 1024L, Files.size(newFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void writeNewFileTooLargeReturnsError() {
-        final var newFile = tempDir.resolve("too-large-new.txt");
-        final var content = "x".repeat(1024 * 1024 + 1);
-
-        final var response = FileIO.write(newFile.toString(), content, "");
-
-        assertNotNull(response.getError());
-        assertTrue(response.getError().contains("1 MB"), response.getError());
-        assertFalse(Files.exists(newFile));
     }
 
     @Test

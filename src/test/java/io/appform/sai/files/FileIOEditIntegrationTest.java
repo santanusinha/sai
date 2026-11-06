@@ -77,52 +77,6 @@ class FileIOEditIntegrationTest {
         assertEquals("A\nb\nC\nd\nE", written);
     }
 
-    @Test
-    @SneakyThrows
-    void checksumMismatchReturnsError() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-        final var edits = List.of(
-                                  ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified").build()
-        );
-
-        final var result = FileIO.editFile(testFile.toString(), edits, "wrong_checksum_value");
-
-        assertNotNull(result.getError());
-        assertTrue(result.getError().contains("Checksum mismatch"));
-        // File should be unchanged
-        assertEquals(content, Files.readString(testFile));
-    }
-
-    @Test
-    @SneakyThrows
-    void checksumUsedForSubsequentEdit() {
-        final var content = "line1\nline2\nline3";
-        Files.writeString(testFile, content, StandardCharsets.UTF_8);
-
-        // First edit
-        final var edits1 = List.of(
-                                   ToolIO.FileEditOperation.builder().startLine(2).endLine(2).content("modified2")
-                                           .build()
-        );
-        final var result1 = FileIO.editFile(testFile.toString(), edits1, checksum(content));
-        assertNull(result1.getError());
-        assertNotNull(result1.getNewChecksum());
-
-        // Second edit using returned checksum — should NOT get checksum mismatch
-        final var edits2 = List.of(
-                                   ToolIO.FileEditOperation.builder().startLine(3).endLine(3).content("modified3")
-                                           .build()
-        );
-        final var result2 = FileIO.editFile(testFile.toString(), edits2, result1.getNewChecksum());
-        assertNull(result2.getError(),
-                   "Second edit with returned checksum should succeed, but got: " + result2.getError());
-        assertNotNull(result2.getNewChecksum());
-
-        final var written = Files.readString(testFile);
-        assertEquals("line1\nmodified2\nmodified3", written);
-    }
-
     // ===== Bug #1: Single-line replacement =====
 
     @Test

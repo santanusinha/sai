@@ -38,9 +38,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Tests for the read() and writeFile() methods in CoreToolBox.
+ * Tests for the read(), writeFile(), readImage() and tool-exposure methods in CoreToolBox.
  */
 class CoreToolBoxTest {
 
@@ -59,6 +62,23 @@ class CoreToolBoxTest {
     private CoreToolBox toolBox;
     private Path tempDir;
     private Path testFile;
+
+    @Test
+    void allowedToolsFilterToNamedToolsCaseInsensitively() {
+        final var names = exposedNames(List.of("Bash", "READFILE"));
+        assertEquals(2, names.size());
+        assertTrue(names.contains("bash"));
+        assertTrue(names.contains("readFile"));
+    }
+
+    @Test
+    void blankAllowedToolNamesAreIgnored() {
+        final var names = exposedNames(List.of("", "   ", "bash"));
+        assertEquals(1, names.size());
+        assertTrue(names.contains("bash"));
+    }
+
+    // ---- read_image tests ----
 
     @Test
     void emptyChecksumForcesReReadEvenWhenUnchanged() throws IOException {
@@ -90,8 +110,6 @@ class CoreToolBoxTest {
         assertNotNull(response.getChecksum());
         assertTrue(response.isChanged());
     }
-
-    // ---- read_image tests ----
 
     @Test
     void firstReadNullChecksum() throws IOException {
@@ -125,6 +143,20 @@ class CoreToolBoxTest {
     }
 
     @Test
+    void nullOrEmptyAllowedToolsExposesAllToolsExceptEditFile() {
+        final var allTools = List.of("bash", "searchReplace", "readFile", "writeFile", "readImage");
+
+        final var unfiltered = exposedNames(null);
+        assertEquals(5, unfiltered.size());
+        allTools.forEach(name -> assertTrue(unfiltered.contains(name), "Missing tool: " + name));
+        assertFalse(unfiltered.contains("editFile"), "editFile is never exposed");
+
+        final var emptyList = exposedNames(List.of());
+        assertEquals(5, emptyList.size());
+        allTools.forEach(name -> assertTrue(emptyList.contains(name), "Missing tool: " + name));
+    }
+
+    @Test
     void reReadDeletedFileReturnsError() throws IOException {
         Files.writeString(testFile, "Hello, World!", StandardCharsets.UTF_8);
         final var checksum = toolBox.readFile("first read", testFile.toString(), "", null).getChecksum();
@@ -136,6 +168,8 @@ class CoreToolBoxTest {
         assertTrue(response.getError().contains("File not found"), response.getError());
         assertNull(response.getContent());
     }
+
+    // ---- read tests ----
 
     @Test
     void reReadDetectsModifications() throws IOException {
@@ -192,8 +226,6 @@ class CoreToolBoxTest {
         assertTrue(response.isChanged());
         assertFalse(originalChecksum.equals(response.getChecksum()));
     }
-
-    // ---- read tests ----
 
     @Test
     void reReadUnchangedFileMultipleTimes() throws IOException {
@@ -335,6 +367,8 @@ class CoreToolBoxTest {
         assertTrue(queued.getContent().startsWith("data:image/png;base64,"), queued.getContent());
     }
 
+    // ---- write tests ----
+
     @Test
     void readImageWithoutQueueReturnsError() throws IOException {
         final var image = tempDir.resolve("test.png");
@@ -366,7 +400,10 @@ class CoreToolBoxTest {
         Files.deleteIfExists(tempDir);
     }
 
-    // ---- write tests ----
+    @Test
+    void unknownAllowedToolNamesYieldEmptyMap() {
+        assertTrue(exposedNames(List.of("does-not-exist")).isEmpty());
+    }
 
     @Test
     void writeCreatesNewFile() throws IOException {
@@ -381,6 +418,8 @@ class CoreToolBoxTest {
         assertEquals(content, Files.readString(newFile));
         assertEquals(content.length(), response.getCharsWritten());
     }
+
+    // ---- tool-exposure filter tests ----
 
     @Test
     void writeMultibyteContentReportsCharacters() throws IOException {
@@ -433,5 +472,11 @@ class CoreToolBoxTest {
         assertNotNull(response.getError());
         assertTrue(response.getError().contains("Checksum mismatch"), response.getError());
         assertEquals("some content", Files.readString(file));
+    }
+
+    private Set<String> exposedNames(List<String> allowedTools) {
+        return new CoreToolBox((Printer) null, allowedTools).tools().values().stream()
+                .map(tool -> tool.getToolDefinition().getName())
+                .collect(Collectors.toSet());
     }
 }

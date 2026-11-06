@@ -25,183 +25,133 @@ import com.phonepe.sentinelai.core.model.Reasoning;
 import com.phonepe.sentinelai.models.ModelOptions;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 class ModelTuningTest {
 
-    @Test
-    void isEmptyReturnsFalseWhenAnyFieldSet() {
-        final var tuning = ModelTuning.builder()
-                .temperature(0.7f)
-                .build();
-        assertTrue(!tuning.isEmpty());
+    static Stream<Arguments> isEmptyCases() {
+        return Stream.of(
+                         Arguments.of("empty builder is empty",
+                                      (Consumer<ModelTuning.ModelTuningBuilder>) b -> {},
+                                      true),
+                         Arguments.of("empty extraArgs is empty",
+                                      (Consumer<ModelTuning.ModelTuningBuilder>) b -> b.extraArgs(Map.of()),
+                                      true),
+                         Arguments.of("temperature set is not empty",
+                                      (Consumer<ModelTuning.ModelTuningBuilder>) b -> b.temperature(0.7f),
+                                      false),
+                         Arguments.of("extraArgs set is not empty",
+                                      (Consumer<ModelTuning.ModelTuningBuilder>) b -> b.extraArgs(Map.of("key",
+                                                                                                         "value")),
+                                      false),
+                         Arguments.of("reasoningReplay set is not empty",
+                                      (Consumer<ModelTuning.ModelTuningBuilder>) b -> b
+                                              .reasoningReplay(ModelOptions.ReasoningReplay.ON),
+                                      false));
+    }
+
+    static Stream<String> mergeFields() {
+        return fieldSetters().keySet().stream().sorted();
+    }
+
+    private static void assertField(final ModelTuning tuning, final String field) {
+        switch (field) {
+            case "temperature" -> assertEquals(0.9f, tuning.getTemperature(), field);
+            case "maxTokens" -> assertEquals(4096, tuning.getMaxTokens(), field);
+            case "seed" -> assertEquals(42, tuning.getSeed(), field);
+            case "timeout" -> assertEquals(Duration.ofSeconds(60), tuning.getTimeout(), field);
+            case "contextWindowSize" -> assertEquals(128_000, tuning.getContextWindowSize(), field);
+            case "encodingType" -> assertEquals(EncodingType.CL100K_BASE, tuning.getEncodingType(), field);
+            case "reasoning" -> assertEquals(Reasoning.HIGH, tuning.getReasoning(), field);
+            case "reasoningReplay" -> assertEquals(ModelOptions.ReasoningReplay.ON,
+                                                   tuning.getReasoningReplay(),
+                                                   field);
+            case "protocol" -> assertEquals("responses", tuning.getProtocol(), field);
+            case "extraArgs" -> assertEquals(Map.of("key", "value"), tuning.getExtraArgs(), field);
+            default -> throw new AssertionError("unknown field: " + field);
+        }
+    }
+
+    /**
+     * Field setters used by the merge tests: each entry sets one field on the
+     * builder, so the merge behaviour can be checked for every field.
+     */
+    private static Map<String, Consumer<ModelTuning.ModelTuningBuilder>> fieldSetters() {
+        return Map.ofEntries(
+                             Map.entry("temperature", b -> b.temperature(0.9f)),
+                             Map.entry("maxTokens", b -> b.maxTokens(4096)),
+                             Map.entry("seed", b -> b.seed(42)),
+                             Map.entry("timeout", b -> b.timeout(Duration.ofSeconds(60))),
+                             Map.entry("contextWindowSize", b -> b.contextWindowSize(128_000)),
+                             Map.entry("encodingType", b -> b.encodingType(EncodingType.CL100K_BASE)),
+                             Map.entry("reasoning", b -> b.reasoning(Reasoning.HIGH)),
+                             Map.entry("reasoningReplay",
+                                       b -> b.reasoningReplay(ModelOptions.ReasoningReplay.ON)),
+                             Map.entry("protocol", b -> b.protocol("responses")),
+                             Map.entry("extraArgs", b -> b.extraArgs(Map.of("key", "value"))));
+    }
+
+    private static ModelTuning tuning(final Consumer<ModelTuning.ModelTuningBuilder> setter) {
+        final var builder = ModelTuning.builder();
+        setter.accept(builder);
+        return builder.build();
     }
 
     @Test
-    void isEmptyReturnsFalseWhenExtraArgsHasEntries() {
-        final var tuning = ModelTuning.builder()
-                .extraArgs(Map.of("key", "value"))
-                .build();
-        assertTrue(!tuning.isEmpty());
-    }
-
-    @Test
-    void isEmptyReturnsFalseWhenOnlyReasoningReplaySet() {
-        final var tuning = ModelTuning.builder()
-                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
-                .build();
-        assertTrue(!tuning.isEmpty());
-    }
-
-    @Test
-    void isEmptyReturnsTrueForAllNullFields() {
+    void defaultsAreNull() {
         final var tuning = ModelTuning.builder().build();
+        assertNull(tuning.getProtocol());
+        assertNull(tuning.getReasoningReplay());
         assertTrue(tuning.isEmpty());
     }
 
-    @Test
-    void isEmptyReturnsTrueForEmptyExtraArgs() {
-        final var tuning = ModelTuning.builder()
-                .extraArgs(Map.of())
-                .build();
-        assertTrue(tuning.isEmpty());
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("isEmptyCases")
+    void isEmpty(String description, Consumer<ModelTuning.ModelTuningBuilder> setter, boolean expected) {
+        final var builder = ModelTuning.builder();
+        setter.accept(builder);
+        assertEquals(expected, builder.build().isEmpty(), description);
+    }
+
+    @ParameterizedTest(name = "merge keeps lhs {0} when rhs does not set it")
+    @MethodSource("mergeFields")
+    void mergeKeepsLhsFieldWhenRhsUnset(String field) {
+        final var lhs = tuning(b -> fieldSetters().get(field).accept(b));
+        final var rhs = ModelTuning.builder().build();
+
+        // An empty rhs tunes nothing, so the merge result must keep the lhs value.
+        final var merged = ModelTuning.merge(lhs, rhs);
+        assertField(merged, field);
     }
 
     @Test
-    void mergeBothNullReturnsNull() {
+    void mergeNullHandling() {
         assertNull(ModelTuning.merge(null, null));
+
+        final var rhsOnly = ModelTuning.builder().temperature(0.7f).build();
+        assertEquals(rhsOnly, ModelTuning.merge(null, rhsOnly));
+
+        final var lhsOnly = ModelTuning.builder().temperature(0.3f).build();
+        assertEquals(lhsOnly, ModelTuning.merge(lhsOnly, null));
     }
 
-    @Test
-    void mergeKeepsLhsFieldsWhenRhsDoesNotSetThem() {
-        final var lhs = ModelTuning.builder()
-                .temperature(0.3f)
-                .maxTokens(2048)
-                .seed(42)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .temperature(0.9f)
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(0.9f, result.getTemperature());
-        assertEquals(2048, result.getMaxTokens());
-        assertEquals(42, result.getSeed());
-    }
+    @ParameterizedTest(name = "merge takes {0} from rhs when rhs sets it")
+    @MethodSource("mergeFields")
+    void mergeRhsFieldWins(String field) {
+        final var lhs = ModelTuning.builder().build();
+        final var rhs = tuning(b -> fieldSetters().get(field).accept(b));
 
-    @Test
-    void mergeKeepsLhsReasoningReplayWhenRhsNull() {
-        final var lhs = ModelTuning.builder()
-                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .temperature(0.5f)
-                .build();
-        assertEquals(ModelOptions.ReasoningReplay.ON,
-                     ModelTuning.merge(lhs, rhs).getReasoningReplay());
-    }
-
-    @Test
-    void mergeLhsNullReturnsRhs() {
-        final var rhs = ModelTuning.builder()
-                .temperature(0.7f)
-                .build();
-        final var result = ModelTuning.merge(null, rhs);
-        assertEquals(rhs, result);
-    }
-
-    @Test
-    void mergePreservesContextWindowSizeFromRhs() {
-        final var lhs = ModelTuning.builder()
-                .contextWindowSize(64_000)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .contextWindowSize(128_000)
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(128_000, result.getContextWindowSize());
-    }
-
-    @Test
-    void mergePreservesEncodingTypeFromRhs() {
-        final var lhs = ModelTuning.builder()
-                .encodingType(EncodingType.O200K_BASE)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .encodingType(EncodingType.CL100K_BASE)
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(EncodingType.CL100K_BASE, result.getEncodingType());
-    }
-
-    @Test
-    void mergePreservesReasoningFromRhs() {
-        final var lhs = ModelTuning.builder()
-                .reasoning(Reasoning.LOW)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .reasoning(Reasoning.HIGH)
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(Reasoning.HIGH, result.getReasoning());
-    }
-
-    @Test
-    void mergePreservesReasoningReplayFromRhs() {
-        final var lhs = ModelTuning.builder()
-                .reasoningReplay(ModelOptions.ReasoningReplay.OFF)
-                .build();
-        final var rhs = ModelTuning.builder()
-                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
-                .build();
-        assertEquals(ModelOptions.ReasoningReplay.ON,
-                     ModelTuning.merge(lhs, rhs).getReasoningReplay());
-    }
-
-    @Test
-    void mergePreservesTimeoutFromRhs() {
-        final var lhs = ModelTuning.builder()
-                .timeout(Duration.ofSeconds(30))
-                .build();
-        final var rhs = ModelTuning.builder()
-                .timeout(Duration.ofSeconds(60))
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(Duration.ofSeconds(60), result.getTimeout());
-    }
-
-    @Test
-    void mergeRhsExtraArgsReplacesLhsExtraArgs() {
-        final var lhs = ModelTuning.builder()
-                .extraArgs(Map.of("lhsKey", "lhsVal"))
-                .build();
-        final var rhs = ModelTuning.builder()
-                .extraArgs(Map.of("rhsKey", "rhsVal"))
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(Map.of("rhsKey", "rhsVal"), result.getExtraArgs());
-    }
-
-    @Test
-    void mergeRhsNullExtraArgsKeepsLhsExtraArgs() {
-        final var lhs = ModelTuning.builder()
-                .extraArgs(Map.of("lhsKey", "lhsVal"))
-                .build();
-        final var rhs = ModelTuning.builder()
-                .temperature(0.5f)
-                .build();
-        final var result = ModelTuning.merge(lhs, rhs);
-        assertEquals(Map.of("lhsKey", "lhsVal"), result.getExtraArgs());
-    }
-
-    @Test
-    void mergeRhsNullReturnsLhs() {
-        final var lhs = ModelTuning.builder()
-                .temperature(0.3f)
-                .build();
-        final var result = ModelTuning.merge(lhs, null);
-        assertEquals(lhs, result);
+        // An empty lhs tunes nothing, so the merge result must match the rhs for
+        // every field, and null the fields rhs leaves unset.
+        final var merged = ModelTuning.merge(lhs, rhs);
+        assertField(merged, field);
     }
 
     @Test
@@ -219,126 +169,63 @@ class ModelTuningTest {
     }
 
     @Test
-    void protocolIsNullByDefault() {
-        assertNull(ModelTuning.builder().build().getProtocol());
-    }
+    void toModelAttributes() {
+        assertNull(ModelTuning.builder().build().toModelAttributes());
 
-    @Test
-    void protocolMergeKeepsLhsWhenRhsNull() {
-        final var lhs = ModelTuning.builder()
-                .protocol("responses")
-                .build();
-        final var rhs = ModelTuning.builder().build();
-        assertEquals("responses", ModelTuning.merge(lhs, rhs).getProtocol());
-    }
-
-    @Test
-    void protocolMergeRhsWins() {
-        final var lhs = ModelTuning.builder()
-                .protocol("chat_completions")
-                .build();
-        final var rhs = ModelTuning.builder()
-                .protocol("responses")
-                .build();
-        assertEquals("responses", ModelTuning.merge(lhs, rhs).getProtocol());
-    }
-
-    @Test
-    void reasoningReplayIsNullByDefault() {
-        assertNull(ModelTuning.builder().build().getReasoningReplay());
-    }
-
-    @Test
-    void toModelAttributesReturnsNonNullWhenContextWindowSizeSet() {
-        final var tuning = ModelTuning.builder()
+        final var contextWindowSize = ModelTuning.builder()
                 .contextWindowSize(128_000)
-                .build();
-        final var attrs = tuning.toModelAttributes();
-        assertNotNull(attrs);
-        assertEquals(128_000, attrs.getContextWindowSize());
-    }
+                .build()
+                .toModelAttributes();
+        assertNotNull(contextWindowSize);
+        assertEquals(128_000, contextWindowSize.getContextWindowSize());
 
-    @Test
-    void toModelAttributesReturnsNonNullWhenEncodingTypeSet() {
-        final var tuning = ModelTuning.builder()
+        final var encodingType = ModelTuning.builder()
                 .encodingType(EncodingType.O200K_BASE)
-                .build();
-        final var attrs = tuning.toModelAttributes();
-        assertNotNull(attrs);
-        assertEquals(EncodingType.O200K_BASE, attrs.getEncodingType());
+                .build()
+                .toModelAttributes();
+        assertNotNull(encodingType);
+        assertEquals(EncodingType.O200K_BASE, encodingType.getEncodingType());
     }
 
     @Test
-    void toModelAttributesReturnsNullWhenBothNull() {
-        final var tuning = ModelTuning.builder().build();
-        assertNull(tuning.toModelAttributes());
-    }
+    void toModelOptions() {
+        // Empty tuning produces no options; each supported field alone produces them.
+        assertNull(ModelTuning.builder().build().toModelOptions());
 
-    @Test
-    void toModelOptionsCarriesBothToolChoiceAndReasoningReplay() {
-        final var tuning = ModelTuning.builder()
+        final var toolChoiceOnly = ModelTuning.builder()
+                .toolChoice(ModelOptions.ToolChoice.AUTO)
+                .build()
+                .toModelOptions();
+        assertNotNull(toolChoiceOnly);
+        assertEquals(ModelOptions.ToolChoice.AUTO, toolChoiceOnly.getToolChoice());
+
+        final var reasoningReplayOnly = ModelTuning.builder()
+                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
+                .build()
+                .toModelOptions();
+        assertNotNull(reasoningReplayOnly);
+        assertEquals(ModelOptions.ReasoningReplay.ON, reasoningReplayOnly.getReasoningReplay());
+
+        final var both = ModelTuning.builder()
                 .toolChoice(ModelOptions.ToolChoice.AUTO)
                 .reasoningReplay(ModelOptions.ReasoningReplay.ON)
-                .build();
-        final var options = tuning.toModelOptions();
-        assertNotNull(options);
-        assertEquals(ModelOptions.ToolChoice.AUTO, options.getToolChoice());
-        assertEquals(ModelOptions.ReasoningReplay.ON, options.getReasoningReplay());
+                .build()
+                .toModelOptions();
+        assertEquals(ModelOptions.ToolChoice.AUTO, both.getToolChoice());
+        assertEquals(ModelOptions.ReasoningReplay.ON, both.getReasoningReplay());
     }
 
     @Test
-    void toModelOptionsReturnsNonNullWhenOnlyReasoningReplaySet() {
-        final var tuning = ModelTuning.builder()
-                .reasoningReplay(ModelOptions.ReasoningReplay.ON)
-                .build();
-        final var options = tuning.toModelOptions();
-        assertNotNull(options);
-        assertEquals(ModelOptions.ReasoningReplay.ON, options.getReasoningReplay());
-    }
+    void toModelSettings() {
+        assertNull(ModelTuning.builder().build().toModelSettings());
 
-    @Test
-    void toModelOptionsReturnsNonNullWhenToolChoiceSet() {
-        final var tuning = ModelTuning.builder()
-                .toolChoice(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO)
-                .build();
-        final var options = tuning.toModelOptions();
-        assertNotNull(options);
-        assertEquals(com.phonepe.sentinelai.models.ModelOptions.ToolChoice.AUTO,
-                     options.getToolChoice());
-    }
-
-    @Test
-    void toModelOptionsReturnsNullWhenNeitherToolChoiceNorReasoningReplaySet() {
-        assertNull(ModelTuning.builder().build().toModelOptions());
-    }
-
-
-    // -------------------------------------------------------------------------
-    // protocol field
-    // -------------------------------------------------------------------------
-
-    @Test
-    void toModelOptionsReturnsNullWhenToolChoiceNull() {
-        final var tuning = ModelTuning.builder().build();
-        final var options = tuning.toModelOptions();
-        assertNull(options);
-    }
-
-    @Test
-    void toModelSettingsReturnsNonNullWhenFieldsSet() {
-        final var tuning = ModelTuning.builder()
+        final var settings = ModelTuning.builder()
                 .temperature(0.5f)
                 .maxTokens(4096)
-                .build();
-        final var settings = tuning.toModelSettings();
+                .build()
+                .toModelSettings();
         assertNotNull(settings);
         assertEquals(0.5f, settings.getTemperature());
         assertEquals(4096, settings.getMaxTokens());
-    }
-
-    @Test
-    void toModelSettingsReturnsNullWhenEmpty() {
-        final var tuning = ModelTuning.builder().build();
-        assertNull(tuning.toModelSettings());
     }
 }
