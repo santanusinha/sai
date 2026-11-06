@@ -28,6 +28,7 @@ import org.jline.reader.LineReader;
 import org.jline.reader.Reference;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.LineReaderImpl;
+import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.utils.NonBlockingReader;
 
@@ -47,13 +48,16 @@ import lombok.extern.slf4j.Slf4j;
  * opens a temporary prompt for additional user input and pauses the run at the
  * next model call via the {@link PauseGate}.
  *
- * <p>While a run is in flight, the reader thread polls the terminal's
- * non-blocking input for the pause key. Silent line typing is NOT supported:
- * the prompt is the only way to send mid-run input. When the pause key is
- * pressed, the gate opens (the next model call blocks) and the prompt
- * {@code ✏️ additional input>} is shown on the shared JLine line reader, so
- * editing, history, and Alt+Enter multi-line entry work like the main prompt.
- * The prompt ends when:
+ * <p>While a run is in flight, the reader thread owns the terminal in raw
+ * mode. Raw mode is required so the tty driver delivers Ctrl-Q and Esc to the
+ * reader: in cooked mode, IXON swallows Ctrl-Q as flow control and canonical
+ * mode line-buffers the text. The saved attributes are restored when the
+ * reader stops, so the JLine prompt between runs works as before.
+ *
+ * <p>When the pause key is pressed, the gate opens (the next model call
+ * blocks) and the prompt {@code ✏️ additional input>} is shown on the shared
+ * JLine line reader, so editing, history, and Alt+Enter multi-line entry work
+ * like the main prompt. The prompt ends when:
  *
  * <ul>
  * <li>Enter is pressed — the text is queued as an additional user message
@@ -65,13 +69,17 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  *
  * <p>The reader is started when a run starts and stopped when it finishes, so
- * it never races with the JLine prompt reader between runs.
+ * it never races with the JLine prompt reader between runs. If the reader
+ * thread dies, the {@code running} flag is reset, so the next run starts a
+ * fresh reader.
  */
 @Slf4j
 public class MidRunInputReader implements AutoCloseable {
 
-    private static final String ADDITIONAL_INPUT_PROMPT = "\u270F\uFE0F additional input> ";
+    private static final String ADDITIONAL_INPUT_PROMPT = "✏️ additional input> ";
     private static final int CTRL_Q = 0x11;
+    private static final int ESC = KeyMap.esc().charAt(0);
+    private static final long ESC_LOOKAHEAD_MS = 25L;
 
     private final Printer printer;
     private final PendingMessagesQueue pendingMessages;
@@ -206,6 +214,27 @@ public class MidRunInputReader implements AutoCloseable {
     }
 
     /**
+     * Consumes a full escape sequence (for example an arrow key) after an
+     * initial ESC, so it does not open the pause prompt. A bare Esc, one not
+     * followed by more bytes within the lookahead window, opens the prompt.
+     */
+    private boolean isEscapeSequence(final NonBlockingReader nonBlocking) throws IOException {
+        int next = nonBlocking.read(ESC_LOOKAHEAD_MS);
+        while (next != NonBlockingReader.READ_EXPIRED) {
+            if (next == NonBlockingReader.EOF) {
+                return false;
+            }
+            final int following = nonBlocking.read(ESC_LOOKAHEAD_MS);
+            if (following == NonBlockingReader.READ_EXPIRED
+                    || following == NonBlockingReader.EOF) {
+                return true;
+            }
+            next = following;
+        }
+        return false;
+    }
+
+    /**
      * Opens the additional-input prompt on the shared line reader. The gate is
      * opened first, so the next model call pauses before the user types; it is
      * released when the prompt ends, whatever the outcome.
@@ -215,12 +244,12 @@ public class MidRunInputReader implements AutoCloseable {
             return;
         }
         pauseGate.open();
-        printer.print(Printer.systemMessage("\u23F8 Paused for your input")
+        printer.print(Printer.systemMessage("⏸ Paused for your input")
                 .withColour(Printer.Colours.BOLD_YELLOW)
                 .withImportant(true));
         final String text = readPrompt(printer.getLineReader());
         pauseGate.release();
-        printer.print(Printer.systemMessage("\u25B6 Resumed").withImportant(true));
+        printer.print(Printer.systemMessage("▶ Resumed").withImportant(true));
         if (!Strings.isNullOrEmpty(text)) {
             queue(text);
         }
@@ -232,10 +261,18 @@ public class MidRunInputReader implements AutoCloseable {
                                             "(additional user input while you work) " + line,
                                             LocalDateTime.now()));
         printer.print(Printer.systemMessage(
-                                            "\uD83D\uDCE5 Queued for the model: " + line).withImportant(true));
+                                            "📥 Queued for the model: " + line).withImportant(true));
         log.info("Queued mid-run user input ({} chars)", line.length());
     }
 
+    /**
+     * Polls the terminal for the pause key for the whole run. The terminal is
+     * held in raw mode for the run duration, so Ctrl-Q and Esc reach this
+     * loop instead of the tty driver. One failing iteration never kills the
+     * loop: each iteration catches its own errors. When the thread exits for
+     * any reason, {@code running} is reset, so the next run can start a
+     * fresh reader.
+     */
     private void readLoop() {
         final var terminal = printer.getTerminal();
         if (terminal == null || Terminal.TYPE_DUMB.equals(terminal.getType())) {
@@ -243,6 +280,14 @@ public class MidRunInputReader implements AutoCloseable {
             return;
         }
         final var nonBlocking = terminal.reader();
+        Attributes savedAttributes = null;
+        try {
+            savedAttributes = terminal.enterRawMode();
+        }
+        catch (Exception e) {
+            log.debug("Mid-run raw mode unavailable: {}", e.getMessage());
+            return;
+        }
         try {
             while (running.get()) {
                 final int available;
@@ -262,11 +307,22 @@ public class MidRunInputReader implements AutoCloseable {
                     // Nothing available within the timeout; re-check the running flag.
                     continue;
                 }
-                if (available == CTRL_Q || available == KeyMap.esc().charAt(0)) {
-                    openPrompt();
+                try {
+                    if (available == CTRL_Q) {
+                        openPrompt();
+                    }
+                    else if (available == ESC) {
+                        if (!isEscapeSequence(nonBlocking)) {
+                            openPrompt();
+                        }
+                    }
+                    else {
+                        bufferCarryOver(available);
+                    }
                 }
-                else {
-                    bufferCarryOver(available);
+                catch (Exception e) {
+                    // One bad key or a failed prompt must not kill the loop.
+                    log.warn("Mid-run input iteration failed: {}", e.getMessage());
                 }
             }
         }
@@ -274,6 +330,18 @@ public class MidRunInputReader implements AutoCloseable {
             if (running.get()) {
                 log.warn("Mid-run input reader stopped: {}", e.getMessage());
             }
+        }
+        finally {
+            if (savedAttributes != null) {
+                try {
+                    terminal.setAttributes(savedAttributes);
+                }
+                catch (Exception e) {
+                    log.warn("Mid-run restore of terminal attributes failed: {}", e.getMessage());
+                }
+            }
+            // Let the next run start a fresh reader even when this thread dies.
+            running.set(false);
         }
     }
 
