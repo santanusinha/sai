@@ -116,6 +116,28 @@ class MessagePrinterTodoCalloutTest {
     }
 
     @Test
+    void todoAddAllErrorSurfacedAsSystemMessage() {
+        final var rendered = render("task_tools_extension_todo_add_all",
+                                    "{\"error\":\"No active task. Start one with task_start first.\"}");
+        assertTrue(rendered.contains("No active task"), "error is surfaced");
+    }
+
+    @Test
+    void todoAddAllRendersCalloutPerTodoInOrder() {
+        final var rendered = render("task_tools_extension_todo_add_all",
+                                    "{\"todoIds\":[\"todo-0001\",\"todo-0002\"],\"todos\":["
+                                            + "{\"id\":\"todo-0001\",\"taskId\":\"task-0001\",\"text\":\"First\",\"state\":\"INCOMPLETE\"},"
+                                            + "{\"id\":\"todo-0002\",\"taskId\":\"task-0001\",\"text\":\"Second\",\"state\":\"INCOMPLETE\"}]}");
+        assertTrue(rendered.contains("+ todo-0001"), "first todo is listed with a + marker");
+        assertTrue(rendered.contains("+ todo-0002"), "second todo is listed with a + marker");
+        assertTrue(rendered.indexOf("todo-0001") < rendered.indexOf("todo-0002"), "todos are listed in input order");
+        assertTrue(rendered.contains("First"), "first todo text is listed");
+        assertTrue(rendered.contains("Second"), "second todo text is listed");
+        assertTrue(rendered.contains("(new todo)"), "lines are marked as new todos");
+        assertTrue(!rendered.contains("\"todos\":"), "raw tool JSON is not printed");
+    }
+
+    @Test
     void todoAddRendersNewTodoCallout() {
         final var rendered = render("task_tools_extension_todo_add",
                                     "{\"todoId\":\"todo-0003\",\"newState\":\"INCOMPLETE\",\"text\":\"New work\"}");

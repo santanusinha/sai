@@ -53,6 +53,7 @@ import io.appform.sai.tools.ToolIO.LineEditOperation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -77,6 +78,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         public static final String READ_IMAGE_TOOL = "core_tool_box_read_image";
         public static final String TASK_START_TOOL = "task_tools_extension_task_start";
         public static final String TODO_ADD_TOOL = "task_tools_extension_todo_add";
+        public static final String TODO_ADD_ALL_TOOL = "task_tools_extension_todo_add_all";
         public static final String TODO_UPDATE_TOOL = "task_tools_extension_todo_update";
         public static final String MARK_TASK_COMPLETE_TOOL = "task_tools_extension_mark_task_complete";
         public static final String TODO_LIST_TOOL = "task_tools_extension_todo_list";
@@ -160,6 +162,8 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                         case KnownToolNames.WRITE_TOOL -> printWriteToolResponse(toolCallResponse, messages);
                         case KnownToolNames.TASK_START_TOOL -> printTaskStartToolResponse(toolCallResponse, messages);
                         case KnownToolNames.TODO_ADD_TOOL -> printTodoAddToolResponse(toolCallResponse, messages);
+                        case KnownToolNames.TODO_ADD_ALL_TOOL -> printTodoAddAllToolResponse(toolCallResponse,
+                                                                                             messages);
                         case KnownToolNames.TODO_UPDATE_TOOL -> printTodoUpdateToolResponse(toolCallResponse, messages);
                         case KnownToolNames.MARK_TASK_COMPLETE_TOOL -> printTaskCompleteToolResponse(toolCallResponse,
                                                                                                      messages);
@@ -355,6 +359,7 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
                 try {
                     switch (toolCall.getToolName()) {
                         case KnownToolNames.PRINT_TOOL, KnownToolNames.TASK_START_TOOL, KnownToolNames.TODO_ADD_TOOL,
+                                KnownToolNames.TODO_ADD_ALL_TOOL,
                                 KnownToolNames.TODO_UPDATE_TOOL, KnownToolNames.MARK_TASK_COMPLETE_TOOL,
                                 KnownToolNames.TODO_LIST_TOOL, KnownToolNames.DEFERRED_TODOS_TOOL,
                                 KnownToolNames.ARCHIVED_NOTES_TOOL, KnownToolNames.NOTE_WRITE_TOOL,
@@ -847,6 +852,26 @@ public class MessagePrinter implements AgentMessageVisitor<List<Printer.Update>>
         messages.add(Printer.raw(Printer.Colours.WHITE + "+ " + response.getTodoId() + "  "
                 + Printer.Colours.WHITE + Strings.nullToEmpty(response.getText())
                 + Printer.Colours.GRAY + " (new todo)" + Printer.Colours.RESET));
+    }
+
+    /**
+     * Renders a todo_add_all response as one callout line per created todo, in
+     * input order, instead of the raw tool JSON.
+     */
+    @SneakyThrows
+    private void printTodoAddAllToolResponse(ToolCallResponse toolCallResponse, ArrayList<Update> messages) {
+        final var response = mapper.readValue(toolCallResponse.getResponse(), TaskIO.TodoAddAllResponse.class);
+        if (!Strings.isNullOrEmpty(response.getError())) {
+            messages.add(Printer.systemMessage("Error adding todos: %s".formatted(response.getError()))
+                    .withSeverity(Severity.ERROR));
+            return;
+        }
+        final var todos = Objects.requireNonNullElseGet(response.getTodos(), List::<TodoItemView>of);
+        for (final var todo : todos) {
+            messages.add(Printer.raw(Printer.Colours.WHITE + "+ " + todo.getId() + "  "
+                    + Printer.Colours.WHITE + Strings.nullToEmpty(todo.getText())
+                    + Printer.Colours.GRAY + " (new todo)" + Printer.Colours.RESET));
+        }
     }
 
     @SneakyThrows
